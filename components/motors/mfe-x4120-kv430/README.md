@@ -33,6 +33,19 @@ Makeflyeasy(MFE)의 고효율 브러시리스 모터. [Striver Mini VTOL](../../
 | 프로펠러 장착 홀 위치 | M3⌀12×4 |
 | 모터 장착 홀 위치 | M4⌀8×4 |
 
+## 🔶 출력선 커넥터 — 규격/성별 미확인 (2026-08-08 조사)
+
+**제조사 자료에 커넥터 정보가 전혀 없다.** 기본 파라미터의 "출력선 규격 12AWG, 100mm"는 굵기와 길이만 기재하며, 커넥터 종류·직경·성별은 명시되지 않았다.
+
+보유 이미지로도 판독 불가 — [01-overview.webp](images/01-overview.webp), [08-packing-list-disclaimer.webp](images/08-packing-list-disclaimer.webp)의 제품 사진과 [05-engineering-drawings.webp](images/05-engineering-drawings.webp)의 3면도 모두 **리드선이 끝단 전에 잘려** 단자 형상이 나타나지 않는다(도면은 길이 110mm만 치수 표기).
+
+| 대상 | 상태 |
+|---|---|
+| 짝 부품: [MFE ESC 6S 100A](../../esc/mfe-esc-6s-100a/README.md#커넥터-궁합-2026-08-08-확인) 3상 출력 | **4.0mm 바나나 암(female)** — 확정 |
+| 본 모터 3상 입력 | **미확인** — 관행상 수(male)로 추정되나 근거 없음 |
+
+⚠️ 크루즈 계통은 **4.0mm**, VTOL 계통([M4112](../mfe-m4112-kv460/README.md))은 **3.5mm**로 직경이 다르다. 실물 확인 시 두 계통을 혼동하지 말 것 — 서로 호환되지 않는다.
+
 ## 성능 파라미터 (Performance Parameters)
 
 | 항목 | 값 |

@@ -1,6 +1,45 @@
-# Holybro DroneCAN Airspeed — 에어스피드 센서
+# Holybro Airspeed — 에어스피드 센서
 
-Holybro의 차압식(differential pressure) 에어스피드 센서, DroneCAN 프로토콜 사용. [Striver Mini VTOL](../../../airframes/striver-mini-vtol/README.md)의 [어댑터/에일러론 서보 캐빈](../../../airframes/striver-mini-vtol/README.md#부위별-사진-자료)(피토관 모듈 장착부)에 설치되며, PNP 옵션에는 미포함이라 별도 구매한 부품.
+Holybro의 차압식(differential pressure) 에어스피드 센서. [Striver Mini VTOL](../../../airframes/striver-mini-vtol/README.md)의 [어댑터/에일러론 서보 캐빈](../../../airframes/striver-mini-vtol/README.md#부위별-사진-자료)(피토관 모듈 장착부)에 설치되며, PNP 옵션에는 미포함이라 별도 구매한 부품.
+
+> ⚠️ **실제 보유 개체는 I2C 방식** (2026-08-08 사용자 확인). FC의 **I2C 포트**에 연결하고 피토관을 물려 **정상 작동 확인 완료**.
+>
+> 본 문서는 당초 Holybro의 DroneCAN 버전 스펙으로 작성되었으나, 실물은 I2C 버전이다. 아래 "실제 구성" 절이 유효하며, DroneCAN 관련 서술(폴더명 포함)은 정정 대기 상태다.
+
+## 실제 구성 (SHADE 기체 — 확정)
+
+| 항목 | 내용 |
+|---|---|
+| 통신 방식 | **I2C** |
+| FC 연결 포트 | **[Pixhawk 6C Mini](../../fc/holybro-pixhawk-6c-mini/README.md) I2C 포트 (4핀 JST-GH)** |
+| 상태 | ✅ 피토관 연결 후 **정상 작동 확인** |
+| 수량 | 1개 (이중화 미적용) |
+
+FC I2C 포트 핀맵 (Holybro 공식):
+
+| 핀 | 신호 |
+|---|---|
+| 1 (red) | VCC +5V |
+| 2 | I2C2_SCL (+3.3V) |
+| 3 | I2C2_SDA (+3.3V) |
+| 4 | GND |
+
+### 이 구성이 배선에 주는 영향
+
+- **CAN 버스가 단순해진다** — CAN1에는 [PM08-CAN](../../power/holybro-pm08-can/README.md) 하나만 물린다. CAN 버스 공유·종단저항·노드 ID 충돌을 따질 필요가 없다.
+- 원문 PDF 배선도의 날개 커넥터 1~4번 핀(`Airspeed− / SDA / SCL / 5V`)이 **I2C용 그대로 유효**하다. DroneCAN이었다면 재배정이 필요했으나 그럴 필요가 없어졌다.
+- PM08의 POWER2를 에어스피드 급전에 쓰려던 방안은 불필요 — POWER2는 유휴로 둔다.
+
+### 🔶 이 절의 확인 필요
+
+- **정확한 센서 모델명 미확인** — I2C 에어스피드는 통상 MS4525DO 또는 DLVR(I2C 버전). 기판 실크 확인 후 문서 제목·폴더명(`holybro-airspeed-dronecan`) 정정 필요
+- 센서 물리 설치 위치(날개 어댑터 캐빈 vs 동체) 및 피토관 튜브 경로 기록 필요
+
+---
+
+## (참고) DroneCAN 버전 스펙
+
+아래는 Holybro DroneCAN Airspeed(DLVR 기반) 기준으로 작성된 내용으로, **보유 개체와 다르다.** 향후 이중화용으로 CAN 버전을 추가 구매할 경우를 대비해 남겨둔다.
 
 - 제조사: Holybro
 - 제품명: DroneCAN Airspeed Sensor (DLVR 기반)

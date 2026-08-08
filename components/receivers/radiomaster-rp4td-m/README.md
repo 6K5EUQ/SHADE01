@@ -8,11 +8,110 @@ RadioMaster의 ExpressLRS(오픈소스 장거리 RC 링크) 초소형 수신기.
 - 리전 옵션: FCC / LBT (전파 규격 지역 옵션, 구매 시 선택)
 - 용도: [Striver Mini VTOL](../../../airframes/striver-mini-vtol/README.md) 등 ExpressLRS 기반 RC 시스템의 수신기
 
-## 🔶 확인 필요 (프로토콜 호환)
+## FC 연결 방법 (Pixhawk 6C Mini)
 
-- 본 수신기의 버스 인터페이스는 **CRSF (Crossfire Protocol)** — TBS Crossfire가 원조이며 ExpressLRS가 채택한 양방향 시리얼 디지털 프로토콜. PPM(아날로그 펄스폭)이나 SBUS(단방향 시리얼)와는 물리/전기적으로 다른 방식이라, FC가 CRSF를 받으려면 그걸 지원하는 UART 포트와 별도 프로토콜 설정이 필요함.
-- SHADE 보유 기체의 실제 FC는 **[Holybro Pixhawk 6C Mini](../../fc/holybro-pixhawk-6c-mini/README.md)로 확정**되어 있음 (PDF 원문의 Pixsurvey V3는 SHADE 기체에 쓰이지 않는 참고자료일 뿐). 따라서 확인이 필요한 대상은 Pixsurvey V3가 아니라 **Pixhawk 6C Mini의 Telem 포트가 CRSF를 지원하는지, PX4/ArduPilot에서 어떤 파라미터 설정이 필요한지**임 — 자세한 내용은 [Pixhawk 6C Mini 문서](../../fc/holybro-pixhawk-6c-mini/README.md#🔶-확인-필요) 참조.
-- Striver 기체의 RC 시스템(ET10 송신기/수신기)은 [구성 리스트](../../../airframes/striver-mini-vtol/README.md#부품-구성-리스트-configuration-list)상 IND(완제품) 옵션에만 포함되며, 보유 기체는 PNP라 RC 수신기가 미포함 상태였음. 본 RP4TD-M을 그 대체품으로 사용하려는 것으로 추정 — ET10과는 별개의 송신기 생태계(ExpressLRS 지원 송신기 필요)이므로, 조종기(TX)도 ExpressLRS 호환 기종인지 함께 확인 필요.
+본 수신기의 버스 인터페이스는 **CRSF (Crossfire Protocol)** — TBS Crossfire가 원조이며 ExpressLRS가 채택한 양방향 시리얼 디지털 프로토콜. PPM(아날로그 펄스폭)이나 SBUS(단방향 시리얼)와는 물리/전기적으로 다른 방식이라, **RC IN / PPM·SBUS 포트에는 꽂을 수 없고 UART 포트(Telem1 또는 Telem2)에 연결**해야 한다.
+
+### 배선 (Telem2 기준)
+
+**PX4는 특정 포트를 강제하지 않는다** — 공식 문서는 "any spare UART port can be used"라고만 하고, 오히려 예시로 `TELEM1`을 든다([PX4 CRSF Telemetry](https://docs.px4.io/main/en/telemetry/crsf_telemetry.html)). 즉 Telem1·Telem2 어느 쪽이든 기능상 동일하다.
+
+**본 기체는 Telem2를 선택** — 기술적 제약이 아니라 자리 배분 관례다. Telem1은 지상국 텔레메트리 무선모듈(T900 Pro 등, 현재 미보유)용으로 예약해 둔다. 측량 임무에서 텔레메트리는 사실상 필수 장비이므로, 나중에 추가할 때 배선을 다시 만지지 않도록 비워둔다. Telem1로 바꾸려면 아래 표의 UART5↔UART7만 바뀌고 핀 번호는 동일하다.
+
+| RP4TD-M 패드 | → | Pixhawk 6C Mini Telem2 핀 | 신호 |
+|---|---|---|---|
+| VCC (5V) | → | 1 (red) | VCC +5V |
+| GND | → | 6 (black) | GND |
+| **TX** | → | **3 (black)** | UART5_RX (in) |
+| **RX** | → | **2 (black)** | UART5_TX (out) |
+
+- ⚠️ **TX/RX는 반드시 교차(cross)** — 수신기 TX → FC RX, 수신기 RX → FC TX. 동봉된 CRSF 케이블이 이미 교차되어 있는지 반드시 육안 확인 후 연결할 것.
+- 신호 반전(inverter) 회로 불필요 — CRSF는 비반전 UART라 직결 가능.
+- Telem 포트 커넥터는 **JST-GH 1.25mm 6핀**. 동봉 CRSF 케이블의 FC측 커넥터 규격이 다르면 별도 제작/구매 필요.
+- 수신기 동작 전압은 5.0V이며 Telem 포트 1번 핀이 5V를 공급하므로 별도 BEC 불필요. (Telem1+GPS1 합산 1.5A 제한 — 본 수신기 소비전류는 미미)
+
+### 펌웨어별 설정
+
+> ✅ **SHADE 기체는 PX4 확정** (2026-08-04). 아래 PX4 절차를 따른다. ArduPilot 항목은 참고용.
+
+**PX4 (본 기체 채택 — ⚠️ 커스텀 펌웨어 빌드 필수)**
+
+기본 배포 펌웨어에는 CRSF 드라이버(`crsf_rc`)가 **포함되어 있지 않다.** QGroundControl로 펌웨어를 설치하는 것만으로는 이 수신기가 동작하지 않으며, 소스를 받아 직접 빌드해야 한다.
+
+```bash
+git clone https://github.com/PX4/PX4-Autopilot.git --recursive
+cd PX4-Autopilot
+make holybro_6c-mini_default boardconfig
+#   drivers          → rc_input   비활성화(해제)
+#   drivers > RC     → crsf_rc    활성화
+make holybro_6c-mini_default upload
+```
+
+| 파라미터 | 값 | 의미 |
+|---|---|---|
+| `RC_CRSF_PRT_CFG` | Telem2 | CRSF를 쓸 UART 지정 |
+| `RC_CRSF_TEL_EN` | Enabled | 텔레메트리 활성화 |
+
+- Telem2를 RC용으로 쓰므로 **해당 포트의 기존 MAVLink 매핑(`MAV_1_CONFIG` 등)을 반드시 제거**해야 충돌하지 않는다.
+- 빌드 타깃명(`holybro_6c-mini_default`)은 PX4 버전에 따라 다를 수 있으므로 `make list_config_targets`로 확인할 것.
+
+**ArduPilot (참고 — 미채택)**
+| 파라미터 | 값 | 의미 |
+|---|---|---|
+| `SERIAL2_PROTOCOL` | 23 | RCIN (CRSF). Telem2 = SERIAL2 |
+| `RSSI_TYPE` | 3 | CRSF 링크 품질을 RSSI로 사용 |
+| `RC_OPTIONS` | bit 13 설정 | ELRS용 보레이트 420K (기본 416K에서 변경) |
+
+- 보레이트는 펌웨어가 자동 관리하므로 `SERIAL2_BAUD` 수동 설정 불필요.
+- 해당 UART는 **DMA 지원**이 필요 (6C Mini는 STM32H743이라 문제 없음).
+- ⚠️ MAVLink로 FC를 재부팅하면 수신기 전원을 껐다 켜기 전까지 통신이 끊김 — 알려진 동작.
+
+> 대안: 커스텀 빌드를 피하고 싶다면 `SERIALx_PROTOCOL`=2 / baud 115 / `RSSI_TYPE`=5로 두고 **MAVLink 모드**로 쓰는 방법도 있으나, RC 링크로서의 지연/신뢰성은 CRSF 네이티브가 우수하다.
+
+### 🔶 남은 확인 필요
+
+- ~~PX4 vs ArduPilot 미확정~~ → **해소(2026-08-04): PX4 확정.** 위 커스텀 펌웨어 빌드가 필수 작업으로 확정됨.
+- ~~동봉 CRSF 케이블의 커넥터 규격 확인~~ → **해소(2026-08-08)**: 실물 확인 결과 **양 끝 커넥터 없는 맨선(주석 도금), 4가닥 트위스트 — 적/초/흰/검**. 아래 [배선 작업](#-배선-작업-납땜-필요) 참조
+- **수신기 패드 실크 인쇄 판독 필요** — 4개 패드 중 어느 것이 5V/GND/TX/RX인지. 케이블 색상(적=VCC, 검=GND는 확실)과 초/흰 중 어느 쪽이 TX인지 미확정
+
+## ⚠️ 배선 작업 (납땜 필요)
+
+무개조 연결 불가. **양쪽 다 가공이 필요**하다.
+
+```
+RP4TD-M 패드 4개 ──[미세 납땜]── 동봉 CRSF wire ──[압착]── JST-GH 1.25mm 6핀 → FC Telem2
+   (커넥터 없음)                  (맨선 4가닥)              (별도 구매 필요)
+```
+
+| 구간 | 작업 | 난이도 |
+|---|---|---|
+| 수신기 쪽 | 기판 패드에 직접 납땜 | **높음** — 기판 18.10×16.00mm, 패드 간격 약 1.5~2mm |
+| FC 쪽 | JST-GH 6핀 커넥터 압착 | 보통 |
+
+**동봉품**: CRSF wire 1개(맨선 4가닥), 열수축 튜브 3개 — 납땜 후 절연을 전제한 구성이다.
+
+### 결선
+
+| 케이블 색 | 신호 | → Telem2 핀 |
+|---|---|---|
+| 적 | VCC 5V | 1 |
+| 초 또는 흰 | 수신기 TX | **3** (UART5_RX) |
+| 흰 또는 초 | 수신기 RX | **2** (UART5_TX) |
+| 검 | GND | 6 |
+| — | (CTS/RTS 미사용) | 4, 5 비움 |
+
+- ⚠️ **TX/RX 교차 필수**. 초/흰 중 어느 것이 TX인지는 패드 실크로 확인.
+- ✅ **뒤바꿔 연결해도 하드웨어 손상 없음** (통신만 안 됨). CRSF·FC 모두 3.3V 로직이라 전압 충돌도 없다. 동작하지 않으면 초↔흰만 서로 바꿔 재시도.
+
+### 납땜 시 주의
+
+- 인두 팁 1mm 이하, 300~330℃. **패드당 2초 이내** — 과열 시 패드가 벗겨지며 복구 불가
+- 피복은 2~3mm만 벗기고 미리 납 먹임(pre-tinning) 후 부착 — 길면 인접 패드와 단락
+- 작업 후 테스터 도통 모드로 **인접 패드 간 단락 확인**
+- 기판 근처에서 케이블을 별도 고정(글루건 등)해 납땜부에 장력이 걸리지 않게 할 것
+- 동봉 열수축 튜브로 기판째 절연 마감
+- Striver 기체의 RC 시스템(ET10 송신기/수신기)은 [구성 리스트](../../../airframes/striver-mini-vtol/README.md#부품-구성-리스트-configuration-list)상 IND(완제품) 옵션에만 포함되며, 보유 기체는 PNP라 RC 수신기가 미포함 상태였음. 본 RP4TD-M을 그 대체품으로 사용하려는 것으로 추정 — ET10과는 별개의 송신기 생태계(ExpressLRS 지원 송신기 필요).
+- **조종기(TX)는 [RadioMaster Boxer](../../transmitters/radiomaster-boxer/README.md)로 확인됨.** 단 Boxer는 CC2500/4in1/ExpressLRS 3가지 내장 RF 모듈 버전이 있어, 보유 기체가 **ExpressLRS 버전(FCC ID: 2A337-BOXER-ELRS)**인지 실물 확인 필요 — ExpressLRS 버전이어야 본 수신기와 무개조 페어링 가능.
 
 ## 특징 (Features, 원문 요약)
 

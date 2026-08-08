@@ -42,17 +42,48 @@ Holybro의 고전류 파워 분배 보드. 배터리 전원을 각 ESC(VTOL ×4,
 ## 연결 구조 (Striver 기체 기준)
 
 ```
-배터리(6S LiPo) ──BAT-IN(스크류터미널)──► PDB 300A (Side Entry)
+배터리(6S LiPo)
+      │
+      ▼
+[PM08-CAN]  BAT IN ──내부 션트──► BAT OUT     ← 파워모듈이 직렬로 선행
+      │                              │
+      └─► CAN/5.2V ──► FC            ▼
+                        BAT-IN(스크류터미널) ──► PDB 300A (Side Entry)
                                               │
                     ┌─────────────┬───────────┼───────────┬─────────────┐
+                  (XT90)        (XT90)      (XT90)      (XT90)       (XT90)   ← PDB 출력단
+                    ┆             ┆           ┆           ┆             ┆
+                    ┆   ⚠️ 변환 필요 (ESC 측은 링터미널, XT90 아님)      ┆
                     ▼             ▼           ▼           ▼             ▼
               VTOL ESC #1   VTOL ESC #2  VTOL ESC #3  VTOL ESC #4  크루즈 ESC
-              (XT90/XT30)   (XT90/XT30)  (XT90/XT30)  (XT90/XT30)  (XT90/XT30)
+             (OT2.5-4 링터미널)                                  (OT2.5-4 링터미널)
 ```
 
-- 배터리 입력은 **BAT-IN 스크류 터미널**로 고정 (고전류 입력용)
-- 각 ESC는 **XT90(고전류) 또는 XT30(저전류)** 커넥터로 분기 연결 — VTOL ESC(50A)/크루즈 ESC(100A) 모두 XT90 용량(90A 연속) 이내이므로 XT90 사용 권장
-- [Holybro PM08-CAN](../holybro-pm08-can/README.md)과 공식 호환 확인됨 — PM08이 이 배터리 라인의 전압/전류를 센싱하는 구조로 추정 (정확한 분기 지점은 실물/매뉴얼 추가 확인 권장)
+### 🔴 PDB ↔ ESC 커넥터 불일치 — 무개조 연결 불가 (2026-08-08 확인)
+
+**PDB 출력단은 XT90인데, 보유 ESC 5개는 전원 입력선 끝단이 전부 `OT2.5-4 냉간압착 링터미널`이다.** 암수 문제가 아니라 **커넥터 종류 자체가 다르므로** 그대로는 연결되지 않는다.
+
+| 부품 | 전원 입력 끝단 | 출처 |
+|---|---|---|
+| VTOL ESC ×4 ([MFE ESC 650 50A](../../esc/mfe-esc-650-50a/README.md#커넥터--단자-구성)) | 16AWG, **OT2.5-4 링터미널** 압착 | 문서 기재 + [product-photos.webp](../../esc/mfe-esc-650-50a/images/product-photos.webp) 실물 사진에서 적색선 끝 링터미널 확인 |
+| 크루즈 ESC ×1 ([MFE ESC 6S 100A](../../esc/mfe-esc-6s-100a/README.md#커넥터--단자-구성)) | 12AWG, **OT2.5-4 링터미널** 압착 | 문서 기재 |
+
+PDB의 스크류터미널은 **BAT-IN 입력 전용 1개소**라 ESC 5개를 여기에 물릴 수 없다.
+
+**대응 선택지**
+1. ESC 5개의 링터미널을 잘라내고 **XT90 수(male) 커넥터를 직접 납땜** — 가장 간결하나 ESC 원상복구 불가
+2. **XT90 수 ↔ 링터미널 어댑터 케이블 5개 제작** — ESC 원형 보존, 다만 접점이 하나 늘어 발열 지점 추가
+
+어느 쪽이든 ESC 측에 붙일 XT90 성별은 **PDB 출력단 XT90의 성별을 실물로 확정한 뒤** 결정할 것 (관행상 보드 측 암 → ESC 측 수이나 미확인).
+
+> ⚠️ 이 변환과 별개로, 아래 전류 정격 문제(특히 크루즈 ESC 100A vs XT90 45A)는 그대로 남는다. 어차피 커넥터를 가공해야 하는 상황이므로, **크루즈 ESC 라인은 처음부터 XT120/AS150급으로 올리는 것**을 함께 검토하는 편이 합리적이다.
+
+- **PDB는 [PM08-CAN](../holybro-pm08-can/README.md)의 하류(BAT OUT 쪽)에 위치.** PM08은 배터리와 PDB 사이 직렬(in-line) 연결이며, PDB 입력단에서 병렬 센싱탭을 따는 구조가 아님 (Holybro 제품 페이지 "Battery IN/OUT Options" 표기로 확인, 2026-08-03)
+- PDB 배터리 입력은 **BAT-IN 스크류 터미널**로 고정 (고전류 입력용) — PM08의 BAT OUT을 여기에 연결
+- 각 ESC는 **XT90** 커넥터로 분기 연결. VTOL ESC(50A) 4개는 XT90 연속 정격 45A를 소폭 상회하므로 순간 정격(90A) 범위 내 단시간 운용으로 간주하되 발열 확인 권장. 크루즈 ESC(100A)는 XT90 연속 정격을 크게 초과하므로 **XT120/AS150급 커넥터 또는 8AWG 직결 검토 필요**
+- XT30(2개)은 저전류 주변장치(서보 전원, 탑재장비 등)용으로 사용
+
+> ⚠️ **커넥터 정격 주의**: Holybro 공식 [Connector & Wire Rating](https://docs.holybro.com/power-module-and-pdb/power-module/connector-and-wire-rating) 기준 — XT60 30A / XT90 45A / XT120 60A / AS150 75A / AS300 150A (모두 연속 기준). 보드 자체가 300A를 견뎌도 **커넥터가 병목**이 된다. 배터리 → PM08 → PDB 주 간선은 링터미널 + 8AWG 이상 권장.
 
 ## 사진/자료
 
@@ -65,4 +96,5 @@ Holybro의 고전류 파워 분배 보드. 배터리 전원을 각 ESC(VTOL ×4,
 ## 보유 수량 (SHADE 기체)
 
 - 1개, PNP 옵션에는 미포함되어 별도 구매
-- 연결 대상: 배터리(BAT-IN), VTOL ESC ×4, 크루즈 ESC ×1, [PM08-CAN](../holybro-pm08-can/README.md)
+- 연결 대상: [PM08-CAN](../holybro-pm08-can/README.md) BAT OUT → PDB BAT-IN(스크류터미널), 출력 → VTOL ESC ×4 + 크루즈 ESC ×1
+- ⚠️ 배터리는 PDB에 직결하지 않고 **PM08을 거쳐서** 들어온다 ([연결 구조](#연결-구조-striver-기체-기준) 참조)

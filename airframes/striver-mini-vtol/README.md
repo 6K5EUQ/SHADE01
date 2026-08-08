@@ -39,7 +39,7 @@ Striver Mini VTOL은 7kg급 수직 이착륙 고정익기로, 4개의 VTOL(수�
 
 | 시나리오 | 시간/거리 | 조건 |
 |---|---|---|
-| Range 1 | 82min / 95km | 속도 19m/s, 탑재 600g, 배터리 6S@16000mAh, 이륙중량 6.5kg, 고도 500m |
+| Range 1 | 82min / 95km | 속도 19m/s, 탑재 600g, 배터리 6S@16000mAh([상세: Fullymax 6S 16000mAh](../../components/batteries/fullymax-6s-16000mah/README.md)), 이륙중량 6.5kg, 고도 500m |
 | Range 2 | 112min / 127km | 속도 19m/s, 탑재 600g, 배터리 6S@22000mAh, 이륙중량 7.1kg, 고도 500m |
 
 ## 구조/캐빈별 사양
@@ -59,11 +59,39 @@ PNP는 기체(플랫폼) + 파워 시스템(모터/ESC/프로펠러/서보)만 �
 | 로터암-모터 연결 | 알루미늄 합금 자동 잠금 폴딩 구조 (원터치 접힘 + 회전 잠금) | 포함 (플랫폼) |
 | 멀티로터 모터 베이스 | 알루미늄 합금 CNC 가공, 아노다이징 처리. 최대 외경 φ65mm 모터 지원. ESC 캐빈 크기 67×31×12mm | VTOL 모터+ESC 장착 포함 |
 | 4+2 모드 날개 모터 마운트 | 임베디드 박스 구조, 최대 외경 φ44mm 모터 지원 (4+2 모드 전용) | 구조물만 포함, 4+2용 모터/ESC는 미포함(기본 파워시스템은 4+1 구성) |
-| 어댑터/에일러론 서보 캐빈 | 날개 중앙 위치, ESC/서보 배선 정리용. 에어스피드 센서(피토관) 모듈 장착 가능 | 서보 장착 포함, 에어스피드 센서는 PNP 미포함(옵션 별매) |
+| 어댑터/에일러론 서보 캐빈 | 날개 중앙 위치, ESC/서보 배선 정리용. **배선 단자대**(금속 나사단자 2 = 전력 분배 / 커넥터 블록 S1~S5 = 신호 분배)가 장착되어 날개 커넥터에서 온 전력·신호를 전방/후방 로터와 에일러론 서보로 분배. 에어스피드 센서(피토관) 모듈 장착 가능 | 서보 + **날개 터미널(단자대) 2개 포함** (구성표 "Wing terminal ×2"). 에어스피드 센서는 PNP 미포함(옵션 별매) |
 | 수직 꼬리 | 5점 통합 툴리스 퀵릴리즈 구조, 9핀 금도금 커넥터로 기계/전기 동시 분리 | 포함 (플랫폼) |
 | 수평 꼬리 | 툴리스 퀵릴리즈(원터치 잠금/분리). 좌우 독립 서보 제어 → 한쪽 고장 시에도 귀환 가능 | 서보 장착 포함 |
 
 > ⚠️ **VTOL 전력 경로 주의**: VTOL ESC/모터는 로터암(날개에 결합)에 있으므로, 동체의 PDB에서 로터암까지 전선이 직결되지 않는다. 반드시 **날개-동체 9+2 커넥터**(위 "날개 구조" 행)를 거쳐 날개 내부 배선을 통해 로터암까지 전력이 전달된다. 날개를 분리하면 이 커넥터에서 전원/신호가 함께 분리된다.
+
+### 전체 전력 경로 (SHADE 기체 Holybro 구성 기준)
+
+```
+배터리(6S LiPo)
+   │
+   ▼
+[PM08-CAN]  BAT IN ─션트─► BAT OUT        ← 직렬(in-line), 전압/전류 센싱
+   │                          │
+   ├─CAN──► FC CAN1           │            (센싱, JST-GH 4핀)
+   ├─5.2V─► FC Power1         │            (FC 전원, JST-GH 6핀)
+   └─5.2V─► 미사용            │            (6C Mini에 Power2 없음)
+                              ▼
+                       [PDB 300A] BAT-IN
+                              │
+              ┌───────────────┼───────────────┐
+              ▼               ▼               ▼
+        크루즈 ESC      날개-동체 9+2 커넥터(좌/우)
+        (기수 캐빈)              │
+                                 ▼
+                          날개 내부 배선 ──► 로터암 ──► VTOL ESC ×4
+```
+
+- **PM08은 배터리와 PDB 사이 직렬**로 들어간다. 배터리를 PDB에 직결하면 전류 측정이 되지 않는다. 상세: [PM08-CAN 전력 경로](../../components/power/holybro-pm08-can/README.md#전력-경로-inline-passthrough)
+- 시스템 연속 전류 상한은 PM08의 **200A** (PDB는 300A이나 직렬 경로상 PM08이 병목)
+- 커넥터 정격 주의 — XT90은 연속 45A. 주 간선(배터리→PM08→PDB)은 링터미널+8AWG 이상 권장
+- ⚠️ **PM08↔FC 연결에 분기 케이블 필요** — PM08은 전원+CAN 통합 6핀(Molex 2.0mm), 6C Mini는 CAN1 4핀 + Power1 6핀(JST-GH 1.25mm)으로 분리 수용. 상세: [PM08-CAN FC 연결](../../components/power/holybro-pm08-can/README.md#fc-연결-pixhawk-6c-mini)
+- ⚠️ **FC 전원 이중화 불가** — [Pixhawk 6C Mini](../../components/fc/holybro-pixhawk-6c-mini/README.md)에 Power2 포트가 없어 PM08의 5.2V 2계통 중 1개만 사용. 배전 캐빈의 "2채널 이중화 비행제어 전원 공급" 옵션도 FC 입력이 1개이므로 활용 불가
 
 ## 부위별 사진 자료
 
@@ -213,13 +241,14 @@ PNP는 기체(플랫폼) + 파워 시스템(모터/ESC/프로펠러/서보)만 �
 - **별도 구매/확정 완료** (Makeflyeasy 순정품 대신 Holybro 생태계로 구성):
   - FC(오토파일럿): [Holybro Pixhawk 6C Mini](../../components/fc/holybro-pixhawk-6c-mini/README.md)
   - GPS: [Holybro M10N](../../components/gps/holybro-m10n/README.md)
-  - 에어스피드 센서: [Holybro DroneCAN Airspeed](../../components/sensors/holybro-airspeed-dronecan/README.md) (1개, 이중화 미적용)
+  - 에어스피드 센서: [Holybro Airspeed](../../components/sensors/holybro-airspeed-dronecan/README.md) (1개, 이중화 미적용) — ✅ **I2C 방식**, FC I2C 포트 연결 + 피토관 물려 **정상 작동 확인 완료**(2026-08-08). 원문 배선도의 날개 커넥터 1~4번 핀(Airspeed−/SDA/SCL/5V)이 그대로 유효
   - 파워 분배: [Holybro PDB 300A Side Entry](../../components/power/holybro-pdb-300a-side-entry/README.md)
   - 파워 모듈: [Holybro PM08-CAN (14S, 200A)](../../components/power/holybro-pm08-can/README.md)
   - RC 수신기: [RadioMaster RP4TD-M](../../components/receivers/radiomaster-rp4td-m/README.md) (검토 중 — ExpressLRS/CRSF 프로토콜, Pixhawk 6C Mini와의 포트/펌웨어 설정 확인 필요)
 - **미포함 (별도 구매 필요)**:
   - 디지털 전송(텔레메트리/영상) 시스템 (T900 Pro, 안테나 등)
-  - 배터리, 카메라/짐벌 등 탑재장비
+  - 카메라/짐벌 등 탑재장비
+- **메인 배터리**: [Fullymax 22.2V 6S 16000mAh 25C (XT90S)](../../components/batteries/fullymax-6s-16000mah/README.md) — Range 1 항속 시나리오와 동일 사양
 - 이 문서의 "구조/캐빈별 사양", "배선 다이어그램" 섹션 중 FC/GPS/디지털전송 관련 부분은 PDF 원문(Makeflyeasy 순정 Pixsurvey V3 기준) 참고 자료이며, 실제 보유 기체는 Holybro Pixhawk 6C Mini로 구성되어 채널 배치가 다를 수 있음 ([Pixhawk 6C Mini 문서](../../components/fc/holybro-pixhawk-6c-mini/README.md)의 "확인 필요" 참조)
 
 ## 안전/면책 (원문 요약)

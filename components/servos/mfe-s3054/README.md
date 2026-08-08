@@ -28,6 +28,8 @@ Makeflyeasy(MFE)의 풀메탈 기어 디지털 서보. [Striver Mini VTOL](../..
 | 케이블 길이 | 25cm |
 | 무게 | 23g |
 
+> 🔶 **동작 주파수(refresh rate) 미기재** — 제조사 스펙시트에 PWM 갱신 주파수 항목이 없어 허용 상한을 알 수 없다. PX4 공식 문서는 *"Servos typically operate safely at lower PWM rates (50-100Hz)"* 로 안내하므로, [QGC Actuators 설정](../../fc/holybro-pixhawk-6c-mini/README.md#qgc-actuators-화면-설정)에서 이 서보가 속한 출력 그룹은 **50Hz로 운용**한다. 400Hz 적용 시 과열·소손 위험이 있으므로 실측 확인 전까지 올리지 말 것.
+
 ## 성능 파라미터 (Performance parameter)
 
 | 항목 | 4.8V | 6.0V |
