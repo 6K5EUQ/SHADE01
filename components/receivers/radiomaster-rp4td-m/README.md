@@ -53,6 +53,7 @@ make holybro_6c-mini_default upload
 | `RC_CRSF_TEL_EN` | Enabled | 텔레메트리 활성화 |
 
 - Telem2를 RC용으로 쓰므로 **해당 포트의 기존 MAVLink 매핑(`MAV_1_CONFIG` 등)을 반드시 제거**해야 충돌하지 않는다.
+- 🔴 **경고: Telem2는 현재 [Raspberry Pi 5 컴패니언](../../companion/raspberry-pi-5/README.md)이 점유해 작동 중이다** (2026-08-11 기준). 위 MAVLink 매핑 제거를 그대로 실행하면 **QGC 무선 텔레메트리 링크가 끊긴다.** 본 수신기 장착 전에 Pi를 Telem1(UART7, 현재 비어 있음)으로 이전하는 등 포트 재배치를 먼저 확정할 것 — [충돌 상세](../../companion/raspberry-pi-5/README.md#-telem2-포트-충돌--rc-수신기와-경합)
 - 빌드 타깃명(`holybro_6c-mini_default`)은 PX4 버전에 따라 다를 수 있으므로 `make list_config_targets`로 확인할 것.
 
 **ArduPilot (참고 — 미채택)**
