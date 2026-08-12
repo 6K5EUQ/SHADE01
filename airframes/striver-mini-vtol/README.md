@@ -228,7 +228,7 @@ PNP는 기체(플랫폼) + 파워 시스템(모터/ESC/프로펠러/서보)만 �
 | VTOL ESC | 6S 50A ([상세: MFE ESC 650](../../components/esc/mfe-esc-650-50a/README.md)) | 4 | 4 | 4 | 4 | 4 |
 | VTOL 프로펠러 | 1550 (정/역 페어) | 2쌍 | 2쌍 | 2쌍 | 2쌍 | 2쌍 |
 | 서보 | S3054 ([상세: MFE 3054](../../components/servos/mfe-s3054/README.md)) | 5 | 5 | 5 | 5 | 5 |
-| UBEC | 3S–14S, 5.3V 10A | 1 | 1 | – | – | – |
+| UBEC | 3S–14S, 5.3V 10A ([상세: MFE UBEC](../../components/power/mfe-ubec-3s14s-10a/README.md)) | 1 | 1 | – | – | – |
 | 날개 터미널(커넥터) | — | 2 | 2 | 2 | 2 | 2 |
 | 파워 케이블 팩 | — | 1 | 1 | 1 | 1 | 1 |
 

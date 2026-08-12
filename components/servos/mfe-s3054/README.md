@@ -9,6 +9,7 @@ Makeflyeasy(MFE)의 풀메탈 기어 디지털 서보. [Striver Mini VTOL](../..
 - 판매처: uavmodel.com (UAVMODEL CO., LIMITED, Hong Kong), 단가 $14.00 (2026-08-02 확인)
 - 용도: Striver Mini VTOL 조종면 구동 (좌/우 에일러론, 수직꼬리, 좌/우 수평꼬리)
 - 장착 위치: [어댑터/에일러론 서보 캐빈](../../../airframes/striver-mini-vtol/README.md#부위별-사진-자료), [수직 꼬리](../../../airframes/striver-mini-vtol/README.md#부위별-사진-자료), [수평 꼬리](../../../airframes/striver-mini-vtol/README.md#부위별-사진-자료)
+- 전원 공급: [MFE UBEC (3S-14S 10A)](../../power/mfe-ubec-3s14s-10a/README.md) — 정격 상한(4.8–6.0V)이 UBEC 실물 라벨 표기(6V)와 맞닿아 있어 실측 확인 권장
 
 ## 특징 (원문 요약)
 
