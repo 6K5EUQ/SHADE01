@@ -8,6 +8,8 @@ Holybro의 소형 오토파일럿. [Striver Mini VTOL](../../../airframes/strive
 - 용도: PX4/ArduPilot 기반 비행 제어. VTOL/고정익 모드 전환, 모터/서보/센서 통합 제어
 - 지원 펌웨어: PX4, ArduPilot (모두 오픈소스)
 
+> GCS(QGroundControl) 접속 절차는 [QGroundControl 연결 절차](../../../gcs/qgroundcontrol/README.md) 참조. 본 문서의 Actuators/파라미터 설정은 QGC 접속이 성립한 뒤 수행한다.
+
 ## 프로세서 / 센서
 
 | 항목 | 값 |

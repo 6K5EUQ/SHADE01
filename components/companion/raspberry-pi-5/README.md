@@ -2,6 +2,8 @@
 
 [Striver Mini VTOL](../../../airframes/striver-mini-vtol/README.md) 기체에 탑재되어 [Pixhawk 6C Mini](../../fc/holybro-pixhawk-6c-mini/README.md)와 시리얼(UART)로 연결되는 온보드 컴퓨터. 역할은 **MAVLink 시리얼 ↔ UDP 브리지** — FC를 PC에 USB로 직접 연결하지 않아도, Tailscale 망을 통해 원격 PC의 QGroundControl이 붙는다.
 
+> **GCS 접속 절차는 [QGroundControl 연결 절차](../../../gcs/qgroundcontrol/README.md) 문서**에 단계별로 정리되어 있다. 본 문서는 브리지 구현·배선·systemd 유닛 상세를 다룬다.
+
 > 아래 내용은 2026-08-11 실기 SSH 접속으로 확인한 값이다.
 
 - 모델: **Raspberry Pi 5 Model B Rev 1.0**
