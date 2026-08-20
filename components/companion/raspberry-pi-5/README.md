@@ -138,22 +138,17 @@ QGC가 UDP 14550을 바인딩하면 **링크 수동 추가 없이** 기체가 �
 - Pi의 WiFi는 **`eduroam` 클라이언트 모드** (wlan0: 10.200.114.166/17). AP 모드 아님 — 기체가 자체 핫스팟을 띄우는 구조가 아니다.
 - ✅ **배터리 잔량 QGC 표시 가능** — [PM08-CAN](../../power/holybro-pm08-can/README.md)이 CAN1으로 FC에 보낸 전압/전류 센싱값이 MAVLink를 타고 QGC까지 도달함. PM08 → FC → Pi → QGC 전 구간이 검증된 셈이다.
 
-## 🔴 Telem2 포트 충돌 — RC 수신기와 경합
+## ✅ Telem2 포트 충돌 — 해소 (2026-08-19)
 
-**Telem2는 하나뿐인데 두 부품이 이 포트를 요구한다.**
+Telem2를 두고 Pi 5와 RC 수신기가 경합하던 문제는 **수신기를 Telem1(UART7)로 배치**해 해소했다. **Pi는 Telem2를 그대로 유지**한다 — 브리지가 이미 검증·가동 중이었으므로 건드리지 않는 쪽이 안전했다.
 
-| 부품 | 요구 포트 | 상태 |
-|---|---|---|
-| Raspberry Pi 5 (본 문서) | Telem2 (UART5) | ✅ 배선·브리지 구축 완료, **가동 중** |
-| [RadioMaster RP4TD-M](../../receivers/radiomaster-rp4td-m/README.md) | Telem2 (CRSF, `RC_CRSF_PRT_CFG`=Telem2) | 🔶 검토 중, 미장착 |
+| 부품 | 포트 | 파라미터 | 상태 |
+|---|---|---|---|
+| Raspberry Pi 5 (본 문서) | **Telem2 (UART5)** | `MAV_1_CONFIG=102` @921600 | ✅ 가동 중, 변경 없음 |
+| [RadioMaster RP4TD-M](../../receivers/radiomaster-rp4td-m/README.md) | **Telem1 (UART7)** | `RC_CRSF_PRT_CFG=101` | ✅ 결선·바인딩 완료 |
 
-두 부품을 동시에 쓰려면 하나를 다른 포트로 옮겨야 한다. 선택지:
-
-1. **RPi를 Telem1(UART7)로 이전** — Telem1은 현재 비어 있다. 배선을 옮기고 FC 파라미터와 `mav_bridge.py`의 포트 설정을 맞추면 된다. 가장 단순.
-2. **수신기를 다른 UART로** — GPS2(UART8)를 CRSF용으로 전환하는 방법이 있으나, 커넥터 규격과 GPS 확장성을 희생한다.
-3. RC 수신기를 최종 미채택 시 충돌 소멸.
-
-> ⚠️ [수신기 문서](../../receivers/radiomaster-rp4td-m/README.md#펌웨어별-설정)의 *"Telem2의 기존 MAVLink 매핑(`MAV_1_CONFIG` 등)을 반드시 제거"* 지시를 그대로 따르면 **Pi 텔레메트리 링크가 끊긴다.** 수신기 작업 전 위 선택지 중 하나를 먼저 확정할 것.
+- 서로 다른 UART이므로 **두 링크가 공존**한다. 수신기 설정 과정에서 Telem2의 MAVLink 매핑을 제거할 필요가 없다 — 이전 판 문서의 해당 경고는 무효다.
+- ⚠️ 남은 여유 UART는 **GPS2(UART8)뿐**이다. T900 Pro 등 지상국 무선모듈 도입 시 포트 재배치를 검토해야 한다.
 
 ## 부수 도구 — `px4_param.py`
 
@@ -168,7 +163,7 @@ QGC가 UDP 14550을 바인딩하면 **링크 수동 추가 없이** 기체가 �
 - **Pi 전원 공급 계통 미기록** — 어느 BEC/배터리에서 5V를 받는지, 전류 여유가 충분한지. Pi 5는 순간 소비가 커서 [UBEC(5.3V/10A)](../../fc/holybro-pixhawk-6c-mini/README.md#서보-전원-mfe-ubec-연결)를 서보와 공유하면 서보 동작 시 전압 강하 위험.
 - 🔴 **실비행 텔레메트리로 부적합** — 현재 링크는 `eduroam` WiFi + 인터넷 + Tailscale 경유다. 지상 벤치 테스트/설정용으로는 충분하나, **기체가 학내 WiFi 범위를 벗어나면 즉시 끊긴다.** 실비행에는 별도 무선 모뎀(T900 Pro 등) 또는 LTE 모뎀이 필요하다.
 - **비행 중 링크 신뢰성 미검증** — 위 사유로 지상 테스트만 완료.
-- **Telem2 포트 충돌 해소 방안 미확정** — 위 [Telem2 포트 충돌](#-telem2-포트-충돌--rc-수신기와-경합) 참조.
+- ~~Telem2 포트 충돌 해소 방안 미확정~~ → **해소(2026-08-19)**: 수신기를 Telem1로 배치. [Telem2 포트 충돌 — 해소](#-telem2-포트-충돌--해소-2026-08-19) 참조.
 
 ## 보유 수량 (SHADE 기체)
 

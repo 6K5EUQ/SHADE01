@@ -12,18 +12,20 @@ RadioMaster의 ExpressLRS(오픈소스 장거리 RC 링크) 초소형 수신기.
 
 본 수신기의 버스 인터페이스는 **CRSF (Crossfire Protocol)** — TBS Crossfire가 원조이며 ExpressLRS가 채택한 양방향 시리얼 디지털 프로토콜. PPM(아날로그 펄스폭)이나 SBUS(단방향 시리얼)와는 물리/전기적으로 다른 방식이라, **RC IN / PPM·SBUS 포트에는 꽂을 수 없고 UART 포트(Telem1 또는 Telem2)에 연결**해야 한다.
 
-### 배선 (Telem2 기준)
+### 배선 (Telem1 — ✅ 확정, 2026-08-19 결선)
 
 **PX4는 특정 포트를 강제하지 않는다** — 공식 문서는 "any spare UART port can be used"라고만 하고, 오히려 예시로 `TELEM1`을 든다([PX4 CRSF Telemetry](https://docs.px4.io/main/en/telemetry/crsf_telemetry.html)). 즉 Telem1·Telem2 어느 쪽이든 기능상 동일하다.
 
-**본 기체는 Telem2를 선택** — 기술적 제약이 아니라 자리 배분 관례다. Telem1은 지상국 텔레메트리 무선모듈(T900 Pro 등, 현재 미보유)용으로 예약해 둔다. 측량 임무에서 텔레메트리는 사실상 필수 장비이므로, 나중에 추가할 때 배선을 다시 만지지 않도록 비워둔다. Telem1로 바꾸려면 아래 표의 UART5↔UART7만 바뀌고 핀 번호는 동일하다.
+**본 기체는 Telem1을 채택**했다. 당초 계획은 Telem2였으나, [Raspberry Pi 5 컴패니언](../../companion/raspberry-pi-5/README.md)이 Telem2(UART5)를 MAVLink 브리지로 점유해 작동 중이었다. **Pi를 옮기는 대신 수신기를 Telem1(UART7)로 배치**해 충돌을 해소했다 — Pi 링크가 이미 검증·가동 중이었으므로 건드리지 않는 쪽이 안전했다.
 
-| RP4TD-M 패드 | → | Pixhawk 6C Mini Telem2 핀 | 신호 |
+> 이로써 T900 Pro 등 지상국 텔레메트리 무선모듈용으로 비워두려던 Telem1이 수신기에 배정됐다. 무선모듈 추가 시 남은 UART(GPS2/UART8 등) 재배치를 검토해야 한다.
+
+| RP4TD-M 패드 | → | Pixhawk 6C Mini Telem1 핀 | 신호 |
 |---|---|---|---|
 | VCC (5V) | → | 1 (red) | VCC +5V |
 | GND | → | 6 (black) | GND |
-| **TX** | → | **3 (black)** | UART5_RX (in) |
-| **RX** | → | **2 (black)** | UART5_TX (out) |
+| **TX** | → | **3 (black)** | UART7_RX (in) |
+| **RX** | → | **2 (black)** | UART7_TX (out) |
 
 - ⚠️ **TX/RX는 반드시 교차(cross)** — 수신기 TX → FC RX, 수신기 RX → FC TX. 동봉된 CRSF 케이블이 이미 교차되어 있는지 반드시 육안 확인 후 연결할 것.
 - 신호 반전(inverter) 회로 불필요 — CRSF는 비반전 UART라 직결 가능.
@@ -34,9 +36,11 @@ RadioMaster의 ExpressLRS(오픈소스 장거리 RC 링크) 초소형 수신기.
 
 > ✅ **SHADE 기체는 PX4 확정** (2026-08-04). 아래 PX4 절차를 따른다. ArduPilot 항목은 참고용.
 
-**PX4 (본 기체 채택 — ⚠️ 커스텀 펌웨어 빌드 필수)**
+**PX4 (본 기체 채택 — ✅ 커스텀 펌웨어 빌드·플래시 완료, 2026-08-11)**
 
 기본 배포 펌웨어에는 CRSF 드라이버(`crsf_rc`)가 **포함되어 있지 않다.** QGroundControl로 펌웨어를 설치하는 것만으로는 이 수신기가 동작하지 않으며, 소스를 받아 직접 빌드해야 한다.
+
+> ✅ **완료** — PX4 **v1.17.0** + `crsf_rc` 빌드 후 FC에 플래시했다. `RC_CRSF_PRT_CFG` 파라미터가 QGC에 나타나는 것으로 드라이버 정상 탑재를 확인했다. 상세: [FC 문서 — 커스텀 펌웨어](../../fc/holybro-pixhawk-6c-mini/README.md#커스텀-펌웨어-px4-v1170--crsf_rc)
 
 ```bash
 git clone https://github.com/PX4/PX4-Autopilot.git --recursive
@@ -49,21 +53,22 @@ make holybro_6c-mini_default upload
 
 | 파라미터 | 값 | 의미 |
 |---|---|---|
-| `RC_CRSF_PRT_CFG` | Telem2 | CRSF를 쓸 UART 지정 |
+| `RC_CRSF_PRT_CFG` | **101 (Telem1)** | CRSF를 쓸 UART 지정 |
 | `RC_CRSF_TEL_EN` | Enabled | 텔레메트리 활성화 |
 
-- Telem2를 RC용으로 쓰므로 **해당 포트의 기존 MAVLink 매핑(`MAV_1_CONFIG` 등)을 반드시 제거**해야 충돌하지 않는다.
-- 🔴 **경고: Telem2는 현재 [Raspberry Pi 5 컴패니언](../../companion/raspberry-pi-5/README.md)이 점유해 작동 중이다** (2026-08-11 기준). 위 MAVLink 매핑 제거를 그대로 실행하면 **QGC 무선 텔레메트리 링크가 끊긴다.** 본 수신기 장착 전에 Pi를 Telem1(UART7, 현재 비어 있음)으로 이전하는 등 포트 재배치를 먼저 확정할 것 — [충돌 상세](../../companion/raspberry-pi-5/README.md#-telem2-포트-충돌--rc-수신기와-경합)
+- ✅ **Telem2 충돌 해소** — 수신기를 Telem1에 두어 Pi 5의 Telem2 MAVLink 매핑(`MAV_1_CONFIG=102`)을 **건드리지 않는다.** 두 링크가 공존한다.
+- ⚠️ `RC_CRSF_PRT_CFG = 0`(미할당)이면 **FC가 해당 UART를 열지 않아 스틱 입력이 전혀 들어오지 않는다.** 배선을 마쳤는데 RC가 안 잡히면 이 값부터 확인할 것.
+- ⚠️ **`COM_RC_IN_MODE` 확인 필수** — 이 값이 `1`이면 *Joystick only* 모드라 **RC 입력을 통째로 무시**한다. 스틱을 움직여도 제어면이 반응하지 않는 직접적 원인이 된다. QGC가 이 파라미터를 `1065353216`처럼 표시하는 경우가 있는데, 이는 float `1.0`의 비트 패턴을 정수로 잘못 읽은 것으로 **실제 값은 `1`**이다.
 - 빌드 타깃명(`holybro_6c-mini_default`)은 PX4 버전에 따라 다를 수 있으므로 `make list_config_targets`로 확인할 것.
 
 **ArduPilot (참고 — 미채택)**
 | 파라미터 | 값 | 의미 |
 |---|---|---|
-| `SERIAL2_PROTOCOL` | 23 | RCIN (CRSF). Telem2 = SERIAL2 |
+| `SERIAL1_PROTOCOL` | 23 | RCIN (CRSF). Telem1 = SERIAL1 |
 | `RSSI_TYPE` | 3 | CRSF 링크 품질을 RSSI로 사용 |
 | `RC_OPTIONS` | bit 13 설정 | ELRS용 보레이트 420K (기본 416K에서 변경) |
 
-- 보레이트는 펌웨어가 자동 관리하므로 `SERIAL2_BAUD` 수동 설정 불필요.
+- 보레이트는 펌웨어가 자동 관리하므로 `SERIAL1_BAUD` 수동 설정 불필요.
 - 해당 UART는 **DMA 지원**이 필요 (6C Mini는 STM32H743이라 문제 없음).
 - ⚠️ MAVLink로 FC를 재부팅하면 수신기 전원을 껐다 켜기 전까지 통신이 끊김 — 알려진 동작.
 
@@ -73,14 +78,17 @@ make holybro_6c-mini_default upload
 
 - ~~PX4 vs ArduPilot 미확정~~ → **해소(2026-08-04): PX4 확정.** 위 커스텀 펌웨어 빌드가 필수 작업으로 확정됨.
 - ~~동봉 CRSF 케이블의 커넥터 규격 확인~~ → **해소(2026-08-08)**: 실물 확인 결과 **양 끝 커넥터 없는 맨선(주석 도금), 4가닥 트위스트 — 적/초/흰/검**. 아래 [배선 작업](#-배선-작업-납땜-필요) 참조
-- **수신기 패드 실크 인쇄 판독 필요** — 4개 패드 중 어느 것이 5V/GND/TX/RX인지. 케이블 색상(적=VCC, 검=GND는 확실)과 초/흰 중 어느 쪽이 TX인지 미확정
+- ~~**수신기 패드 실크 인쇄 판독 필요**~~ → **실질 해소(2026-08-19)**: 실크 판독 대신 **초↔흰 교환 재결선으로 정상 동작 확인**. 다만 어느 색이 TX인지 문서상 확정 표기는 여전히 없다.
+- ~~Telem2 포트 충돌~~ → **해소(2026-08-19)**: 수신기를 **Telem1(UART7)**에 배치. Pi 5는 Telem2 유지. 두 링크 공존.
+- **ELRS 바인딩 — Binding Phrase 방식 사용** — 송신기 웹UI(`ExpressLRS TX` AP → `http://10.0.0.1`)와 수신기 웹UI에 **동일한 phrase**를 입력해 바인딩했다. ⚠️ Binding Phrase가 설정된 수신기는 **수동 바인딩 모드로 진입하지 않는다**(ELRS 공식 문서). LED가 `Green heartbeat`(Web update mode)에 머무르면 phrase 불일치를 의심할 것.
+- **Model Match 불일치 주의** — LED가 `Triple blink then pause`면 송수신기의 model-match 설정이 어긋난 상태다. 조종기 모델 설정에서 `Receiver 01[Bnd]` 등 번호를 맞춰야 고정색으로 바뀐다.
 
 ## ⚠️ 배선 작업 (납땜 필요)
 
 무개조 연결 불가. **양쪽 다 가공이 필요**하다.
 
 ```
-RP4TD-M 패드 4개 ──[미세 납땜]── 동봉 CRSF wire ──[압착]── JST-GH 1.25mm 6핀 → FC Telem2
+RP4TD-M 패드 4개 ──[미세 납땜]── 동봉 CRSF wire ──[압착]── JST-GH 1.25mm 6핀 → FC Telem1
    (커넥터 없음)                  (맨선 4가닥)              (별도 구매 필요)
 ```
 
@@ -93,16 +101,17 @@ RP4TD-M 패드 4개 ──[미세 납땜]── 동봉 CRSF wire ──[압착]�
 
 ### 결선
 
-| 케이블 색 | 신호 | → Telem2 핀 |
+| 케이블 색 | 신호 | → Telem1 핀 |
 |---|---|---|
 | 적 | VCC 5V | 1 |
-| 초 또는 흰 | 수신기 TX | **3** (UART5_RX) |
-| 흰 또는 초 | 수신기 RX | **2** (UART5_TX) |
+| 초 또는 흰 | 수신기 TX | **3** (UART7_RX) |
+| 흰 또는 초 | 수신기 RX | **2** (UART7_TX) |
 | 검 | GND | 6 |
 | — | (CTS/RTS 미사용) | 4, 5 비움 |
 
 - ⚠️ **TX/RX 교차 필수**. 초/흰 중 어느 것이 TX인지는 패드 실크로 확인.
 - ✅ **뒤바꿔 연결해도 하드웨어 손상 없음** (통신만 안 됨). CRSF·FC 모두 3.3V 로직이라 전압 충돌도 없다. 동작하지 않으면 초↔흰만 서로 바꿔 재시도.
+- 📌 **실제 작업 기록 (2026-08-19)**: 초/흰 판독이 확정되지 않아 처음 결선에서 통신이 되지 않았고, **초↔흰을 서로 교환해 재결선한 뒤 정상 동작**했다. 위 "뒤바꿔도 손상 없음"이 실증된 셈이다.
 
 ### 납땜 시 주의
 

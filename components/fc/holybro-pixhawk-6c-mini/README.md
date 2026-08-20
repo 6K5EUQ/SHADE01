@@ -120,13 +120,19 @@ PDB 300A [XT30] ──22V──► UBEC ──5.3V──┬─► FC MAIN OUT �
 | 크루즈 ESC ([MFE ESC 6100](../../esc/mfe-esc-6s-100a/README.md)) | MAIN OUT 또는 AUX OUT — 🔶 아래 참조 |
 | 서보 ×5 ([MFE 3054](../../servos/mfe-s3054/README.md)) | MAIN OUT 또는 AUX OUT — 🔶 아래 참조 |
 | [Raspberry Pi 5 "raspb2" 컴패니언](../../companion/raspberry-pi-5/README.md) | **Telem2 (UART5) @ 921600** — ✅ GPIO 물리핀 8/10/6에 결선, `mav_bridge.py`로 QGC 원격 연결 실적 확인(2026-08-10). ⚠️ 5V(1번 핀) 미연결 — Pi 전원은 별도 계통 |
-| RC 수신기 ([RadioMaster RP4TD-M](../../receivers/radiomaster-rp4td-m/README.md)) | **Telem2** (UART, CRSF) — 🔴 **Pi 5와 포트 충돌**, 아래 참조. RC IN/SBUS 포트 불가. TX/RX 교차 배선, 배선표·파라미터는 [수신기 문서](../../receivers/radiomaster-rp4td-m/README.md#fc-연결-방법-pixhawk-6c-mini) 참조 |
+| RC 수신기 ([RadioMaster RP4TD-M](../../receivers/radiomaster-rp4td-m/README.md)) | **Telem1 (UART7) @ CRSF** — ✅ 결선·바인딩 완료(2026-08-19), `RC_CRSF_PRT_CFG=101`. RC IN/SBUS 포트 불가. TX/RX 교차 배선. 배선표·파라미터는 [수신기 문서](../../receivers/radiomaster-rp4td-m/README.md#fc-연결-방법-pixhawk-6c-mini) 참조 |
 
-### 🔴 Telem2 포트 충돌 (Pi 5 ↔ RC 수신기)
+### ✅ UART 포트 배정 — 충돌 해소 (2026-08-19)
 
-Telem2(UART5)는 1개인데 **현재 Pi 5가 점유해 작동 중**이고, RP4TD-M 수신기 계획도 같은 포트를 요구한다. 수신기 장착 전 한쪽을 옮겨야 한다 — Telem1(UART7)이 비어 있으므로 **Pi를 Telem1으로 이전하는 것이 가장 단순**하다.
+Telem2를 두고 Pi 5와 RC 수신기가 경합하던 문제는 **수신기를 Telem1로 배치**해 해소했다. Pi 링크가 이미 검증·가동 중이었으므로 그쪽을 건드리지 않는 편이 안전했다.
 
-상세 및 선택지: [Raspberry Pi 5 문서 — Telem2 포트 충돌](../../companion/raspberry-pi-5/README.md#-telem2-포트-충돌--rc-수신기와-경합)
+| 포트 | UART | 사용처 | 파라미터 | 상태 |
+|---|---|---|---|---|
+| **Telem1** | UART7 | [RP4TD-M 수신기](../../receivers/radiomaster-rp4td-m/README.md) (CRSF) | `RC_CRSF_PRT_CFG=101` | ✅ 결선·바인딩 완료 |
+| **Telem2** | UART5 | [Raspberry Pi 5](../../companion/raspberry-pi-5/README.md) (MAVLink 브리지) | `MAV_1_CONFIG=102` @921600 | ✅ 가동 중 |
+
+- 두 링크는 **서로 다른 UART이므로 공존**한다. 수신기 설정 시 Telem2의 MAVLink 매핑을 제거할 필요가 없다.
+- ⚠️ T900 Pro 등 지상국 텔레메트리 무선모듈을 추가하려면 **남은 UART가 GPS2(UART8)뿐**이다. 도입 시 포트 재배치 검토 필요.
 
 ### PM08-CAN 연결 — ✅ 결선 완료 (2026-08-11)
 
@@ -146,6 +152,33 @@ PM08에 **동봉된 Y자 분기 케이블**(6핀 → 6핀 + 4핀)로 FC의 두 �
 **남은 제약: FC 전원 이중화 불가** — 6C Mini에는 Power2가 없어 PM08의 5.3V 2계통 중 1개만 사용 가능. PM08의 POWER2는 유휴로 남는다.
 
 상세: [PM08-CAN 문서의 실제 결선](../../power/holybro-pm08-can/README.md#-실제-결선-2026-08-11--작동-확인-완료)
+
+## 커스텀 펌웨어 (PX4 v1.17.0 + `crsf_rc`)
+
+✅ **빌드·플래시 완료 (2026-08-11).** [RP4TD-M 수신기](../../receivers/radiomaster-rp4td-m/README.md)의 CRSF 프로토콜을 쓰려면 기본 배포 펌웨어로는 안 되고, `crsf_rc` 드라이버를 포함해 직접 빌드해야 한다.
+
+| 항목 | 값 |
+|---|---|
+| PX4 버전 | **v1.17.0** (안정 릴리스) |
+| 빌드 타깃 | `px4_fmu-v6c_default` |
+| 산출물 | `px4_fmu-v6c_default.px4` (1.8MB) |
+| 추가 드라이버 | `crsf_rc` (기본 `rc_input` 대신) |
+| **플래시 사용률** | **98.30%** ⚠️ |
+
+**검증**: 플래시 후 QGC Parameters에 `RC_CRSF_PRT_CFG`가 나타나는 것으로 드라이버 정상 탑재를 확인했다. 펌웨어 버전은 Vehicle Setup → Summary에서 `PX4 v1.17.0`으로 표시된다.
+
+### ⚠️ 플래시 용량 98.30%의 부작용
+
+용량이 빠듯해 PX4가 v6c 보드 기본 설정에서 **일부 모듈을 제외**한다. 그 결과:
+
+- QGC가 **"파라미터 누락" 경고**를 띄우는 경우가 있다. QGC는 표준 릴리스 기준으로 파라미터 목록을 검사하기 때문이며, 커스텀 빌드에서는 흔한 현상이다.
+- 경고 자체보다 **실제 기능 오작동 여부**로 판단해야 한다. 파라미터가 목록에 없다고 곧바로 문제인 것은 아니다.
+- 추가 모듈을 더 넣으려면 다른 모듈을 빼야 한다.
+
+### 🔶 확인 필요
+
+- **펌웨어 교체 전 버전 미기록** — 교체 이전 FC에 어떤 버전이 올라가 있었는지 확인하지 못한 채 v1.17.0을 플래시했다. 이전이 더 최신이었다면 다운그레이드이며, 일부 파라미터명이 달라 복원 시 누락이 생길 수 있다.
+- **MAVLink over ELRS 대안 미검토 완료** — ELRS가 MAVLink를 CRSF 형식으로 변환해 EdgeTX 화면 표시와 QGC 연결을 동시에 해결하는 방식이 있다. 이 경로를 쓰면 `RC_CRSF_PRT_CFG` 대신 `MAV_2_CONFIG=TELEM1` + `SER_TEL1_BAUD=460800`을 쓰며, **CRSF 커스텀 펌웨어가 불필요**했을 수 있다. 다만 빌드해 둔 v1.17.0 펌웨어에 드라이버가 포함된 것은 손해가 아니고, 이 대안이 여의치 않을 때 그대로 쓸 수 있다. ELRS 펌웨어 **3.5.0 이상** 필요.
 
 ## 채널 배정안 (PX4 기준)
 
@@ -230,7 +263,8 @@ PX4 v1.13+ 는 QGC **Vehicle Setup → Actuators** 화면에서 채널을 배정
 
 ## 🔶 확인 필요
 
-- ~~펌웨어 PX4/ArduPilot 미확정~~ → **해소(2026-08-04): PX4 확정.** RP4TD-M CRSF 구동을 위해 `crsf_rc` 드라이버를 포함한 **커스텀 펌웨어 빌드가 필수 작업으로 확정**됨. 절차: [수신기 문서](../../receivers/radiomaster-rp4td-m/README.md#펌웨어별-설정)
+- ~~펌웨어 PX4/ArduPilot 미확정~~ → **해소(2026-08-04): PX4 확정.** → **빌드·플래시까지 완료(2026-08-11)**: PX4 v1.17.0 + `crsf_rc`. [커스텀 펌웨어](#커스텀-펌웨어-px4-v1170--crsf_rc) 참조
+- ~~Telem2 포트 충돌 (Pi 5 ↔ RC 수신기)~~ → **해소(2026-08-19)**: 수신기를 **Telem1(UART7)**로 배치, Pi 5는 Telem2 유지. [UART 포트 배정](#-uart-포트-배정--충돌-해소-2026-08-19) 참조
 - ~~PM08 6핀 커넥터의 핀 배열 미확보 / CAN 센싱만으로 동작하는지 검증~~ → **해소(2026-08-11)**: 분기 결선 완료, CURRENT1/VOLTAGE1 미결선 상태로 **QGC 배터리 표시 정상 확인**. [PM08-CAN 연결](#pm08-can-연결---결선-완료-2026-08-11) 참조
 - **PWM 신호 3.3V 호환성 미검증** — [Emax ES3054 서보](../../servos/mfe-s3054/README.md) 및 MFE ESC가 3.3V 신호로 동작하는지 실물 확인. 불가 시 저항 교체(MOD)로 5V 전환.
 - **서보 PWM 주파수 상한 미확인** — [MFE 3054](../../servos/mfe-s3054/README.md#기본-파라미터-basic-parameters) 스펙시트에 동작 주파수(refresh rate) 항목이 없어 400Hz 허용 여부를 판단할 수 없다. [QGC Actuators 설정](#qgc-actuators-화면-설정)에서 **50Hz로 운용**하며, 제조사 문의 또는 실측으로 상한 확인 필요.
