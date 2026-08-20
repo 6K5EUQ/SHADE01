@@ -16,7 +16,7 @@
 | 경로 | QGC의 접속 상대 | 링크 종류 | 상태 |
 |---|---|---|---|
 | **A. 무선 (주 경로)** | RPi 5 `raspb2`의 `mav_bridge.py` — **UDP 14550** | Tailscale VPN (인터넷 경유) | ✅ 검증 완료 (2026-08-11) |
-| **B. USB 직결 (폴백)** | FC USB-C 포트 → PC 시리얼 | USB 케이블 | 🔶 미기록 (표준 동작) |
+| **B. USB 직결 (폴백/설정용)** | FC USB-C 포트 → PC 시리얼 | USB 케이블 | ✅ 검증 완료 (2026-08-11) — ⚠️ 수동 링크 등록 금지, [아래 참조](#-수동-usb-링크는-1초-뒤-끊긴다) |
 | ~~C. 무선 모뎀 직결~~ | T900 Pro 등 텔레메트리 라디오 | 900MHz 등 | ❌ 미보유 — [미구매 항목](../../airframes/striver-mini-vtol/README.md#보유-사양-메모-shade-기체--pnp) |
 
 > 🔴 **경로 A는 지상 벤치 테스트/설정 전용이다.** Pi가 학내 WiFi(`eduroam`) 클라이언트라 기체가 WiFi 범위를 벗어나면 링크가 끊긴다. 실비행 텔레메트리로는 부적합.
@@ -175,13 +175,36 @@ journalctl -u mavlink-bridge.service -f | grep "GCS connected"
 무선 링크가 불가할 때, 또는 **펌웨어 플래싱·센서 캘리브레이션처럼 링크 단절이 치명적인 작업**에 사용한다.
 
 1. FC의 **USB-C 포트**를 PC에 연결한다. (FC USB 전원 입력 4.75–5.25V — [전원 규격](../../components/fc/holybro-pixhawk-6c-mini/README.md#전원-규격))
-2. QGC를 실행하면 시리얼 포트를 **자동 인식**해 연결된다. 링크 수동 추가 불필요.
+2. QGC를 실행하면 시리얼 포트를 **자동 인식**해 연결된다. **링크를 수동으로 추가하지 말 것** — 아래 참조.
 3. Linux에서 포트 권한 오류가 나면 실행 계정이 `dialout` 그룹에 있어야 한다.
 
 ```bash
 sudo usermod -aG dialout $USER   # 적용에는 재로그인 필요
 ```
 
+### 🔴 수동 USB 링크는 1초 뒤 끊긴다
+
+**증상**: Comm Links에 시리얼 링크를 직접 등록해 Connect 하면 붙었다가 **약 1초 만에 끊긴다.** 반복해도 동일하다.
+
+**원인**: QGC(AppImage 번들 Qt)의 포트 열거 문제로 보인다. 등록된 수동 시리얼 링크가 이 환경에서 유지되지 않는다. `Link0`에 `auto=true`를 줘도 해결되지 않는다 — QGC는 저장된 링크와 **무관하게 autoconnect 전용 동적 링크를 따로 생성**하기 때문이다.
+
+```
+4.282  "FC USB" 링크 연결
+5.357  1초 뒤 끊김            ← 수동 등록 링크
+7.052  New auto-connect port added: "PX4 FMU V6C on ttyACM0 (AutoConnect)"
+7.068  이 동적 링크로 연결 → 유지됨   ← 실제로 붙어 있는 것은 이쪽
+```
+
+**해결**: 수동 USB 링크를 **등록하지 않고**, autoconnect 동적 링크만 쓴다. 이미 등록해 두었다면 삭제한다.
+
+| 설정 | 값 | 효과 |
+|---|---|---|
+| `autoConnectPixhawk` | `true` | USB 케이블을 꽂으면 **자동 연결**. Comm Links 목록에는 표시되지 않는다 |
+| `autoConnectUDP` | `false` | Pi 링크가 멋대로 붙지 않음 — 필요할 때 **수동 Connect** |
+
+이 조합이 "상황에 따라 골라 쓰기"에 가장 가깝다: **USB는 꽂으면 자동, Pi는 클릭해서 연결.**
+
+- Comm Links에 "FC USB" 같은 항목이 Connect 버튼인 채 남아 있다면 혼란만 주므로 삭제할 것.
 - ⚠️ **USB 전원만으로는 서보·ESC가 동작하지 않는다.** USB는 FC 로직만 살린다. 액추에이터 테스트에는 [UBEC](../../components/fc/holybro-pixhawk-6c-mini/README.md#서보-전원-mfe-ubec-연결)의 서보 레일 전원과 메인 배터리가 필요하다.
 - ⚠️ **경로 A와 동시 연결 시 주의** — USB와 Telem2 양쪽에서 같은 기체가 붙으면 QGC가 기체를 중복 인식하거나 파라미터 쓰기가 경합할 수 있다. 설정 작업 중에는 **한 경로만 쓰는 것을 권장**한다.
 - 🔶 이 경로는 아직 본 기체에서 별도 기록된 검증 이력이 없다(표준 동작이므로 문제 없을 것으로 예상). 실제 수행 후 결과를 이 문서에 추가할 것.
@@ -196,13 +219,34 @@ QGC 접속이 성립한 뒤 진행할 기체 설정 항목과 참조 문서.
 |---|---|---|
 | 액추에이터(모터/서보) 출력 배정 | Vehicle Setup → Actuators | [FC — Actuators 화면 설정](../../components/fc/holybro-pixhawk-6c-mini/README.md#qgc-actuators-화면-설정) |
 | 채널 배정안 (ESC 5 + 서보 5) | Vehicle Setup → Actuators | [FC — 채널 배정안](../../components/fc/holybro-pixhawk-6c-mini/README.md#채널-배정안-px4-기준) |
-| ESC 스로틀 캘리브레이션 | — (⚠️ **프로펠러 제거 필수**) | [ESC 650 튜닝](../../components/esc/mfe-esc-650-50a/README.md#튜닝-프로세스-throttle-travel-tuning) |
+| ESC 캘리브레이션 | Vehicle Setup → Power (⚠️ **프로펠러 제거 필수**, 🔴 **USB 직결에서만 동작**) | [ESC 650 튜닝](../../components/esc/mfe-esc-650-50a/README.md#튜닝-프로세스-throttle-travel-tuning) |
 | 배터리 / 전원 파라미터 확인 | Vehicle Setup → Power / Parameters | [PM08-CAN](../../components/power/holybro-pm08-can/README.md) |
 | Telem2 시리얼 파라미터 확인 | Parameters → `SER_TEL2_BAUD`, `MAV_*_CONFIG`, `MAV_*_MODE` | [RPi 5 — 확인 필요](../../components/companion/raspberry-pi-5/README.md#-확인-필요) |
 | CAN 파라미터 확인 | Parameters → `UAVCAN_ENABLE`, `UAVCAN_SUB_BAT`, `BAT1_SOURCE` | [PM08-CAN](../../components/power/holybro-pm08-can/README.md) |
-| RC 수신기 설정 | Vehicle Setup → Radio | [RP4TD-M](../../components/receivers/radiomaster-rp4td-m/README.md) 🔴 Telem2 충돌 미해소 |
+| RC 수신기 설정 | Vehicle Setup → Radio | [RP4TD-M](../../components/receivers/radiomaster-rp4td-m/README.md) — ✅ Telem1 결선 완료. `RC_CRSF_PRT_CFG=101`, `COM_RC_IN_MODE` 확인 필수 |
 
 > ⚠️ **파라미터 변경 전 백업**: Parameters 화면 우상단 Tools → **Save to file**로 현재 값을 저장해 둘 것. 되돌릴 수단이 없으면 설정 실수를 복구할 수 없다.
+
+### 🔴 무선(경로 A)으로 하면 안 되는 작업
+
+타이밍이 정밀하거나 링크 단절이 치명적인 작업은 **반드시 USB 직결(경로 B)**에서 수행한다.
+
+| 작업 | 이유 |
+|---|---|
+| **ESC 캘리브레이션** | QGC가 무선 링크에서는 **아예 허용하지 않는다.** 타이밍 정밀도 요구 |
+| 펌웨어 플래싱 | 중간에 끊기면 FC가 벽돌이 될 수 있다 |
+| 파라미터 대량 읽기/쓰기 | 누락·타임아웃 위험 |
+| 미션·랠리포인트 업/다운로드 | 전송 안정성 |
+| 액추에이터 테스트 | 응답 지연이 오판을 부른다 |
+
+USB는 지연이 1ms 수준이라 이런 전송이 안정적이다. 반대로 **비행 중 모니터링**은 무선 경로만 가능하다.
+
+### ⚠️ `COM_RC_IN_MODE` — RC가 안 먹을 때 첫 번째 확인 대상
+
+스틱을 움직여도 제어면이 반응하지 않으면 이 파라미터부터 본다.
+
+- `COM_RC_IN_MODE = 1` 은 **"Joystick only"** 모드로, **RC 입력을 통째로 무시**하고 QGC 조이스틱만 받는다. 배선과 `RC_CRSF_PRT_CFG`가 모두 정상이어도 서보가 움직이지 않는 직접적 원인이 된다.
+- ⚠️ **표시값 함정** — QGC나 스크립트가 이 값을 `1065353216`처럼 보여주는 경우가 있다. 이는 float `1.0`의 비트 패턴을 정수로 잘못 읽은 것으로, **실제 값은 `1`**이다. 이상한 큰 수가 보인다고 해서 값이 깨진 것이 아니다.
 
 ### 파라미터 조회 대안 — `px4_param.py`
 
@@ -293,11 +337,13 @@ FC까지의 CAN 센싱 문제일 가능성이 높다. [PM08-CAN 배선](../../co
 
 ## 🔶 확인 필요
 
-- **경로 B(USB 직결) 실측 미기록** — 본 기체에서 USB 연결로 QGC 접속한 이력이 문서에 없다. 펌웨어 작업 전 한 번 확인해 결과를 기록할 것.
+- ~~경로 B(USB 직결) 실측 미기록~~ → **해소(2026-08-11)**: USB autoconnect로 접속·펌웨어 플래시·ESC 캘리브레이션까지 수행 완료. 단 **수동 링크 등록은 1초 뒤 끊기는 문제**가 있어 autoconnect만 쓴다. ([상세](#-수동-usb-링크는-1초-뒤-끊긴다))
+- **수동 시리얼 링크 1초 끊김 근본 원인 미해결** — AppImage 번들 Qt의 포트 열거 문제로 추정되나 확정하지 못했다. QGC를 소스 빌드하면 해소될 가능성이 있다. 현재는 autoconnect로 우회 중이라 실사용에 지장 없음.
 - **FC측 MAVLink 파라미터 실측값 미확정** — `MAV_*_MODE`가 `Onboard`인지 `Normal`인지 미확인. 수신 스트림에 HIGHRES_IMU·ATTITUDE_QUATERNION이 고레이트로 포함된 것으로 보아 `Onboard` 가능성이 높다. QGC Parameters에서 확정할 것. ([RPi 5 문서](../../components/companion/raspberry-pi-5/README.md#-확인-필요))
 - **QGC 버전 미기록** — `rim` PC의 `QGroundControl-x86_64.AppImage` 버전, `ku-dgs1`의 설치 형태/버전 모두 미확인. Actuators 화면 구성이 버전에 따라 다르므로 기록 필요.
+- ⚠️ **커스텀 펌웨어로 인한 QGC 경고** — FC에 PX4 v1.17.0 커스텀 빌드(플래시 98.30%)가 올라가 있어, QGC가 표준 릴리스 기준으로 검사하며 **"파라미터 누락" 경고**를 띄울 수 있다. 경고 자체보다 실제 기능 오작동 여부로 판단할 것. ([상세](../../components/fc/holybro-pixhawk-6c-mini/README.md#-플래시-용량-9830의-부작용))
 - 🔴 **실비행 텔레메트리 경로 미확보** — 경로 A는 지상 전용. T900 Pro 등 [미구매 항목](../../airframes/striver-mini-vtol/README.md#보유-사양-메모-shade-기체--pnp).
-- 🔴 **Telem2 포트 충돌 미해소** — [RP4TD-M 수신기](../../components/receivers/radiomaster-rp4td-m/README.md) 장착 시 Pi를 Telem1(UART7)로 이전해야 하며, 그 경우 이 문서의 포트 표기도 함께 갱신해야 한다. ([충돌 상세](../../components/companion/raspberry-pi-5/README.md#-telem2-포트-충돌--rc-수신기와-경합))
+- ~~Telem2 포트 충돌 미해소~~ → **해소(2026-08-19)**: 수신기를 **Telem1(UART7)**에, Pi는 **Telem2(UART5)** 유지. 두 링크 공존하므로 이 문서의 포트 표기는 그대로 유효하다. ([포트 배정](../../components/fc/holybro-pixhawk-6c-mini/README.md#-uart-포트-배정--충돌-해소-2026-08-19))
 - **비행 중 링크 신뢰성 미검증** — 지상 테스트만 완료.
 
 ## 관련 문서
