@@ -8,6 +8,22 @@ RadioMaster의 ExpressLRS(오픈소스 장거리 RC 링크) 초소형 수신기.
 - 리전 옵션: FCC / LBT (전파 규격 지역 옵션, 구매 시 선택)
 - 용도: [Striver Mini VTOL](../../../airframes/striver-mini-vtol/README.md) 등 ExpressLRS 기반 RC 시스템의 수신기
 
+## ✅ 현재 운용 상태 (2026-08-21 기준)
+
+> **링크 모드가 CRSF → MAVLink over ELRS로 전환됐다.** 아래 CRSF 절차/파라미터 절은 이력 참고용.
+
+| 항목 | 값 |
+|---|---|
+| 수신기 펌웨어 | ExpressLRS **3.5.6** (ee188b) ISM2G4 |
+| Serial Protocol | **MAVLink** (WebUI에서 CRSF → MAVLink 변경) |
+| 바인딩 | ✅ 완료 — bind phrase 방식, Persistent 저장 |
+| TX (Boxer 내장) | Unified 4.1.0, Link Mode = **MAVLink** |
+| 백팩 | 1.5.9, Telemetry = wifi (노트북 QGC용 AP) |
+| FC 포트 | TELEM1 (UART7), MAVLink 인스턴스, 460800 baud |
+
+RC 조종과 텔레메트리가 MAVLink 단일 링크로 흐르며, `RC_CRSF_*` 파라미터는 더 이상 사용하지 않는다.
+전체 브링업 현황: [BRINGUP.md](../../../BRINGUP.md)
+
 ## FC 연결 방법 (Pixhawk 6C Mini)
 
 본 수신기의 버스 인터페이스는 **CRSF (Crossfire Protocol)** — TBS Crossfire가 원조이며 ExpressLRS가 채택한 양방향 시리얼 디지털 프로토콜. PPM(아날로그 펄스폭)이나 SBUS(단방향 시리얼)와는 물리/전기적으로 다른 방식이라, **RC IN / PPM·SBUS 포트에는 꽂을 수 없고 UART 포트(Telem1 또는 Telem2)에 연결**해야 한다.
@@ -178,10 +194,15 @@ RP4TD-M 패드 4개 ──[미세 납땜]── 동봉 CRSF wire ──[압착]�
 | 제품 페이지 (외형, 가격, 옵션) | [images/01-product-page.png](images/01-product-page.png) | radiomasterrc.com 제품 페이지 캡처 |
 | 사양 + TCXO/듀얼 트랜시버/듀얼안테나 설명 | [images/02-specifications-and-tcxo.png](images/02-specifications-and-tcxo.png) | |
 | 사양표(재확인) + 무게/크기 실측 + 패키지 구성 | [images/03-specs-weight-size-package.png](images/03-specs-weight-size-package.png) | 저울 실측 사진, 치수 도면 포함 |
+| 수신기 WebUI 메인 (펌웨어 3.5.6 확인) | [images/webui-rx-main-fw356.jpg](images/webui-rx-main-fw356.jpg) | 10.0.0.1, 바인딩 작업 중 캡처 (2026-08-19) |
+| WebUI — Binding storage 옵션, Bound UID | [images/webui-rx-binding-storage.jpg](images/webui-rx-binding-storage.jpg) | Persistent 선택 |
+| WebUI — Serial Protocol 목록 | [images/webui-rx-serial-protocol.jpg](images/webui-rx-serial-protocol.jpg) | 이후 MAVLink로 전환 |
+| WebUI — Model Match / Force telemetry off | [images/webui-rx-modelmatch-forcetelem.jpg](images/webui-rx-modelmatch-forcetelem.jpg) | 둘 다 미사용 |
+| 제조사 매뉴얼 (RP4TD 시리즈) | [RP4TD-manual.pdf](RP4TD-manual.pdf) | |
 
 > 원본 자료는 radiomasterrc.com 제품 페이지의 풀페이지 스크린샷(PDF, 4페이지)이며, 이 문서에는 제품 정보(사양/패키지 구성)까지만 반영함. 이후 페이지의 리뷰, "You may also like", 사이트 푸터 등은 제외.
 
 ## 보유 수량 (SHADE 기체)
 
-- 현재 보유/구매 검토 중 (수량 미정)
-- Striver Mini VTOL은 PNP 옵션으로 RC 수신기 미포함 상태였으며, 본 제품이 그 자리를 채울 후보로 확인됨 (위 "확인 필요" 항목 참조)
+- ✅ 1개 보유 — 기체에 장착 완료 (TELEM1 결선, 바인딩 완료, 2026-08-19~21)
+- Striver Mini VTOL은 PNP 옵션으로 RC 수신기 미포함 상태였으며, 본 제품이 그 자리를 채움
