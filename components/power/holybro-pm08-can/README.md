@@ -240,6 +240,12 @@ Striver 기체의 [배전 캐빈 사양](../../../airframes/striver-mini-vtol/RE
   - 참고: 제품 페이지 "You may also like"에 [CAN Hub $27.59](https://holybro.com/products/can-hub) 노출 — CAN 노드가 늘어날 때 배선 정리용으로 검토 가능
 - ~~Power1의 CURRENT1/VOLTAGE1 미결선 상태로 CAN 센싱만 동작하는지 실물 검증~~ → **해소(2026-08-11)**: 두 핀을 비운 채 CAN 센싱만으로 **QGC에 22.88V / 48% / 0.17A 정상 표시** 확인. 아날로그 센싱 핀 없이 동작함이 실증됨
 - 🔶 **CAN1 핀4(GND) 미결선** — **동봉 케이블 설계상 정상**(CAN 측 4핀에 노랑·파랑 2가닥만 배선). FC 내부에서 Power1 GND와 공통이라 현재 정상 동작한다. 다만 모터 구동 시 노이즈 환경에서 CAN 안정성 재확인 필요. [실제 결선](#-실제-결선-2026-08-11--작동-확인-완료) 참조
+- ⚠️ **DroneCAN 노드 ID가 MAVLink 배터리 ID로 노출된다 (2026-08-22 발견)** — PX4는 `battery.cpp:131`에서
+  `_battery_status[instance].id = msg.getSrcNodeID().get()`로 노드 ID를 그대로 쓴다. 본 개체는 **노드 ID 124**라
+  `BATTERY_STATUS.id = 124`로 송신되며, 이를 바꾸는 파라미터는 없다.
+  이 때문에 ELRS 4.1.0이 배터리 텔레메트리를 버려 조종기 화면에 값이 안 떴다
+  ([ELRS 배터리 텔레메트리 수정](../../transmitters/radiomaster-boxer/elrs-battery-telemetry-fix.md)).
+  **아날로그 파워모듈이면 `id=0`이라 겪지 않는 문제**이므로, DroneCAN 파워모듈 특유의 함정으로 기록해 둔다.
 - **CAN 파라미터 실제 적용값 미확인** — 센싱이 동작하는 것으로 보아 `UAVCAN_ENABLE=2`, `UAVCAN_SUB_BAT=2`, `BAT1_SOURCE=External`이 설정돼 있을 것이나, QGC에서 실측값 확인 필요
 - 실제 Striver 기체의 배전 캐빈 구조([08-distribution-cabin.png](../../../airframes/striver-mini-vtol/images/08-distribution-cabin.png))와 대조해 물리적 배치 확인 필요
 

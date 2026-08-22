@@ -16,12 +16,16 @@ RadioMaster의 ExpressLRS(오픈소스 장거리 RC 링크) 초소형 수신기.
 |---|---|
 | 수신기 펌웨어 | ExpressLRS **3.5.6** (ee188b) ISM2G4 |
 | Serial Protocol | **MAVLink** (WebUI에서 CRSF → MAVLink 변경) |
-| 바인딩 | ✅ 완료 — bind phrase 방식, Persistent 저장 |
-| TX (Boxer 내장) | Unified 4.1.0, Link Mode = **MAVLink** |
+| 바인딩 | ✅ 완료 — bind phrase 방식, Persistent 저장. **Bound UID `45,5,9,157,112,199`** |
+| TX (Boxer 내장) | Unified 4.1.0 **커스텀 빌드**, Link Mode = **MAVLink** — [배터리 텔레메트리 패치](../../transmitters/radiomaster-boxer/elrs-battery-telemetry-fix.md) |
 | 백팩 | 1.5.9, Telemetry = wifi (노트북 QGC용 AP) |
 | FC 포트 | TELEM1 (UART7), MAVLink 인스턴스, 460800 baud |
 
 RC 조종과 텔레메트리가 MAVLink 단일 링크로 흐르며, `RC_CRSF_*` 파라미터는 더 이상 사용하지 않는다.
+
+> **본 수신기는 패치 대상이 아니다.** MAVLink→CRSF 변환은 TX에서만 일어나므로(`tx_main.cpp:1544` 단독 호출,
+> `rx_main.cpp`에 해당 코드 없음), 배터리 텔레메트리 문제는 TX 펌웨어만 고쳐 해결했다. RX는 공식 3.5.6 유지.
+
 전체 브링업 현황: [BRINGUP.md](../../../BRINGUP.md)
 
 ## FC 연결 방법 (Pixhawk 6C Mini)

@@ -36,9 +36,13 @@
 
 | 장치 | 펌웨어 | 설정 |
 |---|---|---|
-| TX (Boxer 내장, ESP32 2400) | Unified **4.1.0** ISM2G4 (a9d4a9) | Link Mode = **MAVLink** |
-| RX RP4TD-M | **3.5.6** (ee188b) ISM2G4 | Serial Protocol = **MAVLink**, 바인딩 완료 (bind phrase 방식) |
+| TX (Boxer 내장, ESP32 2400) | Unified **4.1.0 커스텀 빌드** (DroneCAN 배터리 패치) | Link Mode = **MAVLink** |
+| RX RP4TD-M | **3.5.6** (ee188b) ISM2G4 | Serial Protocol = **MAVLink**, 바인딩 완료 — Bound UID `45,5,9,157,112,199` |
 | 백팩 | **1.5.9** | Telemetry = **wifi** (노트북 QGC 연결용) |
+
+> **TX는 커스텀 펌웨어다.** PM08 DroneCAN 파워모듈이 `BATTERY_STATUS.id=124`로 보고하는데
+> ELRS 4.1.0이 `id != 0`을 버려 조종기 화면에 배터리가 안 떴다. 1줄 패치로 해결.
+> 재플래시 시 바인딩 재설정 필요 — 절차와 상세: [ELRS 배터리 텔레메트리 수정](components/transmitters/radiomaster-boxer/elrs-battery-telemetry-fix.md)
 
 바인딩 과정 스크린샷: `components/receivers/radiomaster-rp4td-m/images/webui-rx-*`,
 `components/transmitters/radiomaster-boxer/images/webui-tx-*`
