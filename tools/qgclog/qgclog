@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# qgclog 런처 — pyulog/numpy 가 있는 인터프리터를 찾아 qgclog.py 를 실행한다.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+pick_python() {
+  for cand in "${QGCLOG_PYTHON:-}" "$HOME/venv-ardupilot/bin/python" \
+              "$HOME/venv-ardupilot/bin/python3" python3 python; do
+    [ -n "$cand" ] || continue
+    if command -v "$cand" >/dev/null 2>&1 && \
+       "$cand" -c "import pyulog, numpy" >/dev/null 2>&1; then
+      echo "$cand"; return 0
+    fi
+  done
+  return 1
+}
+
+PY="$(pick_python)" || {
+  echo "pyulog/numpy 를 가진 python 을 못 찾았다." >&2
+  echo "설치: python3 -m pip install pyulog numpy" >&2
+  echo "또는 QGCLOG_PYTHON=/path/to/python 지정" >&2
+  exit 1
+}
+
+exec "$PY" "$HERE/qgclog.py" "$@"

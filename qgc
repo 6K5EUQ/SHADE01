@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# SHADE 기체 유틸 진입점.
+#   ./qgc log list      최근 비행 로그 나열
+#   ./qgc log 1         1번 로그 분석
+#   ./qgc log <path>    경로 직접 지정
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+usage() {
+  cat >&2 <<'USAGE'
+사용법:
+  ./qgc log list        최근 비행 로그 나열 (1 = 가장 최근)
+  ./qgc log <번호>      해당 로그 분석
+  ./qgc log <path.ulg>  경로 직접 지정
+
+옵션은 그대로 전달된다:
+  ./qgc log list -n 30
+  ./qgc log 1 --dir ~/다른/Logs
+USAGE
+  exit 1
+}
+
+[ $# -ge 1 ] || usage
+
+case "$1" in
+  log)
+    shift
+    [ $# -ge 1 ] || set -- list
+    exec "$HERE/tools/qgclog/qgclog" "$@"
+    ;;
+  -h|--help|help) usage ;;
+  *)
+    echo "알 수 없는 하위명령: $1" >&2
+    usage
+    ;;
+esac
