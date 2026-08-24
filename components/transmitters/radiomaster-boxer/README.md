@@ -10,6 +10,11 @@ RadioMaster의 2.4GHz RC 송신기, **M2 개정판**. [RadioMaster RP4TD-M 수�
 - FCC ID: 2A337-BOXER-4IN1 (4-in-1/CC2500 버전), 2A337-BOXER-ELRS (ExpressLRS 내장 버전) — *(구형 A1.9 매뉴얼 기준, M2도 동일 ID 사용 여부는 미확인)*
 - 리뷰: 5.00/5.0 (13건, 2026-08-07 확인)
 
+## 스위치 매핑
+
+SA/SB/SC/SD/SE 채널 배정, RC 값 규칙(**위=1000 / 아래=2000**), RTL 스위치 설정은
+별도 문서로 정리했다 → [스위치 매핑](switch-mapping.md)
+
 ## ⚠️ 내장 ELRS는 커스텀 펌웨어다 (2026-08-22~)
 
 내장 ELRS TX에 **1줄 패치한 4.1.0 커스텀 빌드**가 올라가 있다. [PM08-CAN](../../power/holybro-pm08-can/README.md)
