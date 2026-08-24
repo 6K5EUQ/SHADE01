@@ -10,7 +10,9 @@
 
 분석 도구: `./qgc log list` / `./qgc log <번호>` ([qgclog](tools/qgclog/README.md))
 
-**미해결 (다음 비행 전 필수)**: 피토관 역결선 — 에어스피드가 음수라 고정익 전환 불가.
+**미해결 (다음 비행 전 필수)**: 에어스피드 **영점 오프셋** 어긋남 — 정지 시 음수라 고정익 전환 불가.
+⚠️ 배관은 정상이다(불면 양수 확인). 튜브 건드리지 말고 **영점만 재보정**할 것 —
+[상세](components/sensors/holybro-airspeed-dronecan/README.md#️-영점-오프셋-어긋남--미해결-2026-08-24)
 
 ## 조종기 스위치 (2026-08-24 확정)
 
@@ -24,6 +26,9 @@
 | SD | 7 | VTOL 전환 | 고정익 |
 | SE | 8 | KILL | KILL |
 | **SC** | **9** | **RTL** | **RTL** |
+
+⚠️ 3단은 **SB·SC 뿐**이다. SA·SD·SE 는 2단(중간 없음), SF 는 모멘터리(TOGGLE).
+P3 는 **6단 스위치**로 자동미션 진입용 검토 중.
 
 상세·RTL 동작·주의사항: [스위치 매핑](components/transmitters/radiomaster-boxer/switch-mapping.md)
 
