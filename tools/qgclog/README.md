@@ -8,6 +8,9 @@ ULog(`.ulg`)를 읽어 **무엇이 문제였고, 무엇이 잘 됐고, 다음에
 ./qgc log <path.ulg>  # 경로 직접 지정
 ```
 
+**FC 에서 로그 받아오기**: [FETCHING.md](FETCHING.md) — QGC 없이 USB 만으로,
+MAVFTP 버스트로 7.6MB 를 18초에. `fcfetch.py` 사용.
+
 `tools/qgclog/qgclog` 를 직접 불러도 같다.
 
 ## 출력 예

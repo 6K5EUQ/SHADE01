@@ -45,6 +45,20 @@ qgclog 1 --dir ~/다른/Logs
    자동 판정은 임계값 기반이라 **맥락을 모른다** — 지상 테스트인지 실비행인지,
    의도한 기동인지 사고인지는 로그만으로 구분 못 한다. 그 판단을 네가 채워라.
 
+## FC 에서 로그 받아오기
+
+로그가 로컬에 없으면 **FC 내장 SD 에서 직접** 받는다. QGC 불필요, USB 만 있으면 된다.
+
+```bash
+~/.venv-mav/bin/python <SHADE_parts>/tools/qgclog/fcfetch.py ls /fs/microsd/log/2026-08-24
+~/.venv-mav/bin/python <SHADE_parts>/tools/qgclog/fcfetch.py fetch 2026-08-24 /tmp/fclogs
+```
+
+⚠️ **파일명은 UTC** — KST = UTC+9. 19시 비행은 `10_*.ulg` 다.
+⚠️ **QGC 가 포트를 잡고 있으면 실패** — 먼저 `fuser -v /dev/ttyACM0` 확인. 사용자 창이면 물어볼 것.
+
+절차·API 함정·복구 원리 전부: [FETCHING.md](../../tools/qgclog/FETCHING.md)
+
 ## 로그 디렉토리
 
 `--dir` > `$QGC_LOG_DIR` > `~/QGroundControl/Logs` > `~/Documents/QGroundControl/Logs` > `./Logs` 순으로 찾는다.
@@ -79,6 +93,11 @@ qgclog 1 --dir ~/다른/Logs
   `vehicle_status.failsafe` 로 판단하라.
 - **시각은 arm 시점 기준 상대초**로 표시된다. 로그 파일 절대시각과 다르다.
 - **`gravity[N]` innovation 초과**는 기동 중에는 흔하다. 정지 호버에서 크면 IMU 문제.
+- **"파싱 실패" 를 손상으로 단정하지 마라.** `qgclog` 가 원인을 구분해 준다 —
+  *구독 섹션 유실* 은 자동 복구되고(데이터는 멀쩡하다), *데이터 깨짐 N%* 만 실제 손상이다.
+- **고도를 원점 기준으로 읽지 마라.** `local_position` 의 z 는 EKF 원점 기준이라
+  이륙 지점과 다르다. 실제 비행 여부는 **GPS 누적 이동거리·수평속도·전류**로 판단하라.
+  (지상 테스트: 이동 1~2m, 속도 0.5m/s 이하 / 실비행: 이동 수십 m, 속도 3m/s 이상)
 - **VTOL 전환이 없으면** 에어스피드 이상은 당장 비행에 영향 없다. 다만 고정익 전환 전에는
   반드시 고쳐야 한다 — 전환 판단이 에어스피드에 걸려 있다.
 

@@ -9,9 +9,13 @@
 """
 import argparse
 import contextlib
+import glob
 import io
 import os
+import re
+import struct
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
@@ -79,18 +83,72 @@ def list_logs(log_dir):
     return [f for _, f in out]
 
 
+def _time_from_name(path):
+    """log_<n>_YYYY-M-D-H-M-S.ulg 또는 YYYY-MM-DD_HH_MM_SS.ulg 에서 시각을 뽑는다.
+
+    boot_time_utc_us 는 '부팅' 시각이라 같은 세션 로그가 전부 같은 값이 된다.
+    파일명이 로그마다 다르므로 이쪽이 정확하다.
+    """
+    base = os.path.basename(path)
+    m = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})[-_](\d{1,2})[-_](\d{2})[-_](\d{2})", base)
+    if m:
+        try:
+            return datetime(*[int(x) for x in m.groups()])
+        except ValueError:
+            return None
+    return None
+
+
+def _why_broken(path):
+    """읽기 실패 원인을 구분한다. '손상' 으로 뭉뚱그리지 않는다."""
+    try:
+        raw = open(path, "rb").read()
+    except OSError as exc:
+        return "파일 읽기 실패: %s" % exc
+    if len(raw) < 16 or raw[:4] != b"ULog":
+        return "ULog 헤더 아님"
+    o = 16
+    n = len(raw)
+    while o + 3 <= n:
+        ln, _ty = struct.unpack_from("<HB", raw, o)
+        if o + 3 + ln > n:
+            return "데이터 깨짐 — %.0f%% 지점에서 메시지 구조 붕괴" % (o / n * 100)
+        o += 3 + ln
+    if not _subscription_block(raw):
+        return "구독 섹션 유실 — 같은 포맷의 정상 로그가 없어 복구 불가"
+    return "구조는 온전하나 pyulog 가 해석 실패"
+
+
 def quick_scan(path):
     """목록 표시용 최소 정보. 전체 파싱 없이 빠르게."""
     from pyulog import ULog
     # pyulog 는 미구독 메시지 id 를 stdout 으로 경고한다. 표가 깨지므로 삼킨다.
+    info = {"size_mb": os.path.getsize(path) / 1e6,
+            "utc": _time_from_name(path)}
     try:
         with contextlib.redirect_stdout(io.StringIO()):
             ulog = ULog(path, message_name_filter_list=["actuator_armed"])
-    except Exception as exc:
-        return {"error": str(exc)}
-    info = {"size_mb": os.path.getsize(path) / 1e6}
+        datasets = ulog.data_list
+    except Exception:
+        datasets = []
+    if not datasets:
+        # 구독 섹션 유실 가능성 — 복구해 본다
+        repaired = _repair(path)
+        if repaired:
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    ulog = ULog(repaired)
+                datasets = ulog.data_list
+                info["repaired"] = True
+            except Exception:
+                datasets = []
+            finally:
+                os.unlink(repaired)
+    if not datasets:
+        info["error"] = _why_broken(path)
+        return info
     armed_s = 0.0
-    for dataset in ulog.data_list:
+    for dataset in datasets:
         if dataset.name != "actuator_armed":
             continue
         t = dataset.data["timestamp"] / 1e6
@@ -98,9 +156,10 @@ def quick_scan(path):
         if armed.any():
             armed_s = t[armed][-1] - t[armed][0]
     info["armed_s"] = armed_s
-    boot = ulog.msg_info_dict.get("boot_time_utc_us")
-    if boot:
-        info["utc"] = kst(boot)
+    if info.get("utc") is None:
+        boot = ulog.msg_info_dict.get("boot_time_utc_us")
+        if boot:
+            info["utc"] = kst(boot)
     return info
 
 
@@ -109,6 +168,107 @@ def get(ulog, name):
         if dataset.name == name:
             return dataset
     return None
+
+
+def _scan_sections(raw):
+    """ULog 메시지를 훑어 (타입, offset, length) 목록을 만든다."""
+    out = []
+    o = 16                     # 파일 헤더 16 바이트
+    n = len(raw)
+    while o + 3 <= n:
+        ln, ty = struct.unpack_from("<HB", raw, o)
+        out.append((chr(ty) if 32 <= ty < 127 else "?", o, ln))
+        o += 3 + ln
+    return out
+
+
+def _subscription_block(raw):
+    """연속된 A(구독) 메시지 덩어리를 원본 바이트 그대로 잘라낸다."""
+    for kind, off, _ln in _scan_sections(raw):
+        if kind != "A":
+            continue
+        o = off
+        blk = b""
+        while o + 3 <= len(raw):
+            ln, ty = struct.unpack_from("<HB", raw, o)
+            if chr(ty) != "A":
+                break
+            blk += raw[o:o + 3 + ln]
+            o += 3 + ln
+        return blk
+    return b""
+
+
+def _repair(path):
+    """구독(A) 섹션이 유실된 로그를 같은 디렉토리의 정상 로그로 복구한다.
+
+    PX4 는 로그 앞부분에 F(포맷) → P(파라미터) → A(구독) 순으로 정의를 쓴다.
+    A 가 통째로 없으면 pyulog 가 D(데이터)를 어느 토픽에 넣을지 몰라 토픽 0개가 된다.
+    포맷 정의(F)가 완전히 같은 로그를 찾아 A 블록만 이식하면 읽을 수 있다.
+
+    반환: 복구된 임시 파일 경로, 또는 복구 불가 시 None.
+    """
+    raw = open(path, "rb").read()
+    if _subscription_block(raw):
+        return None                       # 멀쩡하다
+
+    def formats(buf):
+        out = {}
+        for kind, off, ln in _scan_sections(buf):
+            if kind == "F":
+                txt = buf[off + 3:off + 3 + ln].decode("utf-8", "replace")
+                out[txt.split(":")[0]] = txt
+        return out
+
+    mine = formats(raw)
+    donor_blk = None
+    for cand in sorted(glob.glob(os.path.join(os.path.dirname(path) or ".", "*.ulg"))):
+        if os.path.abspath(cand) == os.path.abspath(path):
+            continue
+        try:
+            other = open(cand, "rb").read()
+        except OSError:
+            continue
+        blk = _subscription_block(other)
+        # 포맷 정의가 완전히 같아야 msg_id 매핑을 믿을 수 있다
+        if blk and formats(other) == mine:
+            donor_blk = blk
+            break
+    if not donor_blk:
+        return None
+
+    # 정의 섹션의 끝(첫 D 직전 마지막 P 뒤)에 끼워 넣는다
+    insert_at = None
+    for kind, off, ln in _scan_sections(raw):
+        if kind == "P":
+            insert_at = off + 3 + ln
+        elif kind == "D":
+            break
+    if insert_at is None:
+        return None
+
+    fixed = tempfile.NamedTemporaryFile(suffix=".ulg", delete=False)
+    fixed.write(raw[:insert_at] + donor_blk + raw[insert_at:])
+    fixed.close()
+    return fixed.name
+
+
+def _load(path):
+    """ULog 를 연다. 구독 섹션이 없으면 한 번 복구를 시도한다."""
+    from pyulog import ULog
+    with contextlib.redirect_stdout(io.StringIO()):
+        ulog = ULog(path)
+    if ulog.data_list:
+        return ulog, False
+    repaired = _repair(path)
+    if not repaired:
+        return ulog, False
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            ulog = ULog(repaired)
+    finally:
+        os.unlink(repaired)
+    return ulog, bool(ulog.data_list)
 
 
 def transitions(t, values, mapping=None):
@@ -124,10 +284,8 @@ def transitions(t, values, mapping=None):
 
 
 def analyse(path):
-    from pyulog import ULog
-    with contextlib.redirect_stdout(io.StringIO()):
-        ulog = ULog(path)
-    rep = {"path": path, "findings": [], "good": [], "todo": []}
+    ulog, repaired = _load(path)
+    rep = {"path": path, "findings": [], "good": [], "todo": [], "repaired": repaired}
 
     # ── 비행 구간 ────────────────────────────────────────────────
     armed = get(ulog, "actuator_armed")
