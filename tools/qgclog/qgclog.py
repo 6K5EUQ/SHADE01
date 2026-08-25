@@ -341,7 +341,15 @@ def analyse(path):
         rep["cell_min"] = float(volt.min() / cells)
         rep["cur_max"] = float(cur.max())
         rep["cur_mean"] = float(cur.mean())
-        rep["mah"] = float(np.nanmax(batt.data.get("discharged_mah", [0])))
+        # discharged_mah 는 FC 부팅 후 누적치다. 이 비행분만 보려면 증가분을 써야 한다.
+        dis = batt.data.get("discharged_mah")
+        if dis is not None and mask.any():
+            win = dis[mask]
+            win = win[np.isfinite(win)]
+            rep["mah"] = float(win[-1] - win[0]) if len(win) else 0.0
+            rep["mah_total"] = float(win[-1]) if len(win) else 0.0
+        else:
+            rep["mah"] = 0.0
         rep["sag"] = float(volt.max() - volt.min())
 
         for thresh in (XT90_CONT_A, 60.0, XT90_PEAK_A):
@@ -541,8 +549,10 @@ def print_report(rep):
     if "v_min" in rep:
         print("  전압    %.2f ~ %.2f V   셀당 최저 %.2f V   강하 %.2f V"
               % (rep["v_min"], rep["v_max"], rep["cell_min"], rep["sag"]))
-        print("  전류    평균 %.1f A   최대 %.1f A   소모 %.0f mAh"
-              % (rep["cur_mean"], rep["cur_max"], rep["mah"]))
+        tot = rep.get("mah_total")
+        extra = "  (부팅후 누적 %.0f)" % tot if tot and tot > rep["mah"] * 1.05 else ""
+        print("  전류    평균 %.1f A   최대 %.1f A   이번비행 %.0f mAh%s"
+              % (rep["cur_mean"], rep["cur_max"], rep["mah"], extra))
         for thresh, cnt, total, longest in rep.get("over", []):
             print("  >%.0fA    %d회, 누적 %.1fs, 최장 연속 %.1fs" % (thresh, cnt, total, longest))
 
