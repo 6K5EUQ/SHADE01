@@ -169,7 +169,8 @@ journalctl -u mavlink-bridge.service -f | grep "GCS connected"
 
 전 구간(PM08 → FC → Pi → QGC)이 실증된 상태다. 상세: [RPi 5 문서](../../components/companion/raspberry-pi-5/README.md#이전-구성-raspb2-2026-08-11)
 
-> 🔶 **위 기록은 브리지가 `raspb2` 에 있던 때의 것이다.** 2026-08-30 에 `raspb1` 로 옮겼고,
+> 🔶 **위 기록은 브리지가 `raspb2` 에 있던 때의 것이다.** raspb2 는 **고장 확정(2026-08-30)** 이라
+> 되돌아가지 않는다. 같은 날 `raspb1` 로 옮겼고,
 > FC 결선·재부팅이 남아 있어 **같은 수준의 재검증은 아직이다.**
 
 ---

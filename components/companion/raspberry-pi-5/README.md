@@ -4,9 +4,11 @@
 
 > **GCS 접속 절차는 [QGroundControl 연결 절차](../../../gcs/qgroundcontrol/README.md) 문서**에 단계별로 정리되어 있다. 본 문서는 브리지 구현·배선·systemd 유닛 상세를 다룬다.
 
-> **2026-08-30 — 컴패니언 Pi 를 `raspb2` 에서 `raspb1` 로 옮겼다.** raspb2 가 오프라인
-> 상태로 길어져 브리지를 띄울 수 없었다. 이전 기기의 실측 기록은
-> [이전 구성 (raspb2, 2026-08-11)](#이전-구성-raspb2-2026-08-11) 절에 그대로 남겨 둔다.
+> **2026-08-30 — 컴패니언 Pi 를 `raspb2` 에서 `raspb1` 로 옮겼다.**
+> 🔴 **raspb2 는 고장이다 (2026-08-30 확정).** 처음엔 일시 오프라인으로 봤으나 복구되지
+> 않았고, 운용자가 하드웨어 고장으로 판정했다. **되돌아갈 계획은 없다** — raspb1 이 정본이다.
+> 이전 기기의 실측 기록은 근거 자료로만
+> [이전 구성 (raspb2, 2026-08-11)](#이전-구성-raspb2-2026-08-11) 절에 남겨 둔다.
 
 - 모델: **Raspberry Pi 5 Model B Rev 1.0**
 - OS: **Ubuntu 24.04.4 LTS** (aarch64, kernel 6.8.0-1056-raspi)
@@ -197,13 +199,32 @@ Telem2를 두고 Pi 5와 RC 수신기가 경합하던 문제는 **수신기를 T
 - **Pi 전원 공급 계통 미기록** — 어느 BEC/배터리에서 5V를 받는지, 전류 여유가 충분한지. Pi 5는 순간 소비가 커서 [UBEC(5.3V/10A)](../../fc/holybro-pixhawk-6c-mini/README.md#서보-전원-mfe-ubec-연결)를 서보와 공유하면 서보 동작 시 전압 강하 위험.
 - 🔴 **실비행 텔레메트리로 부적합** — 현재 링크는 WiFi + 인터넷 + Tailscale 경유다. 지상 벤치 테스트/설정용으로는 충분하나, **기체가 WiFi 범위를 벗어나면 즉시 끊긴다.** 실비행에는 별도 무선 모뎀(T900 Pro 등) 또는 LTE 모뎀이 필요하다.
 - **비행 중 링크 신뢰성 미검증** — 위 사유로 지상 테스트만 완료.
-- 🔴 **raspb1 에서 아직 실측 미완료 (2026-08-30)** — UART 활성화·스크립트·유닛 배포까지 끝냈고
-  브리지 로직은 가짜 시리얼(pty)로 왕복 검증했으나, **FC 결선과 재부팅이 남아 있다.**
-  아래가 끝나야 raspb2 때와 같은 수준의 검증이 된다:
-  1. 재부팅 → `/dev/ttyAMA0` 생성 확인
-  2. FC Telem2 결선 (물리핀 8/10/6, TX/RX 교차)
-  3. `journalctl -u mavlink-bridge.service -f` 에 시리얼 오픈 + 패킷 수신
-  4. QGC 에서 기체 인식·배터리·GPS·자세
+- 🟡 **raspb1 실측 — 절반 완료 (2026-08-30 23:21 확인)**
+  1. ✅ 재부팅 → `/dev/ttyAMA0` 생성 확인 (`crw-rw---- root dialout 204,64`)
+  2. ✅ 유닛 `enabled` + `active`, 부팅 자동기동 확인
+  3. ✅ 시리얼 오픈 성공 — `mav_bridge: serial opened: /dev/ttyAMA0 @ 921600`
+  4. ⬜ **FC Telem2 결선 미완** — 패킷 수신 로그가 없다. 시리얼은 열렸으나 반대편이 조용하다
+  5. ⬜ QGC 에서 기체 인식·배터리·GPS·자세 (4번 이후)
+
+  현재 `ExecStart` 고정 타겟: `100.99.120.110:14550`(ku-dgs1), `100.107.83.47:14550`(rim),
+  `100.105.212.78:14550`.
+  ⚠️ **`gram-labtop`(`100.66.204.25`) 은 고정 타겟에 없다.** 대신 브리지가 **먼저 말을 걸어온
+  GCS 를 동적으로 등록**하므로(`peers`, 무통신 시 타임아웃), gram 의 QGC 링크에 raspb1 을
+  **송신 대상으로 지정**해 두면 붙는다 — 유닛 수정 없이 동작한다.
+
+  gram QGC 설정 (`~/.config/QGroundControl/QGroundControl.ini`):
+  ```ini
+  [LinkConfigurations]
+  Link0\host0=100.126.161.1:14550
+  Link0\hostCount=1
+  Link0\name=raspb1 Bridge (UDP 14550)
+  Link0\port=14550
+  Link0\type=1
+  ```
+  QGC 의 **Comm Links 에서 이 링크를 Connect** 해야 송신이 시작된다(`auto=false`).
+  붙으면 raspb1 로그에 `GCS connected: ('100.66.204.25', ...)` 가 찍힌다.
+  항구적으로 고정 타겟에 넣으려면 유닛의 `ExecStart` 끝에 `100.66.204.25:14550` 을 추가한다
+  (raspb1 sudo 비밀번호 필요).
 - 🔴 **전원 감시 부재** — raspb1 에는 UPS/배터리 모니터가 없다 (머리말 참조). 기체 탑재 시
   저전압 상황을 소프트웨어로 알 수 없다.
 - ~~Telem2 포트 충돌 해소 방안 미확정~~ → **해소(2026-08-19)**: 수신기를 Telem1로 배치. [Telem2 포트 충돌 — 해소](#-telem2-포트-충돌--해소-2026-08-19) 참조.
@@ -241,6 +262,7 @@ ATTITUDE·HIGHRES_IMU·GPS_RAW_INT·ALTITUDE·VFR_HUD·SYS_STATUS·EXTENDED_SYS_
 
 raspb2 는 드론 탑재 Pi 인 동시에 BEWE DGS-X 기지였는데, **2026-08-21 무렵부터 오프라인**
 (Tailscale `last seen 9d ago`, ping 100% 손실)이라 브리지를 띄울 수 없었다.
+**2026-08-30 운용자가 하드웨어 고장으로 확정했다** — 복구·재사용 계획 없음.
 
 **이때 드러난 문제 — 스크립트가 기기 안에만 있었다.** `mav_bridge.py` / `px4_param.py` 가
 git 에 없어 기기가 꺼지자 회수 불가였고, README 에 남은 동작 명세를 근거로 **재작성**해야 했다.

@@ -62,9 +62,11 @@ P3 는 **6단 스위치**로 자동미션 진입용 검토 중.
 - 실비행 운용 계획: 노트북 2대 — 1대 Pi 링크, 1대 조종기 백팩 WiFi 링크.
 - QGC USB 링크 1초 끊김 버그 해결: 원인은 `autoConnectPixhawk=false` 시 포트 스캔 중단 →
   `_checkPortAvailability()`가 빈 목록 보고 close. 현재 `autoConnectPixhawk=true`.
-- ⚠️ **컴패니언 Pi 교체 (2026-08-30)** — `raspb2`(DGS-X) → **`raspb1`(DGS-3)**. raspb2 가
-  오프라인 상태가 길어져 옮겼다. 브리지 코드는 이제 repo 안에 있다
+- 🔴 **컴패니언 Pi 교체 (2026-08-30)** — `raspb2`(DGS-X) → **`raspb1`(DGS-3)**.
+  **raspb2 는 고장 확정**이며 되돌아가지 않는다. 브리지 코드는 이제 repo 안에 있다
   ([mav_bridge.py](components/companion/raspberry-pi-5/mav_bridge.py)).
+  raspb1 상태: 유닛 `enabled`+`active`, `/dev/ttyAMA0` 921600 오픈 성공.
+  **FC Telem2 결선이 남아 있어 패킷 수신은 아직 없다.**
 - ⚠️ **문서-실기 불일치** — 이 문서는 `autoConnectUDP=false` 라고 적어 왔으나 `ku-dgs1` 의
   실제 `QGroundControl.ini` 는 **`autoConnectUDP=true`** 다 (2026-08-30 실측).
 
