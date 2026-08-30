@@ -53,7 +53,7 @@ P3 는 **6단 스위치**로 자동미션 진입용 검토 중.
         │
         └─ 백팩 WiFi AP (10.0.0.1) ─UDP→ 노트북 QGC        (대역폭 ~2KB/s)
 
-[Pi5 raspb2] ─UART─ FC TELEM2 (921600) ─UDP 14550→ PC / rim   (mav_bridge, systemd 서비스)
+[Pi5 raspb1] ─UART─ FC TELEM2 (921600) ─UDP 14550→ ku-dgs1 / rim / rim3  (mav_bridge, systemd 서비스)
 
 [USB 직결] /dev/ttyACM0 — QGC 자동연결
 ```
@@ -61,8 +61,12 @@ P3 는 **6단 스위치**로 자동미션 진입용 검토 중.
 - RC 조종 + 텔레메트리가 **MAVLink over ELRS** 단일 링크. CRSF 아님 (전환 완료).
 - 실비행 운용 계획: 노트북 2대 — 1대 Pi 링크, 1대 조종기 백팩 WiFi 링크.
 - QGC USB 링크 1초 끊김 버그 해결: 원인은 `autoConnectPixhawk=false` 시 포트 스캔 중단 →
-  `_checkPortAvailability()`가 빈 목록 보고 close. 현재 `autoConnectPixhawk=true`,
-  `autoConnectUDP=false` (Pi 링크는 Comm Links에서 수동 Connect).
+  `_checkPortAvailability()`가 빈 목록 보고 close. 현재 `autoConnectPixhawk=true`.
+- ⚠️ **컴패니언 Pi 교체 (2026-08-30)** — `raspb2`(DGS-X) → **`raspb1`(DGS-3)**. raspb2 가
+  오프라인 상태가 길어져 옮겼다. 브리지 코드는 이제 repo 안에 있다
+  ([mav_bridge.py](components/companion/raspberry-pi-5/mav_bridge.py)).
+- ⚠️ **문서-실기 불일치** — 이 문서는 `autoConnectUDP=false` 라고 적어 왔으나 `ku-dgs1` 의
+  실제 `QGroundControl.ini` 는 **`autoConnectUDP=true`** 다 (2026-08-30 실측).
 
 ## FC — Pixhawk 6C Mini
 

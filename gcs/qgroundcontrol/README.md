@@ -11,11 +11,11 @@
 
 ## 결론부터 — 무엇에 접속하는가
 
-**QGC는 FC에 직접 접속하지 않는다.** 무선 경로에서 QGC가 실제로 붙는 상대는 기체에 탑재된 [Raspberry Pi 5 `raspb2`](../../components/companion/raspberry-pi-5/README.md)가 띄운 **UDP 14550 MAVLink 브리지**다.
+**QGC는 FC에 직접 접속하지 않는다.** 무선 경로에서 QGC가 실제로 붙는 상대는 기체에 탑재된 [Raspberry Pi 5 `raspb1`](../../components/companion/raspberry-pi-5/README.md)가 띄운 **UDP 14550 MAVLink 브리지**다.
 
 | 경로 | QGC의 접속 상대 | 링크 종류 | 상태 |
 |---|---|---|---|
-| **A. 무선 (주 경로)** | RPi 5 `raspb2`의 `mav_bridge.py` — **UDP 14550** | Tailscale VPN (인터넷 경유) | ✅ 검증 완료 (2026-08-11) |
+| **A. 무선 (주 경로)** | RPi 5 `raspb1`의 `mav_bridge.py` — **UDP 14550** | Tailscale VPN (인터넷 경유) | 🔶 raspb1 이설 후 재검증 대기 (2026-08-30) |
 | **B. USB 직결 (폴백/설정용)** | FC USB-C 포트 → PC 시리얼 | USB 케이블 | ✅ 검증 완료 (2026-08-11) — ⚠️ 수동 링크 등록 금지, [아래 참조](#-수동-usb-링크는-1초-뒤-끊긴다) |
 | ~~C. 무선 모뎀 직결~~ | T900 Pro 등 텔레메트리 라디오 | 900MHz 등 | ❌ 미보유 — [미구매 항목](../../airframes/striver-mini-vtol/README.md#보유-사양-메모-shade-기체--pnp) |
 
@@ -24,7 +24,7 @@
 ### 전체 링크 구조
 
 ```
-[Pixhawk 6C Mini] ──Telem2 UART 921600──► [Raspberry Pi 5 "raspb2"]
+[Pixhawk 6C Mini] ──Telem2 UART 921600──► [Raspberry Pi 5 "raspb1"]
    (PX4, MAVLink v2)                          /dev/ttyAMA0
         │                                          │
         │                                   mav_bridge.py
@@ -34,7 +34,7 @@
                     │                              │
                     │                  ┌───────────┴───────────┐
                     ▼                  ▼                       ▼
-              [로컬 PC]        [ku-dgs1 100.99.120.110]  [rim 100.107.83.47]
+              [로컬 PC]        [ku-dgs1 100.99.120.110]  [rim / rim3]
             QGroundControl        QGroundControl          QGroundControl
                                         └──── 경로 A ────┘
 ```
@@ -48,7 +48,7 @@
 | 항목 | 요구 상태 | 확인 방법 |
 |---|---|---|
 | 기체 전원 | FC에 전원 인가 ([PM08-CAN](../../components/power/holybro-pm08-can/README.md) → Power1) | FC LED 점등 |
-| Pi 전원 | RPi 5 부팅 완료 | Tailscale에 `raspb2-dgsx` 온라인 표시 |
+| Pi 전원 | RPi 5 부팅 완료 | Tailscale에 `raspb1-dgs3` 온라인 표시 |
 | Pi ↔ FC 배선 | Telem2 ↔ GPIO 물리핀 8/10/6 결선 | [배선표](../../components/companion/raspberry-pi-5/README.md#배선-fc-telem2--rpi-gpio) |
 | 브리지 서비스 | `mavlink-bridge.service` **active** | 아래 1단계 |
 | GCS PC | Tailscale 로그인 + 해당 tailnet 소속 | `tailscale status` |
@@ -56,13 +56,13 @@
 
 ### 1단계 — 기체측 브리지 상태 확인
 
-`raspb2`에 SSH 접속해 서비스가 살아 있는지 본다.
+`raspb1`에 SSH 접속해 서비스가 살아 있는지 본다.
 
 ```bash
 # GCS PC에서
-ssh raspb2@raspb2-dgsx
+ssh raspb1@100.126.161.1
 
-# raspb2에서
+# raspb1에서
 systemctl status mavlink-bridge.service
 ```
 
@@ -80,7 +80,7 @@ journalctl -u mavlink-bridge.service -f
 브리지는 **ExecStart 인자로 등록된 IP에만 먼저 텔레메트리를 밀어준다.** 등록된 PC는 QGC를 켜기만 하면 자동으로 기체가 뜬다.
 
 ```bash
-# raspb2에서 — 현재 등록된 대상 확인
+# raspb1에서 — 현재 등록된 대상 확인
 grep ExecStart /etc/systemd/system/mavlink-bridge.service
 ```
 
@@ -90,6 +90,7 @@ grep ExecStart /etc/systemd/system/mavlink-bridge.service
 |---|---|---|
 | `ku-dgs1` | `100.99.120.110:14550` | ✅ 등록됨 |
 | `rim` | `100.107.83.47:14550` | ✅ 등록됨 (2026-08-11 추가) |
+| `rim3` | `100.105.212.78:14550` | ✅ 등록됨 (2026-08-30 추가) |
 
 **내 PC가 목록에 없으면** → [3단계](#3단계--새-gcs-pc-추가-필요시)로. 있으면 → [4단계](#4단계--qgc-실행)로 건너뛴다.
 
@@ -105,7 +106,7 @@ tailscale ip -4
 그 IP를 브리지의 고정 대상에 덧붙인다.
 
 ```bash
-# raspb2에서 — 아래 명령은 유닛 파일을 수정한다. 실행 전 아래 주의사항을 읽을 것.
+# raspb1에서 — 아래 명령은 유닛 파일을 수정한다. 실행 전 아래 주의사항을 읽을 것.
 sudo cp /etc/systemd/system/mavlink-bridge.service \
         /etc/systemd/system/mavlink-bridge.service.bak-$(date +%Y%m%d)
 sudo sed -i 's|mav_bridge.py .*|& 새IP:14550|' /etc/systemd/system/mavlink-bridge.service
@@ -149,13 +150,13 @@ QGC 화면에서 아래 항목을 순서대로 확인한다.
 **양방향 통신이 성립했는지**는 기체측 브리지 로그로도 확인할 수 있다.
 
 ```bash
-# raspb2에서
+# raspb1에서
 journalctl -u mavlink-bridge.service -f | grep "GCS connected"
 ```
 
 `GCS connected: ('100.107.83.47', 14550)` 처럼 내 PC IP가 등록되면 명령 전송·파라미터 읽기/쓰기가 가능한 상태다.
 
-### ✅ 실측 검증 기록 (2026-08-11, `rim` PC)
+### ✅ 실측 검증 기록 (2026-08-11, `rim` PC — 당시 브리지는 `raspb2`)
 
 | 확인 항목 | 결과 |
 |---|---|
@@ -166,7 +167,10 @@ journalctl -u mavlink-bridge.service -f | grep "GCS connected"
 | 양방향 통신 | ✅ `GCS connected: ('100.107.83.47', 14550)` 등록 |
 | GCS 2대 동시 | ✅ `ku-dgs1` + `rim` 병행 동작, 상호 간섭 없음 |
 
-전 구간(PM08 → FC → Pi → QGC)이 실증된 상태다. 상세: [RPi 5 문서](../../components/companion/raspberry-pi-5/README.md#-rim-pc-수신-검증-2026-08-11)
+전 구간(PM08 → FC → Pi → QGC)이 실증된 상태다. 상세: [RPi 5 문서](../../components/companion/raspberry-pi-5/README.md#이전-구성-raspb2-2026-08-11)
+
+> 🔶 **위 기록은 브리지가 `raspb2` 에 있던 때의 것이다.** 2026-08-30 에 `raspb1` 로 옮겼고,
+> FC 결선·재부팅이 남아 있어 **같은 수준의 재검증은 아직이다.**
 
 ---
 
@@ -250,13 +254,14 @@ USB는 지연이 1ms 수준이라 이런 전송이 안정적이다. 반대로 **
 
 ### 파라미터 조회 대안 — `px4_param.py`
 
-QGC 없이도 기체측에서 파라미터를 읽고 쓸 수 있다. `/home/raspb2/px4_param.py` (자체 제작, pymavlink 없이 MAVLink v2 프레임 직접 생성).
+QGC 없이도 기체측에서 파라미터를 읽고 쓸 수 있다. `/home/raspb1/px4_param.py` (자체 제작, pymavlink 없이 MAVLink v2 프레임 직접 생성). 정본은 [px4_param.py](../../components/companion/raspberry-pi-5/px4_param.py).
 
 ⚠️ **브리지와 동시 실행 불가** — 같은 시리얼 포트를 열기 때문에 먼저 브리지를 내려야 한다. 이때 **모든 QGC 링크가 끊긴다.**
 
 ```bash
 sudo systemctl stop mavlink-bridge.service
-python3 /home/raspb2/px4_param.py            # 조회/설정
+python3 /home/raspb1/px4_param.py get SENS_DPRES_OFF
+python3 /home/raspb1/px4_param.py set SENS_DPRES_OFF 0.0
 sudo systemctl start mavlink-bridge.service  # 작업 후 반드시 재기동
 ```
 
@@ -273,7 +278,7 @@ sudo systemctl start mavlink-bridge.service  # 작업 후 반드시 재기동
 **1) 브리지가 시리얼에서 데이터를 받는가**
 
 ```bash
-# raspb2에서
+# raspb1에서
 journalctl -u mavlink-bridge.service -n 50
 ```
 
@@ -286,11 +291,11 @@ journalctl -u mavlink-bridge.service -n 50
 
 ```bash
 # GCS PC에서
-tailscale status | grep raspb2
-ping -c 3 raspb2-dgsx
+tailscale status | grep raspb1
+ping -c 3 100.126.161.1
 ```
 
-- 노드 offline → Pi의 WiFi(`eduroam`) 연결 상태 확인. Pi는 **AP 모드가 아니라 클라이언트 모드**이므로 WiFi 범위 밖이면 링크가 없다.
+- 노드 offline → Pi의 WiFi 연결 상태 확인. Pi는 **AP 모드가 아니라 클라이언트 모드**이므로 WiFi 범위 밖이면 링크가 없다. raspb1 프로필 우선순위: `iptimE`(20) → `eduroam`(10) → `5G_LGWiFi_2459`(1) → `SK_WiFiGIGA6311_5G`(0).
 
 **3) UDP 14550이 실제로 도달하는가**
 
@@ -315,7 +320,7 @@ Application Settings → Comm Links → Add:
 |---|---|
 | Type | UDP |
 | Listening Port | `14550` |
-| Target Hosts | `raspb2의 Tailscale IP:14550` (추가 시 QGC가 먼저 말을 걸어 `peer` 등록됨) |
+| Target Hosts | `100.126.161.1:14550` (raspb1. 추가 시 QGC가 먼저 말을 걸어 `peer` 등록됨) |
 | High Latency | 미사용 |
 | Automatically Connect on Start | 체크 |
 
@@ -326,7 +331,7 @@ FC까지의 CAN 센싱 문제일 가능성이 높다. [PM08-CAN 배선](../../co
 ### 링크가 붙었다 끊긴다
 
 - 경로 A는 **WiFi + 인터넷 + Tailscale** 3중 의존이다. 지상 벤치에서도 WiFi 신호가 약하면 간헐 단절이 발생한다.
-- 기체가 `eduroam` 커버리지를 벗어나면 즉시 끊긴다. → 🔴 **실비행에는 이 경로를 쓰지 말 것.** 별도 무선 모뎀(T900 Pro 등) 또는 LTE 모뎀 필요.
+- 기체가 WiFi 커버리지를 벗어나면 즉시 끊긴다. → 🔴 **실비행에는 이 경로를 쓰지 말 것.** 별도 무선 모뎀(T900 Pro 등) 또는 LTE 모뎀 필요.
 - 브리지 서비스가 반복 재시작하는지 확인: `systemctl status mavlink-bridge.service`의 재시작 횟수
 
 ### QGC를 닫았다 켰는데 안 붙는다
@@ -350,7 +355,7 @@ FC까지의 CAN 센싱 문제일 가능성이 높다. [PM08-CAN 배선](../../co
 
 | 문서 | 이 문서와의 관계 |
 |---|---|
-| [Raspberry Pi 5 "raspb2"](../../components/companion/raspberry-pi-5/README.md) | 브리지 구현·배선·systemd 유닛 상세 |
+| [Raspberry Pi 5 "raspb1"](../../components/companion/raspberry-pi-5/README.md) | 브리지 구현·배선·systemd 유닛 상세 |
 | [Pixhawk 6C Mini](../../components/fc/holybro-pixhawk-6c-mini/README.md) | FC 포트/파라미터/Actuators 설정 |
 | [Striver Mini VTOL](../../airframes/striver-mini-vtol/README.md) | 기체 전체 구성 계통도 |
 | [PM08-CAN](../../components/power/holybro-pm08-can/README.md) | 배터리 텔레메트리 소스 |

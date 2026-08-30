@@ -1,0 +1,14 @@
+[Unit]
+Description=MAVLink serial-to-UDP bridge (FC Telem2 -> QGC)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=raspb1
+ExecStart=/usr/bin/python3 /home/raspb1/mav_bridge.py 100.99.120.110:14550 100.107.83.47:14550 100.105.212.78:14550
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
