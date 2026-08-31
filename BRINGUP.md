@@ -67,11 +67,15 @@ P3 는 **6단 스위치**로 자동미션 진입용 검토 중.
   ([mav_bridge.py](components/companion/raspberry-pi-5/mav_bridge.py)).
   raspb1 상태: 유닛 `enabled`+`active`, `/dev/ttyAMA0` 921600 오픈 성공.
   고정 타겟 4개(`ku-dgs1`·`rim`·`rim3`·`gram-labtop`).
-- 🔴 **FC→Pi 시리얼 무신호 (2026-08-31)** — Telem2 ↔ GPIO 교차 결선 + 메인 배터리 인가 후에도
-  `/dev/ttyAMA0` 수신 **0바이트** (921600/115200/57600 raw read 전부). GCS↔브리지 UDP 구간은
-  같은 날 검증됐다(`GCS connected: ('100.99.120.110', 14550)`). 남은 건 FC 쪽 —
-  `MAV_1_CONFIG` / `MAV_1_MODE` / `SER_TEL2_BAUD` 를 **USB 직결로 실측**할 것.
-  [상세](components/companion/raspberry-pi-5/README.md#-확인-필요)
+- 🔴 **FC→Pi 시리얼 무신호 — 원인 규명 완료 (2026-08-31)**: **Pi 케이블의 FC측 JST-GH
+  커넥터가 TELEM2 의 2번(TX)과 3번(RX)을 다리 놓고 있다.** 양쪽이 자기 신호를 되받아
+  상대 데이터가 오가지 못한다. 케이블 교체·재압착이 필요하다.
+  **FC 포트·Pi·네트워크는 모두 정상으로 확인됐다** — 같은 포트에 수신기를 꽂으면 되돌이가
+  없고(460800 에서 rx 15.5kB/s 수신), Pi 는 물리 8↔10 루프백 64/64 왕복,
+  UDP 구간은 `GCS connected: ('100.99.120.110', 14550)` 로 실증.
+  진단은 `pxsh.py`(MAVLink SERIAL_CONTROL 로 PX4 NSH 셸 접속)로 `mavlink status` 를 읽어서 했다.
+  대안은 **Pi↔FC USB 직결**(`/dev/ttyACM0 @2000000` 실증됨).
+  [상세](components/companion/raspberry-pi-5/README.md#-telem2-무신호--원인-pi-케이블의-fc측-커넥터-단락-2026-08-31)
 - ⚠️ **문서-실기 불일치** — 이 문서는 `autoConnectUDP=false` 라고 적어 왔으나 `ku-dgs1` 의
   실제 `QGroundControl.ini` 는 **`autoConnectUDP=true`** 다 (2026-08-30 실측).
 
