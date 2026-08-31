@@ -118,13 +118,13 @@ PDB 300A [XT30] ──22V──► UBEC ──5.3V──┬─► FC MAIN OUT �
 | 크루즈 ESC ([MFE ESC 6100](../../esc/mfe-esc-6s-100a/README.md)) | MAIN OUT 또는 AUX OUT — 🔶 아래 참조 |
 | 서보 ×5 ([MFE 3054](../../servos/mfe-s3054/README.md)) | MAIN OUT 또는 AUX OUT — 🔶 아래 참조 |
 | [Raspberry Pi 5 "raspb2" 컴패니언](../../companion/raspberry-pi-5/README.md) | **Telem2 (UART5) @ 921600** — ✅ GPIO 물리핀 8/10/6에 결선, `mav_bridge.py`로 QGC 원격 연결 실적 확인(2026-08-10). ⚠️ 5V(1번 핀) 미연결 — Pi 전원은 별도 계통 |
-| RC 수신기 ([RadioMaster RP4TD-M](../../receivers/radiomaster-rp4td-m/README.md)) | **Telem2** (UART, CRSF) — 🔴 **Pi 5와 포트 충돌**, 아래 참조. RC IN/SBUS 포트 불가. TX/RX 교차 배선, 배선표·파라미터는 [수신기 문서](../../receivers/radiomaster-rp4td-m/README.md#fc-연결-방법-pixhawk-6c-mini) 참조 |
+| RC 수신기 ([RadioMaster RP4TD-M](../../receivers/radiomaster-rp4td-m/README.md)) | **Telem1** (UART, CRSF) — ✅ Pi 5(Telem2)와 포트 분리 완료, 아래 참조. RC IN/SBUS 포트 불가. TX/RX 교차 배선, 배선표·파라미터는 [수신기 문서](../../receivers/radiomaster-rp4td-m/README.md#fc-연결-방법-pixhawk-6c-mini) 참조 |
 
-### 🔴 Telem2 포트 충돌 (Pi 5 ↔ RC 수신기)
+### ✅ Telem 포트 배분 (Pi 5 ↔ RC 수신기)
 
-Telem2(UART5)는 1개인데 **현재 Pi 5가 점유해 작동 중**이고, RP4TD-M 수신기 계획도 같은 포트를 요구한다. 수신기 장착 전 한쪽을 옮겨야 한다 — Telem1(UART7)이 비어 있으므로 **Pi를 Telem1으로 이전하는 것이 가장 단순**하다.
+**포트 배분 확정 (2026-08-31)**: Pi 5는 Telem2(UART5)를 그대로 점유, RP4TD-M 수신기는 비어 있던 Telem1(UART7)에 배정. 배선 납땜 완료.
 
-상세 및 선택지: [Raspberry Pi 5 문서 — Telem2 포트 충돌](../../companion/raspberry-pi-5/README.md#-telem2-포트-충돌--rc-수신기와-경합)
+상세: [Raspberry Pi 5 문서 — Telem 포트 배분 확정](../../companion/raspberry-pi-5/README.md#-telem-포트-배분-확정-2026-08-31)
 
 ### PM08-CAN 연결 — ✅ 결선 완료 (2026-08-11)
 

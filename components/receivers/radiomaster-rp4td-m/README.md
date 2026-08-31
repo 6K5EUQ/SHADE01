@@ -12,18 +12,18 @@ RadioMaster의 ExpressLRS(오픈소스 장거리 RC 링크) 초소형 수신기.
 
 본 수신기의 버스 인터페이스는 **CRSF (Crossfire Protocol)** — TBS Crossfire가 원조이며 ExpressLRS가 채택한 양방향 시리얼 디지털 프로토콜. PPM(아날로그 펄스폭)이나 SBUS(단방향 시리얼)와는 물리/전기적으로 다른 방식이라, **RC IN / PPM·SBUS 포트에는 꽂을 수 없고 UART 포트(Telem1 또는 Telem2)에 연결**해야 한다.
 
-### 배선 (Telem2 기준)
+### 배선 (Telem1 기준)
 
 **PX4는 특정 포트를 강제하지 않는다** — 공식 문서는 "any spare UART port can be used"라고만 하고, 오히려 예시로 `TELEM1`을 든다([PX4 CRSF Telemetry](https://docs.px4.io/main/en/telemetry/crsf_telemetry.html)). 즉 Telem1·Telem2 어느 쪽이든 기능상 동일하다.
 
-**본 기체는 Telem2를 선택** — 기술적 제약이 아니라 자리 배분 관례다. Telem1은 지상국 텔레메트리 무선모듈(T900 Pro 등, 현재 미보유)용으로 예약해 둔다. 측량 임무에서 텔레메트리는 사실상 필수 장비이므로, 나중에 추가할 때 배선을 다시 만지지 않도록 비워둔다. Telem1로 바꾸려면 아래 표의 UART5↔UART7만 바뀌고 핀 번호는 동일하다.
+**본 기체는 Telem1(UART7)을 선택** (2026-08-31 확정) — Telem2(UART5)는 [Raspberry Pi 5 컴패니언](../../companion/raspberry-pi-5/README.md)이 이미 점유해 가동 중이므로, 비어 있던 Telem1을 본 수신기에 배정했다. 핀 번호는 Telem2와 동일하고 UART 번호만 UART5→UART7로 바뀐다.
 
-| RP4TD-M 패드 | → | Pixhawk 6C Mini Telem2 핀 | 신호 |
+| RP4TD-M 패드 | → | Pixhawk 6C Mini Telem1 핀 | 신호 |
 |---|---|---|---|
 | VCC (5V) | → | 1 (red) | VCC +5V |
 | GND | → | 6 (black) | GND |
-| **TX** | → | **3 (black)** | UART5_RX (in) |
-| **RX** | → | **2 (black)** | UART5_TX (out) |
+| **TX** | → | **3 (black)** | UART7_RX (in) |
+| **RX** | → | **2 (black)** | UART7_TX (out) |
 
 - ⚠️ **TX/RX는 반드시 교차(cross)** — 수신기 TX → FC RX, 수신기 RX → FC TX. 동봉된 CRSF 케이블이 이미 교차되어 있는지 반드시 육안 확인 후 연결할 것.
 - 신호 반전(inverter) 회로 불필요 — CRSF는 비반전 UART라 직결 가능.
@@ -49,21 +49,21 @@ make holybro_6c-mini_default upload
 
 | 파라미터 | 값 | 의미 |
 |---|---|---|
-| `RC_CRSF_PRT_CFG` | Telem2 | CRSF를 쓸 UART 지정 |
+| `RC_CRSF_PRT_CFG` | Telem1 | CRSF를 쓸 UART 지정 |
 | `RC_CRSF_TEL_EN` | Enabled | 텔레메트리 활성화 |
 
-- Telem2를 RC용으로 쓰므로 **해당 포트의 기존 MAVLink 매핑(`MAV_1_CONFIG` 등)을 반드시 제거**해야 충돌하지 않는다.
-- 🔴 **경고: Telem2는 현재 [Raspberry Pi 5 컴패니언](../../companion/raspberry-pi-5/README.md)이 점유해 작동 중이다** (2026-08-11 기준). 위 MAVLink 매핑 제거를 그대로 실행하면 **QGC 무선 텔레메트리 링크가 끊긴다.** 본 수신기 장착 전에 Pi를 Telem1(UART7, 현재 비어 있음)으로 이전하는 등 포트 재배치를 먼저 확정할 것 — [충돌 상세](../../companion/raspberry-pi-5/README.md#-telem2-포트-충돌--rc-수신기와-경합)
+- Telem1을 RC용으로 쓰므로 **해당 포트의 기존 MAVLink 매핑(`MAV_x_CONFIG` 등)을 반드시 제거**해야 충돌하지 않는다.
+- ✅ **포트 배분 확정 (2026-08-31): 본 수신기는 Telem1, [Raspberry Pi 5](../../companion/raspberry-pi-5/README.md)는 Telem2.** 두 부품이 서로 다른 포트를 쓰므로 충돌하지 않는다. 위 MAVLink 매핑 제거는 **Telem1에만** 적용할 것 — Telem2의 Pi 텔레메트리 설정은 건드리지 않는다.
 - 빌드 타깃명(`holybro_6c-mini_default`)은 PX4 버전에 따라 다를 수 있으므로 `make list_config_targets`로 확인할 것.
 
 **ArduPilot (참고 — 미채택)**
 | 파라미터 | 값 | 의미 |
 |---|---|---|
-| `SERIAL2_PROTOCOL` | 23 | RCIN (CRSF). Telem2 = SERIAL2 |
+| `SERIAL1_PROTOCOL` | 23 | RCIN (CRSF). Telem1 = SERIAL1 |
 | `RSSI_TYPE` | 3 | CRSF 링크 품질을 RSSI로 사용 |
 | `RC_OPTIONS` | bit 13 설정 | ELRS용 보레이트 420K (기본 416K에서 변경) |
 
-- 보레이트는 펌웨어가 자동 관리하므로 `SERIAL2_BAUD` 수동 설정 불필요.
+- 보레이트는 펌웨어가 자동 관리하므로 `SERIAL1_BAUD` 수동 설정 불필요.
 - 해당 UART는 **DMA 지원**이 필요 (6C Mini는 STM32H743이라 문제 없음).
 - ⚠️ MAVLink로 FC를 재부팅하면 수신기 전원을 껐다 켜기 전까지 통신이 끊김 — 알려진 동작.
 
@@ -75,12 +75,12 @@ make holybro_6c-mini_default upload
 - ~~동봉 CRSF 케이블의 커넥터 규격 확인~~ → **해소(2026-08-08)**: 실물 확인 결과 **양 끝 커넥터 없는 맨선(주석 도금), 4가닥 트위스트 — 적/초/흰/검**. 아래 [배선 작업](#-배선-작업-납땜-필요) 참조
 - **수신기 패드 실크 인쇄 판독 필요** — 4개 패드 중 어느 것이 5V/GND/TX/RX인지. 케이블 색상(적=VCC, 검=GND는 확실)과 초/흰 중 어느 쪽이 TX인지 미확정
 
-## ⚠️ 배선 작업 (납땜 필요)
+## ✅ 배선 작업 (납땜 완료 — 2026-08-31)
 
-무개조 연결 불가. **양쪽 다 가공이 필요**하다.
+무개조 연결이 불가하여 **양쪽 다 가공**했다. 아래는 시공 내역이다.
 
 ```
-RP4TD-M 패드 4개 ──[미세 납땜]── 동봉 CRSF wire ──[압착]── JST-GH 1.25mm 6핀 → FC Telem2
+RP4TD-M 패드 4개 ──[미세 납땜]── 동봉 CRSF wire ──[압착]── JST-GH 1.25mm 6핀 → FC Telem1
    (커넥터 없음)                  (맨선 4가닥)              (별도 구매 필요)
 ```
 
@@ -93,11 +93,11 @@ RP4TD-M 패드 4개 ──[미세 납땜]── 동봉 CRSF wire ──[압착]�
 
 ### 결선
 
-| 케이블 색 | 신호 | → Telem2 핀 |
+| 케이블 색 | 신호 | → Telem1 핀 |
 |---|---|---|
 | 적 | VCC 5V | 1 |
-| 초 또는 흰 | 수신기 TX | **3** (UART5_RX) |
-| 흰 또는 초 | 수신기 RX | **2** (UART5_TX) |
+| 초 또는 흰 | 수신기 TX | **3** (UART7_RX) |
+| 흰 또는 초 | 수신기 RX | **2** (UART7_TX) |
 | 검 | GND | 6 |
 | — | (CTS/RTS 미사용) | 4, 5 비움 |
 

@@ -124,8 +124,8 @@ PNP는 기체(플랫폼) + 파워 시스템(모터/ESC/프로펠러/서보)만 �
 
 - **FC 무선 연결 성립** — FC를 PC에 USB로 연결하지 않아도 QGC가 붙는다. 단 로컬 WiFi 직결이 아니라 **인터넷 경유 Tailscale VPN** 링크다. 상세: [Raspberry Pi 5 문서](../../components/companion/raspberry-pi-5/README.md)
 - **배터리 잔량 QGC 표시 확인** — PM08의 CAN 센싱값이 FC → Pi → QGC까지 전 구간 도달함이 실증됨. PM08 배선과 CAN 설정이 정상임을 뜻한다.
-- 🔴 **실비행 텔레메트리로는 부적합** — Pi가 학내 WiFi(`eduroam`) 클라이언트라 기체가 WiFi 범위를 벗어나면 링크가 끊긴다. 지상 설정/벤치 테스트용이며, 실비행에는 별도 무선 모뎀(T900 Pro 등) 필요.
-- 🔴 **Telem2 포트 경합** — 현재 Pi가 Telem2를 점유 중이나, [RP4TD-M 수신기](../../components/receivers/radiomaster-rp4td-m/README.md) 계획도 같은 포트(CRSF)를 요구한다. 수신기 장착 전 포트 재배치 필요: [충돌 상세](../../components/companion/raspberry-pi-5/README.md#-telem2-포트-충돌--rc-수신기와-경합)
+- ⚠️ **실비행 텔레메트리는 WiFi 범위 내 한정** — Pi가 학내 WiFi(`eduroam`) 클라이언트라 기체가 WiFi 범위를 벗어나면 링크가 끊긴다. 2026-08-31 비행에서는 범위 내 운용으로 문제없었음. 비행 범위를 넓히려면 별도 무선 모뎀(T900 Pro 등) 필요.
+- ✅ **Telem 포트 배분 확정** — Pi는 Telem2, [RP4TD-M 수신기](../../components/receivers/radiomaster-rp4td-m/README.md)는 Telem1로 분리, 배선 납땜 완료. 상세: [Pi 문서](../../components/companion/raspberry-pi-5/README.md#-telem-포트-배분-확정-2026-08-31)
 - 아직 미연결: ESC ×5, 서보 ×5, RC 수신기 (위 [채널 배정안](../../components/fc/holybro-pixhawk-6c-mini/README.md#채널-배정안-px4-기준) 참조)
 
 ## 부위별 사진 자료
@@ -279,7 +279,7 @@ PNP는 기체(플랫폼) + 파워 시스템(모터/ESC/프로펠러/서보)만 �
   - 에어스피드 센서: [Holybro Airspeed](../../components/sensors/holybro-airspeed-dronecan/README.md) (1개, 이중화 미적용) — ✅ **I2C 방식**, FC I2C 포트 연결 + 피토관 물려 **정상 작동 확인 완료**(2026-08-08). 원문 배선도의 날개 커넥터 1~4번 핀(Airspeed−/SDA/SCL/5V)이 그대로 유효
   - 파워 분배: [Holybro PDB 300A Side Entry](../../components/power/holybro-pdb-300a-side-entry/README.md)
   - 파워 모듈: [Holybro PM08-CAN (14S, 200A)](../../components/power/holybro-pm08-can/README.md)
-  - 컴패니언 컴퓨터: [Raspberry Pi 5 "raspb2"](../../components/companion/raspberry-pi-5/README.md) — FC Telem2에 UART(921600) 연결, 자체 제작 `mav_bridge.py`로 MAVLink↔UDP 브리지. ✅ **가동 중**, GCS 2대(`ku-dgs1`/`rim`) 동시 수신 및 배터리 텔레메트리 확인 완료(2026-08-11). ⚠️ WiFi 의존이라 실비행 텔레메트리로는 부적합
+  - 컴패니언 컴퓨터: [Raspberry Pi 5 "raspb2"](../../components/companion/raspberry-pi-5/README.md) — FC Telem2에 UART(921600) 연결, 자체 제작 `mav_bridge.py`로 MAVLink↔UDP 브리지. ✅ **가동 중**, GCS 2대(`ku-dgs1`/`rim`) 동시 수신 및 배터리 텔레메트리 확인 완료(2026-08-11). ⚠️ WiFi 의존이라 실비행 텔레메트리는 WiFi 범위 내로 한정 — 범위 내 비행(2026-08-31)은 문제없었음
   - RC 수신기: [RadioMaster RP4TD-M](../../components/receivers/radiomaster-rp4td-m/README.md) (검토 중 — ExpressLRS/CRSF 프로토콜, Pixhawk 6C Mini와의 포트/펌웨어 설정 확인 필요)
 - **미포함 (별도 구매 필요)**:
   - 디지털 전송(텔레메트리/영상) 시스템 (T900 Pro, 안테나 등)

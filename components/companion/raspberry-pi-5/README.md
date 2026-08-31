@@ -136,22 +136,18 @@ QGC가 UDP 14550을 바인딩하면 **링크 수동 추가 없이** 기체가 �
 - Pi의 WiFi는 **`eduroam` 클라이언트 모드** (wlan0: 10.200.114.166/17). AP 모드 아님 — 기체가 자체 핫스팟을 띄우는 구조가 아니다.
 - ✅ **배터리 잔량 QGC 표시 가능** — [PM08-CAN](../../power/holybro-pm08-can/README.md)이 CAN1으로 FC에 보낸 전압/전류 센싱값이 MAVLink를 타고 QGC까지 도달함. PM08 → FC → Pi → QGC 전 구간이 검증된 셈이다.
 
-## 🔴 Telem2 포트 충돌 — RC 수신기와 경합
+## ✅ Telem 포트 배분 확정 (2026-08-31)
 
-**Telem2는 하나뿐인데 두 부품이 이 포트를 요구한다.**
+**Pi는 Telem2, RC 수신기는 Telem1** — 서로 다른 포트를 쓰므로 충돌하지 않는다.
 
-| 부품 | 요구 포트 | 상태 |
+| 부품 | 포트 | 상태 |
 |---|---|---|
-| Raspberry Pi 5 (본 문서) | Telem2 (UART5) | ✅ 배선·브리지 구축 완료, **가동 중** |
-| [RadioMaster RP4TD-M](../../receivers/radiomaster-rp4td-m/README.md) | Telem2 (CRSF, `RC_CRSF_PRT_CFG`=Telem2) | 🔶 검토 중, 미장착 |
+| Raspberry Pi 5 (본 문서) | **Telem2 (UART5)** | ✅ 배선·브리지 구축 완료, **가동 중** |
+| [RadioMaster RP4TD-M](../../receivers/radiomaster-rp4td-m/README.md) | **Telem1 (UART7)** | ✅ 배선 납땜 완료 |
 
-두 부품을 동시에 쓰려면 하나를 다른 포트로 옮겨야 한다. 선택지:
+Pi 배선은 그대로 두고, 수신기를 비어 있던 Telem1에 배정하는 것으로 정리했다.
 
-1. **RPi를 Telem1(UART7)로 이전** — Telem1은 현재 비어 있다. 배선을 옮기고 FC 파라미터와 `mav_bridge.py`의 포트 설정을 맞추면 된다. 가장 단순.
-2. **수신기를 다른 UART로** — GPS2(UART8)를 CRSF용으로 전환하는 방법이 있으나, 커넥터 규격과 GPS 확장성을 희생한다.
-3. RC 수신기를 최종 미채택 시 충돌 소멸.
-
-> ⚠️ [수신기 문서](../../receivers/radiomaster-rp4td-m/README.md#펌웨어별-설정)의 *"Telem2의 기존 MAVLink 매핑(`MAV_1_CONFIG` 등)을 반드시 제거"* 지시를 그대로 따르면 **Pi 텔레메트리 링크가 끊긴다.** 수신기 작업 전 위 선택지 중 하나를 먼저 확정할 것.
+> ⚠️ [수신기 문서](../../receivers/radiomaster-rp4td-m/README.md#펌웨어별-설정)의 MAVLink 매핑 제거 지시는 **Telem1에만** 적용할 것. Telem2의 Pi 텔레메트리 설정을 건드리면 QGC 링크가 끊긴다.
 
 ## 부수 도구 — `px4_param.py`
 
@@ -164,9 +160,7 @@ QGC가 UDP 14550을 바인딩하면 **링크 수동 추가 없이** 기체가 �
 - **FC측 PX4 파라미터 실측값 미확인** — Telem2가 921600으로 동작 중인 것으로 보아 `SER_TEL2_BAUD`=921600, `MAV_x_CONFIG`=TELEM2로 설정돼 있을 것이나, `MAV_x_MODE`가 `Onboard`인지 `Normal`인지 등은 QGC에서 직접 읽어 확정 필요. (`px4_param.py`로 조회 가능)
   - 참고: 수신 스트림에 HIGHRES_IMU·ATTITUDE_QUATERNION이 고레이트로 포함된 것으로 보아 `Onboard` 모드일 가능성이 높다. QGC 파라미터 화면에서 확정할 것.
 - **Pi 전원 공급 계통 미기록** — 어느 BEC/배터리에서 5V를 받는지, 전류 여유가 충분한지. Pi 5는 순간 소비가 커서 [UBEC(5.3V/10A)](../../fc/holybro-pixhawk-6c-mini/README.md#서보-전원-mfe-ubec-연결)를 서보와 공유하면 서보 동작 시 전압 강하 위험.
-- 🔴 **실비행 텔레메트리로 부적합** — 현재 링크는 `eduroam` WiFi + 인터넷 + Tailscale 경유다. 지상 벤치 테스트/설정용으로는 충분하나, **기체가 학내 WiFi 범위를 벗어나면 즉시 끊긴다.** 실비행에는 별도 무선 모뎀(T900 Pro 등) 또는 LTE 모뎀이 필요하다.
-- **비행 중 링크 신뢰성 미검증** — 위 사유로 지상 테스트만 완료.
-- **Telem2 포트 충돌 해소 방안 미확정** — 위 [Telem2 포트 충돌](#-telem2-포트-충돌--rc-수신기와-경합) 참조.
+- ⚠️ **실비행 텔레메트리로 부적합 (설계상 한계)** — 현재 링크는 `eduroam` WiFi + 인터넷 + Tailscale 경유다. 지상 벤치 테스트/설정용이며, **기체가 학내 WiFi 범위를 벗어나면 끊긴다.** 본 기체는 이를 감수하고 운용 중(2026-08-31 비행 시 문제 없음)이나, 비행 범위를 넓히려면 별도 무선 모뎀(T900 Pro 등) 또는 LTE 모뎀이 필요하다.
 
 ## 보유 수량 (SHADE 기체)
 
