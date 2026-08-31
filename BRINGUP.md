@@ -66,7 +66,12 @@ P3 는 **6단 스위치**로 자동미션 진입용 검토 중.
   **raspb2 는 고장 확정**이며 되돌아가지 않는다. 브리지 코드는 이제 repo 안에 있다
   ([mav_bridge.py](components/companion/raspberry-pi-5/mav_bridge.py)).
   raspb1 상태: 유닛 `enabled`+`active`, `/dev/ttyAMA0` 921600 오픈 성공.
-  **FC Telem2 결선이 남아 있어 패킷 수신은 아직 없다.**
+  고정 타겟 4개(`ku-dgs1`·`rim`·`rim3`·`gram-labtop`).
+- 🔴 **FC→Pi 시리얼 무신호 (2026-08-31)** — Telem2 ↔ GPIO 교차 결선 + 메인 배터리 인가 후에도
+  `/dev/ttyAMA0` 수신 **0바이트** (921600/115200/57600 raw read 전부). GCS↔브리지 UDP 구간은
+  같은 날 검증됐다(`GCS connected: ('100.99.120.110', 14550)`). 남은 건 FC 쪽 —
+  `MAV_1_CONFIG` / `MAV_1_MODE` / `SER_TEL2_BAUD` 를 **USB 직결로 실측**할 것.
+  [상세](components/companion/raspberry-pi-5/README.md#-확인-필요)
 - ⚠️ **문서-실기 불일치** — 이 문서는 `autoConnectUDP=false` 라고 적어 왔으나 `ku-dgs1` 의
   실제 `QGroundControl.ini` 는 **`autoConnectUDP=true`** 다 (2026-08-30 실측).
 
