@@ -53,7 +53,8 @@ P3 는 **6단 스위치**로 자동미션 진입용 검토 중.
         │
         └─ 백팩 WiFi AP (10.0.0.1) ─UDP→ 노트북 QGC        (대역폭 ~2KB/s)
 
-[Pi5 raspb1] ─UART─ FC TELEM2 (921600) ─UDP 14550→ ku-dgs1 / rim / rim3  (mav_bridge, systemd 서비스)
+[Pi5 raspb1] ─USB─ FC USB-C (/dev/ttyACM0) ─UDP 14550→ ku-dgs1 / rim / rim3 / gram-labtop
+              (mav_bridge, systemd 서비스)   ※ TELEM2 포트 사망으로 2026-08-31 전환
 
 [USB 직결] /dev/ttyACM0 — QGC 자동연결
 ```
@@ -67,15 +68,15 @@ P3 는 **6단 스위치**로 자동미션 진입용 검토 중.
   ([mav_bridge.py](components/companion/raspberry-pi-5/mav_bridge.py)).
   raspb1 상태: 유닛 `enabled`+`active`, `/dev/ttyAMA0` 921600 오픈 성공.
   고정 타겟 4개(`ku-dgs1`·`rim`·`rim3`·`gram-labtop`).
-- 🔴 **FC→Pi 시리얼 무신호 — 원인 규명 완료 (2026-08-31)**: **Pi 케이블의 FC측 JST-GH
-  커넥터가 TELEM2 의 2번(TX)과 3번(RX)을 다리 놓고 있다.** 양쪽이 자기 신호를 되받아
-  상대 데이터가 오가지 못한다. 케이블 교체·재압착이 필요하다.
-  **FC 포트·Pi·네트워크는 모두 정상으로 확인됐다** — 같은 포트에 수신기를 꽂으면 되돌이가
-  없고(460800 에서 rx 15.5kB/s 수신), Pi 는 물리 8↔10 루프백 64/64 왕복,
-  UDP 구간은 `GCS connected: ('100.99.120.110', 14550)` 로 실증.
-  진단은 `pxsh.py`(MAVLink SERIAL_CONTROL 로 PX4 NSH 셸 접속)로 `mavlink status` 를 읽어서 했다.
-  대안은 **Pi↔FC USB 직결**(`/dev/ttyACM0 @2000000` 실증됨).
-  [상세](components/companion/raspberry-pi-5/README.md#-telem2-무신호--원인-pi-케이블의-fc측-커넥터-단락-2026-08-31)
+- 🔴 **FC TELEM2 포트 사망 → USB 링크로 전환 (2026-08-31)** — 빈 포트에서도 FC 가 자기
+  패킷을 22.4kB/s 로 되받고(`sysid:1 compid:1`), TELEM1 에서 멀쩡하던 **수신기를 그 케이블째
+  옮기자 LED 조차 안 켜졌다** (5V 출력도 사망). 미연결 대조 포트 `ttyS4` 는 유효 프레임 0 이라
+  PX4 카운터 착시가 아니다. Pi(물리 8↔10 루프백 64/64)·케이블·네트워크는 전부 무죄.
+  **Pi 는 이제 FC USB(`/dev/ttyACM0`) 로 붙는다** — `ku-dgs1` 에서 **21.8 KB/s** 실측
+  (2572패킷/8초, RC_CHANNELS 포함). 유닛에 `Environment=MAV_SERIAL=/dev/ttyACM0` 한 줄.
+  죽은 포트에 CPU 7.4% 를 태우고 있어 `MAV_1_CONFIG=0` 으로 껐다.
+  진단은 `pxsh.py`(MAVLink SERIAL_CONTROL 로 PX4 NSH 셸 접속)로 했다.
+  [상세](components/companion/raspberry-pi-5/README.md#-telem2-포트-사망--usb-링크로-전환-2026-08-31)
 - ⚠️ **문서-실기 불일치** — 이 문서는 `autoConnectUDP=false` 라고 적어 왔으나 `ku-dgs1` 의
   실제 `QGroundControl.ini` 는 **`autoConnectUDP=true`** 다 (2026-08-30 실측).
 
@@ -86,7 +87,7 @@ P3 는 **6단 스위치**로 자동미션 진입용 검토 중.
 | 펌웨어 | **PX4 v1.17.0 커스텀 빌드** (fmu-v6c, CRSF 드라이버 포함, 플래시 98.3%) |
 | 파라미터 | 1360개 유지, 캘리브레이션 `CAL_*` 82개 보존 (플래시 후 초기화 안 됨) |
 | TELEM1 | MAVLink (수신기), `SER_TEL1_BAUD=460800` |
-| TELEM2 | Pi 브릿지, `MAV_1_CONFIG=102`, `MAV_1_MODE=2`, `SER_TEL2_BAUD=921600` |
+| TELEM2 | 🔴 **포트 사망 (2026-08-31)** — `MAV_1_CONFIG=0` 으로 꺼 둠. Pi 는 USB 로 이설 |
 | 전원 | PM08 DroneCAN — `UAVCAN_ENABLE=2`, `UAVCAN_SUB_BAT=2`, `BAT1_SOURCE=1`, `BAT1_N_CELLS=6` |
 | 기체 | `MAV_TYPE=22` Standard VTOL |
 | 백업 | `param_backup/px4_params_20260811-121719.params` (1359개) |

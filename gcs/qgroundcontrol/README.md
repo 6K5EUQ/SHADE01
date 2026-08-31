@@ -15,7 +15,7 @@
 
 | 경로 | QGC의 접속 상대 | 링크 종류 | 상태 |
 |---|---|---|---|
-| **A. 무선 (주 경로)** | RPi 5 `raspb1`의 `mav_bridge.py` — **UDP 14550** | Tailscale VPN (인터넷 경유) | 🔶 UDP 구간 검증 완료. **Pi 케이블의 FC측 커넥터 단락으로 FC→Pi 시리얼 두절** (2026-08-31) |
+| **A. 무선 (주 경로)** | RPi 5 `raspb1`의 `mav_bridge.py` — **UDP 14550** | Tailscale VPN (인터넷 경유) | ✅ **전 구간 검증 (2026-08-31)** — 21.8 KB/s. Pi↔FC 는 **USB 직결**(TELEM2 포트 사망) |
 | **B. USB 직결 (폴백/설정용)** | FC USB-C 포트 → PC 시리얼 | USB 케이블 | ✅ 검증 완료 (2026-08-11) — ⚠️ 수동 링크 등록 금지, [아래 참조](#-수동-usb-링크는-1초-뒤-끊긴다) |
 | ~~C. 무선 모뎀 직결~~ | T900 Pro 등 텔레메트리 라디오 | 900MHz 등 | ❌ 미보유 — [미구매 항목](../../airframes/striver-mini-vtol/README.md#보유-사양-메모-shade-기체--pnp) |
 
@@ -24,8 +24,9 @@
 ### 전체 링크 구조
 
 ```
-[Pixhawk 6C Mini] ──Telem2 UART 921600──► [Raspberry Pi 5 "raspb1"]
-   (PX4, MAVLink v2)                          /dev/ttyAMA0
+[Pixhawk 6C Mini] ──USB-C ⟷ USB-A────────► [Raspberry Pi 5 "raspb1"]
+   (PX4, MAVLink v2)                          /dev/ttyACM0
+   🔴 TELEM2 포트는 사망 (2026-08-31)
         │                                          │
         │                                   mav_bridge.py
         └── USB-C ──┐                     (UDP :14550 브리지)

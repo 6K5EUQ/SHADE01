@@ -1,9 +1,11 @@
 [Unit]
-Description=MAVLink serial-to-UDP bridge (FC Telem2 -> QGC)
+Description=MAVLink serial-to-UDP bridge (FC USB -> QGC)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
+# TELEM2 포트 사망(2026-08-31)으로 GPIO UART 대신 FC USB 를 쓴다.
+Environment=MAV_SERIAL=/dev/ttyACM0
 Type=simple
 User=raspb1
 ExecStart=/usr/bin/python3 /home/raspb1/mav_bridge.py 100.99.120.110:14550 100.107.83.47:14550 100.105.212.78:14550 100.66.204.25:14550
