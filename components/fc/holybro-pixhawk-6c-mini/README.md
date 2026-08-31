@@ -119,7 +119,7 @@ PDB 300A [XT30] ──22V──► UBEC ──5.3V──┬─► FC MAIN OUT �
 | VTOL ESC ×4 ([MFE ESC 650](../../esc/mfe-esc-650-50a/README.md)) | MAIN OUT 또는 AUX OUT — 🔶 아래 참조 |
 | 크루즈 ESC ([MFE ESC 6100](../../esc/mfe-esc-6s-100a/README.md)) | MAIN OUT 또는 AUX OUT — 🔶 아래 참조 |
 | 서보 ×5 ([MFE 3054](../../servos/mfe-s3054/README.md)) | MAIN OUT 또는 AUX OUT — 🔶 아래 참조 |
-| [Raspberry Pi 5 "raspb1" 컴패니언](../../companion/raspberry-pi-5/README.md) | **Telem2 (UART5) @ 921600** — GPIO 물리핀 8/10/6에 결선. `mav_bridge.py`로 QGC 원격 연결 실적은 이전 기기(`raspb2`)로 확인(2026-08-10). 🔶 2026-08-30 `raspb1` 이설 — 결선 후 재확인 필요. ⚠️ 5V(1번 핀) 미연결 — Pi 전원은 별도 계통 |
+| [Raspberry Pi 5 "raspb1" 컴패니언](../../companion/raspberry-pi-5/README.md) | 🔵 **USB-C 직결 → Pi `/dev/ttyACM0`** (2026-08-31 전환, 현행). `mav_bridge.py` 가 24.3 kB/s 수신 중. ⛔ 구 경로 Telem2(UART5) @921600 은 **케이블 FC측 커넥터 단락으로 폐기** — `MAV_1_CONFIG=0` 권장. ⚠️ Pi 전원은 별도 계통 |
 | RC 수신기 ([RadioMaster RP4TD-M](../../receivers/radiomaster-rp4td-m/README.md)) | **Telem1 (UART7) @ CRSF** — ✅ 결선·바인딩 완료(2026-08-19), `RC_CRSF_PRT_CFG=101`. RC IN/SBUS 포트 불가. TX/RX 교차 배선. 배선표·파라미터는 [수신기 문서](../../receivers/radiomaster-rp4td-m/README.md#fc-연결-방법-pixhawk-6c-mini) 참조 |
 
 ### ✅ UART 포트 배정 — 충돌 해소 (2026-08-19)
@@ -129,7 +129,7 @@ Telem2를 두고 Pi 5와 RC 수신기가 경합하던 문제는 **수신기를 T
 | 포트 | UART | 사용처 | 파라미터 | 상태 |
 |---|---|---|---|---|
 | **Telem1** | UART7 | [RP4TD-M 수신기](../../receivers/radiomaster-rp4td-m/README.md) (CRSF) | `RC_CRSF_PRT_CFG=101` | ✅ 결선·바인딩 완료 |
-| **Telem2** | UART5 | [Raspberry Pi 5](../../companion/raspberry-pi-5/README.md) (MAVLink 브리지) | `MAV_1_CONFIG=102` @921600 | ✅ 가동 중 |
+| **Telem2** | UART5 | ~~[Raspberry Pi 5](../../companion/raspberry-pi-5/README.md) (MAVLink 브리지)~~ → **비어 있음** | `MAV_1_CONFIG=102` @921600 → **`0` 권장** | ⛔ **폐기 (2026-08-31)** — 케이블 FC측 커넥터 단락. Pi 는 USB 로 이설 |
 
 - 두 링크는 **서로 다른 UART이므로 공존**한다. 수신기 설정 시 Telem2의 MAVLink 매핑을 제거할 필요가 없다.
 - ⚠️ T900 Pro 등 지상국 텔레메트리 무선모듈을 추가하려면 **남은 UART가 GPS2(UART8)뿐**이다. 도입 시 포트 재배치 검토 필요.

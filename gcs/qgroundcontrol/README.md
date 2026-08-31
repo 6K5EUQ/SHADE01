@@ -50,7 +50,7 @@
 |---|---|---|
 | 기체 전원 | FC에 전원 인가 ([PM08-CAN](../../components/power/holybro-pm08-can/README.md) → Power1) | FC LED 점등 |
 | Pi 전원 | RPi 5 부팅 완료 | Tailscale에 `raspb1-dgs3` 온라인 표시 |
-| Pi ↔ FC 배선 | Telem2 ↔ GPIO 물리핀 8/10/6 결선 | [배선표](../../components/companion/raspberry-pi-5/README.md#배선-fc-telem2--rpi-gpio) |
+| Pi ↔ FC 배선 | **USB-C 직결** (`/dev/ttyACM0`) — 구 Telem2 GPIO 결선은 폐기 | [USB 직결](../../components/companion/raspberry-pi-5/README.md#-fc--raspb1-usb-직결-2026-08-31-현행) |
 | 브리지 서비스 | `mavlink-bridge.service` **active** | 아래 1단계 |
 | GCS PC | Tailscale 로그인 + 해당 tailnet 소속 | `tailscale status` |
 | GCS PC IP | 브리지 **고정 송신 대상에 등록**되어 있어야 함 | 아래 2단계 |
@@ -213,7 +213,7 @@ sudo usermod -aG dialout $USER   # 적용에는 재로그인 필요
 
 - Comm Links에 "FC USB" 같은 항목이 Connect 버튼인 채 남아 있다면 혼란만 주므로 삭제할 것.
 - ⚠️ **USB 전원만으로는 서보·ESC가 동작하지 않는다.** USB는 FC 로직만 살린다. 액추에이터 테스트에는 [UBEC](../../components/fc/holybro-pixhawk-6c-mini/README.md#서보-전원-mfe-ubec-연결)의 서보 레일 전원과 메인 배터리가 필요하다.
-- ⚠️ **경로 A와 동시 연결 시 주의** — USB와 Telem2 양쪽에서 같은 기체가 붙으면 QGC가 기체를 중복 인식하거나 파라미터 쓰기가 경합할 수 있다. 설정 작업 중에는 **한 경로만 쓰는 것을 권장**한다.
+- 🔴 **경로 A 와 동시 사용 불가** — 경로 A(raspb1 브리지)가 FC 의 **같은 USB 포트**를 점유한다. 노트북을 직결하려면 Pi 쪽 USB 를 뽑거나 `sudo systemctl stop mavlink-bridge.service` 로 브리지를 내려야 한다.
 - 🔶 이 경로는 아직 본 기체에서 별도 기록된 검증 이력이 없다(표준 동작이므로 문제 없을 것으로 예상). 실제 수행 후 결과를 이 문서에 추가할 것.
 
 ---
@@ -286,9 +286,9 @@ journalctl -u mavlink-bridge.service -n 50
 ```
 
 - 서비스가 `inactive`/`failed` → `sudo systemctl start mavlink-bridge.service`
-- 시리얼 오픈 실패 → FC 전원 미인가, 또는 [Telem2 배선](../../components/companion/raspberry-pi-5/README.md#배선-fc-telem2--rpi-gpio) 문제. **TX/RX 교차** 확인 (FC 2번 → Pi 물리 10번, FC 3번 → Pi 물리 8번)
-- 포트 점유 충돌 → `serial-getty@ttyAMA0`가 살아났거나 `px4_param.py`가 돌고 있는지 확인
-- 시리얼은 열렸는데 패킷 0 → FC측 `SER_TEL2_BAUD`(921600) / `MAV_*_CONFIG`(TELEM2) 파라미터 확인 (경로 B로 접속해 조회)
+- 시리얼 오픈 실패 → FC 전원 미인가, 또는 **USB 케이블 빠짐**. `ls /dev/ttyACM0` 과 `lsusb | grep Auterion` 으로 확인 ([USB 직결](../../components/companion/raspberry-pi-5/README.md#-fc--raspb1-usb-직결-2026-08-31-현행))
+- 포트 점유 충돌 → `px4_param.py` 나 노트북 USB 직결(경로 B)이 같은 FC 를 잡고 있는지 확인
+- 시리얼은 열렸는데 패킷 0 → USB 경로는 보레이트 무관. FC 재부팅 후 `/dev/ttyACM0` 재생성 확인
 
 **2) Tailscale 링크가 살아 있는가**
 

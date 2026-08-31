@@ -1,13 +1,19 @@
 # Raspberry Pi 5 (raspb1) — 컴패니언 컴퓨터 / MAVLink 브리지
 
-[Striver Mini VTOL](../../../airframes/striver-mini-vtol/README.md) 기체에 탑재되어 [Pixhawk 6C Mini](../../fc/holybro-pixhawk-6c-mini/README.md)와 시리얼(UART)로 연결되는 온보드 컴퓨터. 역할은 **MAVLink 시리얼 ↔ UDP 브리지** — FC를 PC에 USB로 직접 연결하지 않아도, Tailscale 망을 통해 원격 PC의 QGroundControl이 붙는다.
+[Striver Mini VTOL](../../../airframes/striver-mini-vtol/README.md) 기체에 탑재되어 [Pixhawk 6C Mini](../../fc/holybro-pixhawk-6c-mini/README.md)와 **USB 로 연결되는** 온보드 컴퓨터. 역할은 **MAVLink 시리얼 ↔ UDP 브리지** — 노트북을 기체에 붙이지 않아도, Tailscale 망을 통해 원격 PC의 QGroundControl이 붙는다.
 
 > **GCS 접속 절차는 [QGroundControl 연결 절차](../../../gcs/qgroundcontrol/README.md) 문서**에 단계별로 정리되어 있다. 본 문서는 브리지 구현·배선·systemd 유닛 상세를 다룬다.
 
-> **2026-08-30 — 컴패니언 Pi 를 `raspb2` 에서 `raspb1` 로 옮겼다.**
-> 🔴 **raspb2 는 고장이다 (2026-08-30 확정).** 처음엔 일시 오프라인으로 봤으나 복구되지
-> 않았고, 운용자가 하드웨어 고장으로 판정했다. **되돌아갈 계획은 없다** — raspb1 이 정본이다.
-> 이전 기기의 실측 기록은 근거 자료로만
+> ### 🔵 현재 링크 구성 — **FC USB ↔ raspb1** (2026-08-31 실측)
+>
+> **드론 링크 체계는 `raspb1` 하나다.** FC 와 Pi 는 **USB 로 직결**돼 있고
+> (`/dev/ttyACM0`), TELEM2 UART 경로는 **쓰지 않는다** — 그 케이블의 FC측 커넥터가
+> 단락이라 버렸다. 상세는
+> [FC ↔ raspb1 USB 직결](#-fc--raspb1-usb-직결-2026-08-31-현행) 절.
+>
+> 🔴 **raspb2 는 고장으로 기체에서 제거됐다 (2026-08-30 확정, 2026-08-31 철거).**
+> 복구·재사용·되돌아갈 계획 **없다.** 이전 기기의 실측 기록은 "PM08 → FC → Pi → QGC
+> 전 구간이 한 번은 실증됐다" 는 근거 자료로만
 > [이전 구성 (raspb2, 2026-08-11)](#이전-구성-raspb2-2026-08-11) 절에 남겨 둔다.
 
 - 모델: **Raspberry Pi 5 Model B Rev 1.0**
@@ -23,7 +29,44 @@
   raspb2 에 있던 X1200 UPS 배터리 로거 같은 장치가 없어 저전압 경고·안전 종료를 못 한다.
   (`vcgencmd get_throttled` 도 `raspb1` 이 `video` 그룹이 아니라 권한 오류.)
 
-## 배선 (FC Telem2 ↔ RPi GPIO)
+## 🔵 FC ↔ raspb1 USB 직결 (2026-08-31, 현행)
+
+**현재 운용 경로다.** TELEM2 케이블의 FC측 커넥터 단락([상세](#-telem2-무신호--원인-pi-케이블의-fc측-커넥터-단락-2026-08-31))으로
+UART 경로를 포기하고, FC 의 USB-C 를 Pi 5 의 USB-A 포트에 직접 꽂았다.
+
+| 항목 | 값 (2026-08-31 실측) |
+|---|---|
+| 물리 연결 | Pixhawk 6C Mini **USB-C** ↔ raspb1 **USB-A** |
+| Pi 측 장치 | `/dev/ttyACM0` (`crw-rw---- root dialout 166,0`) |
+| `lsusb` | `Bus 002 Device 003: ID 3185:0038 Auterion PX4 FMU v6C.x` |
+| 보레이트 | `921600` (USB CDC-ACM 이라 실제로는 무의미 — 값 무관하게 동작) |
+| 유닛 설정 | `Environment=MAV_SERIAL=/dev/ttyACM0` |
+| 유닛 상태 | `enabled` + `active` |
+| 실측 수신량 | **약 24.3 kB/s** (브리지 PID `rchar` 5초 델타 121,608 B) |
+| 포트 점유 | 브리지 python3 단독 (`fd 4 -> /dev/ttyACM0`) |
+
+```
+mav_bridge: serial=/dev/ttyACM0 baud=921600 udp=:14550
+mav_bridge: fixed targets: 100.99.120.110:14550, 100.107.83.47:14550, 100.105.212.78:14550, 100.66.204.25:14550
+mav_bridge: serial opened: /dev/ttyACM0 @ 921600
+```
+
+- ✅ **FC → Pi 구간 해결됨.** 오래 막혀 있던 마지막 구간이 뚫렸다. UART 시절 0바이트였던
+  것과 달리 24 kB/s 가 실제로 흐른다.
+- ⚠️ **FC 의 USB 포트를 Pi 가 점유한다** — 노트북 USB 직결(경로 B)과 **동시 사용 불가**.
+  노트북으로 붙이려면 Pi 쪽 USB 를 뽑거나 브리지를 내려야 한다.
+- ⚠️ **USB 커넥터는 JST-GH 보다 진동에 약하다.** 비행 전 케이블을 기체에 고정할 것.
+  비행 중 빠지면 링크가 통째로 죽는다.
+- ⚠️ **FC 를 USB 로만 급전하지 말 것** — 메인 배터리 없이 USB 만으로 켜면 서보·ESC 계통이
+  죽은 채로 부팅된다. 진단용으로만.
+- `MAV_1_CONFIG`(TELEM2) 는 이제 쓰이지 않는다. 죽은 포트에 계속 쏘느라 FC CPU 7.4% 를
+  태우므로 **`MAV_1_CONFIG=0` 으로 꺼두는 것을 권장**한다 (미적용 시 낭비만 발생, 기능 영향 없음).
+
+## 배선 (FC Telem2 ↔ RPi GPIO) — ⛔ 폐기된 경로
+
+> ⛔ **이 절은 더 이상 현행이 아니다 (2026-08-31).** 케이블 FC측 커넥터 단락으로 포기했고
+> 지금은 [USB 직결](#-fc--raspb1-usb-직결-2026-08-31-현행)을 쓴다.
+> 케이블을 새로 만들어 UART 로 돌아갈 경우를 대비해 결선 정보만 남긴다.
 
 FC의 Telem2(JST-GH 1.25mm 6핀)와 Pi 5의 40핀 GPIO 헤더를 3선(TX/RX/GND)으로 연결한다.
 
@@ -72,7 +115,7 @@ enable_uart=1
 |---|---|
 | 스크립트 | `/home/raspb1/mav_bridge.py` (정본: [mav_bridge.py](mav_bridge.py)) |
 | systemd 유닛 | `/etc/systemd/system/mavlink-bridge.service` (정본: [mavlink-bridge.service](mavlink-bridge.service)) |
-| 시리얼 | `/dev/ttyAMA0` @ **921600** (환경변수 `MAV_SERIAL`/`MAV_BAUD`로 변경 가능) |
+| 시리얼 | **`/dev/ttyACM0`** @ 921600 — FC USB 직결 (2026-08-31 전환). 유닛의 `Environment=MAV_SERIAL` 로 지정. 구 경로 `/dev/ttyAMA0`(TELEM2 UART)는 폐기 |
 | UDP 리슨 | `0.0.0.0:14550` (환경변수 `MAV_UDP_PORT`) |
 | 고정 송신 대상 | `100.99.120.110:14550` (**`ku-dgs1`**) + `100.107.83.47:14550` (**`rim`**) + `100.105.212.78:14550` (**`rim3`**) + `100.66.204.25:14550` (**`gram-labtop`**, 2026-08-31 추가) — 유닛의 ExecStart 인자 |
 | 자동 시작 | `enabled` (부팅 시 기동) |
@@ -159,8 +202,8 @@ QGC가 UDP 14550을 바인딩하면 **링크 수동 추가 없이** 기체가 �
 ## 데이터 흐름
 
 ```
-[Pixhawk 6C Mini] ──Telem2 UART 921600──► [Raspberry Pi 5 "raspb1"]
-                                             /dev/ttyAMA0
+[Pixhawk 6C Mini] ────── USB (CDC-ACM) ──► [Raspberry Pi 5 "raspb1"]
+                          ~24.3 kB/s 실측       /dev/ttyACM0
                                                   │
                                           mav_bridge.py
                                         (UDP :14550 브리지)
@@ -171,7 +214,11 @@ QGC가 UDP 14550을 바인딩하면 **링크 수동 추가 없이** 기체가 �
                           ▼                       ▼                       ▼
               [ku-dgs1 100.99.120.110]  [rim 100.107.83.47]   [rim3 100.105.212.78]
                   QGroundControl            QGroundControl        QGroundControl
+                                    + [gram-labtop 100.66.204.25]
 ```
+
+> **드론 링크 체계는 raspb1 단독이다.** raspb2 는 고장으로 제거됐고 대체 경로는 없다.
+> FC ↔ Pi 는 USB, Pi ↔ GCS 는 Tailscale UDP 14550.
 
 - **QGC는 기체에 붙어 있지 않고 원격 노드에서 실행**된다. 로컬 WiFi 직결이 아니라 **인터넷 경유 Tailscale VPN** 링크다.
 - Pi의 WiFi는 **클라이언트 모드**다. AP 모드 아님 — 기체가 자체 핫스팟을 띄우는 구조가 아니다.
@@ -342,8 +389,11 @@ QGC 없이 MAVLink SERIAL_CONTROL(msgid 126) 로 PX4 NSH 셸을 여는 스크립
 
 ## 🔶 확인 필요
 
-- **FC측 PX4 파라미터 실측값 미확인** — Telem2가 921600으로 동작 중인 것으로 보아 `SER_TEL2_BAUD`=921600, `MAV_x_CONFIG`=TELEM2로 설정돼 있을 것이나, `MAV_x_MODE`가 `Onboard`인지 `Normal`인지 등은 QGC에서 직접 읽어 확정 필요. (`px4_param.py`로 조회 가능)
-  - 참고: 수신 스트림에 HIGHRES_IMU·ATTITUDE_QUATERNION이 고레이트로 포함된 것으로 보아 `Onboard` 모드일 가능성이 높다. QGC 파라미터 화면에서 확정할 것.
+- **FC측 USB 링크 MAVLink 모드 미확정** — USB 경로는 `MAV_x_CONFIG` 없이도 PX4 가 기본
+  MAVLink 인스턴스를 띄운다. 스트림 구성(`Normal` vs `Onboard`)은 QGC 파라미터 화면에서
+  확정할 것. 참고: USB 직결 실측에서 22~24 kB/s 가 나오는 것으로 보아 `Onboard` 급 고레이트다.
+- **`MAV_1_CONFIG`(TELEM2) 정리 미적용** — 죽은 포트에 계속 송신하며 FC CPU 7.4% 를 태운다.
+  `0` 으로 꺼두기 권장. 기능 영향은 없고 낭비만 발생.
 - **Pi 전원 공급 계통 미기록** — 어느 BEC/배터리에서 5V를 받는지, 전류 여유가 충분한지. Pi 5는 순간 소비가 커서 [UBEC(5.3V/10A)](../../fc/holybro-pixhawk-6c-mini/README.md#서보-전원-mfe-ubec-연결)를 서보와 공유하면 서보 동작 시 전압 강하 위험.
 - 🔴 **실비행 텔레메트리로 부적합** — 현재 링크는 WiFi + 인터넷 + Tailscale 경유다. 지상 벤치 테스트/설정용으로는 충분하나, **기체가 WiFi 범위를 벗어나면 즉시 끊긴다.** 실비행에는 별도 무선 모뎀(T900 Pro 등) 또는 LTE 모뎀이 필요하다.
 - **비행 중 링크 신뢰성 미검증** — 위 사유로 지상 테스트만 완료.
