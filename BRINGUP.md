@@ -77,6 +77,21 @@ P3 는 **6단 스위치**로 자동미션 진입용 검토 중.
   죽은 포트에 CPU 7.4% 를 태우고 있어 `MAV_1_CONFIG=0` 으로 껐다.
   진단은 `pxsh.py`(MAVLink SERIAL_CONTROL 로 PX4 NSH 셸 접속)로 했다.
   [상세](components/companion/raspberry-pi-5/README.md#-telem2-포트-사망--usb-링크로-전환-2026-08-31)
+- 🔵 **비행모드를 S3 6단 로터리로 전환 (2026-08-31)** — CH6 소스를 SB(3단) → **P3/S3
+  (6단 multipos)** 로 바꿔 `COM_FLTMODE` 6슬롯을 1:1 로 쓴다. 실측 PWM
+  1000/1182/1449/1550/1817/2000us. 배정: **1 Stabilized · 2 Altitude · 3·4 Position ·
+  5 Mission · 6 RTL**. 3·4단은 슬롯 경계 1500us 와 49us/50us 밖에 안 떨어져 있어
+  **일부러 같은 모드**로 뒀다.
+  `COM_ARM_WO_GPS` 를 **0→1** 로 바꿔 GPS 없이도 1·2단(Stabilized/Altitude) 시동이 걸린다.
+  ⚠️ **광류·라이다가 없어 GPS 없는 위치유지는 불가** — "no-GPS 모드" 라는 별도 모드는 없고
+  Stabilized/Altitude 가 그 역할이다.
+  ⚠️ USB 조이스틱(HID)은 **CH1~8 만** 내보낸다 — CH9 이상은 실링크로만 검증된다.
+  [상세](components/transmitters/radiomaster-boxer/switch-mapping.md#-s3-6단-비행모드-2026-08-31-현행)
+- 🔵 **미션/실패안전 파라미터 (2026-08-31)** — `MIS_TAKEOFF_ALT` 3→**5m**,
+  `COM_LOW_BAT_ACT` 0(경고만)→**3(RTL)**. 저전압 RTL 은 **15% / 팩 22.14V** 에서 발동
+  (6S 16000mAh, `BAT_LOW_THR=0.15`). `RTL_RETURN_ALT`·`RTL_DESCEND_ALT` 는 5m 로 이미 일치.
+  🔴 **지오펜스는 여전히 무제한** — `GF_MAX_HOR_DIST=0`, `GF_MAX_VER_DIST=0`, 폴리곤 0개.
+  `GF_ACTION=2`(RTL) 만 켜져 있어 **실제로 막는 것이 없다.** 운용자 판단으로 보류 중.
 - ⚠️ **문서-실기 불일치** — 이 문서는 `autoConnectUDP=false` 라고 적어 왔으나 `ku-dgs1` 의
   실제 `QGroundControl.ini` 는 **`autoConnectUDP=true`** 다 (2026-08-30 실측).
 

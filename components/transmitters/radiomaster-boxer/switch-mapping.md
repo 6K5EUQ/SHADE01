@@ -54,22 +54,41 @@
 | 스위치 | 채널 | 박서 믹스명 | FC 파라미터 | 위(1000) | 아래(2000) |
 |---|---|---|---|---|---|
 | **SA** | CH5 | ARM | `RC_MAP_ARM_SW=5` | 해제 | **ARM** |
-| **SB** | CH6 | MOD | `RC_MAP_FLTMODE=6` | STABILIZED | POSCTL |
-| **SD** | CH7 | BP | `RC_MAP_TRANS_SW=7` | 멀티로터 | 고정익 전환 |
-| **SE** | CH8 | TUR | `RC_MAP_KILL_SW=8` | 해제 | **KILL** |
-| **SC** | CH9 | RTL | `RC_MAP_RETURN_SW=9` | 해제 | **RTL** |
+| 🔵 **P3 (S3)** | **CH6** | MOD | `RC_MAP_FLTMODE=6` | **6단 로터리 — 아래 표 참조** ||
+| **SD** | CH7 | BP(TRA) | ⚠️ **FC 미매핑** | 멀티로터 | 고정익 전환 |
+| **SE** | CH8 | TUR(KIL) | `RC_MAP_KILL_SW=8` | 해제 | **KILL** |
+| P3 | CH9 | RTL | — | 잔재, 미사용 ||
+
+> 🔵 **2026-08-31 — CH6 을 SB(3단) 에서 P3/S3(6단 로터리) 로 교체했다.** 6모드를 각각 쓰기
+> 위해서다. **SB 는 현재 어느 채널에도 실려 있지 않다.**
+>
+> ⚠️ **CH7(SD, VTOL 천이) 은 FC 에 매핑돼 있지 않다** — `RC_MAP_*` 어느 파라미터에도 7 이
+> 없다(2026-08-31 실측). 조종기는 보내지만 FC 가 받지 않는다. 천이를 손으로 쓰려면 매핑 필요.
 
 스틱: `Ail`→CH1, `Ele`→CH2, `Thr`→CH3, `Rud`→CH4 (각각 `RC_MAP_ROLL/PITCH/THROTTLE/YAW`).
 
-### SB 비행모드 3단
+### 🔵 S3 6단 비행모드 (2026-08-31, 현행)
 
-`COM_FLTMODE` 슬롯이 6개인데 3단 스위치라 2슬롯씩 묶인다.
+S3(EdgeTX 내부명 **P3**, `radio.yml` 에 `type: multipos_switch`)를 CH6 에 실어
+`COM_FLTMODE` 6슬롯을 **1:1 로** 쓴다. 2슬롯씩 묶던 SB 3단 구성은 폐기.
 
-| SB | CH6 | 슬롯 | 모드 |
-|---|---|---|---|
-| 위 | 1000 | 1·2 | **STABILIZED** |
-| 가운데 | 1500 | 3·4 | ALTCTL |
-| 아래 | 2000 | 5·6 | POSCTL |
+| 단 | 실측 PWM | 파라미터 | 모드 | GPS |
+|---|---|---|---|---|
+| 1 | 1000us | `COM_FLTMODE1=8` | **Stabilized** | 불필요 |
+| 2 | 1182us | `COM_FLTMODE2=1` | **Altitude** | 불필요 |
+| 3 | 1449us | `COM_FLTMODE3=2` | **Position** | 필요 |
+| 4 | 1550us | `COM_FLTMODE4=2` | **Position** | 필요 |
+| 5 | 1817us | `COM_FLTMODE5=3` | **Mission** (자동비행) | 필요 |
+| 6 | 2000us | `COM_FLTMODE6=5` | **Return** (RTL) | 필요 |
+
+> PWM 은 2026-08-31 USB 조이스틱(`/dev/input/js1`, AXIS 5)에서 6단을 실제로 돌려 측정했다.
+
+⚠️ **3·4단을 일부러 같은 모드로 뒀다.** 3단(1449) 과 4단(1550) 이 PX4 슬롯 경계 1500us 를
+사이에 두고 **49us/50us 여유밖에 없다** — 다른 단 간격은 182~267us 다. 드리프트로 뒤바뀔 수
+있어 무해화한 것. **Mission 같은 자동비행을 3·4단에 두지 말 것.**
+
+⚠️ **USB 조이스틱(HID) 은 CH1~8 만 내보낸다.** S3 를 CH9 에 뒀을 때 USB 로 아무리 돌려도
+안 잡혔던 원인이 이것이다. CH9 이상은 실제 ELRS 링크로만 검증된다.
 
 ## RTL 스위치 (SC) — 2026-08-24 추가
 
