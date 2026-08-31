@@ -207,6 +207,162 @@ Telem2를 두고 Pi 5와 RC 수신기가 경합하던 문제는 **수신기를 T
 
 ⚠️ **브리지와 동시 실행 불가** — 둘 다 같은 시리얼 포트를 열기 때문에, 이 스크립트를 쓰려면 먼저 `sudo systemctl stop mavlink-bridge.service`로 브리지를 내려야 한다.
 
+## 🔴 FC TELEM2 포트 고장 (2026-08-31)
+
+**결론: FC(Pixhawk 6C Mini)의 TELEM2 = `/dev/ttyS3` 에 TX→RX 내부 되돌이가 있다.
+컴패니언 Pi·케이블·배선·네트워크는 모두 무죄다.** raspb2→raspb1 교체와도 무관하며
+시점만 겹쳤다.
+
+### 증상
+
+Telem2 ↔ Pi GPIO 를 교차 결선하고 메인 배터리를 인가해도 `/dev/ttyAMA0` 수신이 0바이트.
+**9600 / 19200 / 38400 / 57600 / 115200 / 230400 / 460800 / 500000 / 921600 / 1M / 1.5M**
+11개 보레이트를 전부 raw read 해도 0바이트다. 보레이트 불일치라면 깨진 바이트라도 들어오므로
+선로 자체가 조용하다는 뜻이었다. `px4_param.py` 도 무응답이라 양방향이 죽어 있었다.
+
+### 결정적 증거 — FC 가 자기 소리를 듣는다
+
+QGC 없이 **MAVLink SERIAL_CONTROL(msgid 126) 로 PX4 NSH 셸을 열어** (`DEV_SHELL=10`,
+`FLAG_RESPOND|FLAG_MULTI`) `mavlink status` 를 직접 읽었다. 도구는 USB 로 붙는다.
+
+```
+instance #1:
+	rates:
+	  tx: 22462.2 B/s
+	  rx: 22462.2 B/s          ← 송신량과 수신량이 정확히 같다
+	Received Messages:
+	  sysid:  1, compid:  1     ← FC 자기 자신
+	mode: Onboard
+	transport protocol: serial (/dev/ttyS3 @921600)
+```
+
+**TELEM2 커넥터에서 케이블을 완전히 뽑은 상태에서도** 이 수치가 유지되고 메시지 카운터가
+계속 증가한다. 재부팅 직후에도 즉시 재발한다. 그리고 수신 목록에 `sysid:254/255` 가
+없다 — **Pi 가 보낸 패킷은 FC 에 단 한 개도 도달한 적이 없다.**
+
+### 대조군 — 미연결 포트는 이러지 않는다
+
+"PX4 가 자기 송신을 수신으로 카운트하는 것뿐" 이라는 가능성을 배제하려고, 물리적으로
+아무것도 연결되지 않은 **`ttyS4` 에 임시 인스턴스**를 띄워 비교했다.
+
+| 인스턴스 | 포트 | 물리 연결 | rx | 파싱된 메시지 |
+|---|---|---|---|---|
+| #1 | `ttyS3` (TELEM2) | 없음 | 22480 B/s | **`sysid:1 compid:1` 51만개** |
+| #3 | `ttyS4` (테스트) | 없음 | 339 B/s | **없음** (sysid 항목 자체가 없음) |
+
+미연결 포트는 뜬 핀 노이즈만 잡히고 유효 프레임이 하나도 안 만들어진다. `ttyS3` 에만
+실제 되돌이가 있다. (테스트 인스턴스는 재부팅으로 정리했다.)
+
+### 배제된 것들 — 이 순서로 하나씩 확인했다
+
+| 대상 | 판정 | 근거 |
+|---|---|---|
+| FC 펌웨어 설정 | 정상 | `MAV_1_CONFIG=102`, `MAV_1_MODE=2`(Onboard), `SER_TEL2_BAUD=921600` |
+| FC 부팅 | 정상 | `Starting MAVLink on /dev/ttyS3` / `Onboard, 80000 B/s @921600B`, 에러 없음 |
+| 포트 경합 | 없음 | `ps` 에서 `mavlink_if1` 만 ttyS3 점유. `crsf_rc`·`rc_input` 태스크 없음 |
+| 하드웨어 흐름제어 | 배제 | `MAV_1_FLOW_CTRL` 2(Auto) → **0(강제 off)** 로 바꿔도 동일 |
+| 인스턴스 중복 | 배제 | `MAV_2_CONFIG=101` 이 TELEM1 과 겹쳐 있어 **0 으로 껐다**. 증상 불변 |
+| Pi UART 설정 | 정상 | DT `serial0=/axi/pcie@120000/rp1/serial@30000`, pinctrl phandle → `rp1_uart0_14_15` |
+| Pi 물리 핀 | 정상 | 물리 8↔10 루프백 **64/64 왕복 성공** |
+| Pi 포트 점유 | 없음 | HAT EEPROM 없음, `fuser` 상 브리지 python3 하나뿐 |
+| 네트워크 | 정상 | `GCS connected: ('100.99.120.110', 14550)`, Tailscale RTT 43~130ms |
+| FC 다른 UART | 정상 | TELEM1(`ttyS5`)은 ELRS 와 정상 통신 (`sysid:255 compid:68`) |
+
+### FC 내부 분석 (2026-08-31, `pxsh.py` 로 NSH 셸 접속)
+
+**보드·펌웨어**
+
+```
+HW arch: PX4_FMU_V6C          HW type: V6C002002 (rev 0x002)
+MCU: STM32H7[4|5]xxx, rev. V
+PX4: Release 1.17.0  git-hash d6f12ad1c4f70ad3230afd7d86e971421e02fef4
+Build datetime: Aug 11 2026 15:28:15   (커스텀 빌드)
+NuttX: 11.0.0
+```
+
+**시리얼 포트 재고** — `param show SER_*` 결과 보드가 가진 UART 는 **세 개뿐**이다.
+`SER_GPS1_BAUD` / `SER_TEL1_BAUD`(460800) / `SER_TEL2_BAUD`(921600).
+즉 TELEM2 를 포기하면 **남는 여유 포트가 없다** (GPS1 은 M10N, TELEM1 은 ELRS 가 쓴다).
+
+**포트를 잡는 모듈 전수 조회** — 반이중(single-wire)으로 UART 를 바꾸는 드라이버가
+붙어 있는지 확인했다. PX4 에서 `TIOCSSINGLEWIRE` 를 호출하는 쪽은 CRSF·DShot 텔레메트리
+계열인데 전부 꺼져 있다.
+
+| 파라미터 | 값 | 의미 |
+|---|---|---|
+| `MAV_0_CONFIG` | 101 | TELEM1 (ELRS) |
+| `MAV_1_CONFIG` | 102 | TELEM2 (Pi 브리지) |
+| `GPS_1_CONFIG` | 201 | GPS1 |
+| `RC_CRSF_PRT_CFG` | **0** | CRSF 미사용 |
+| `DSHOT_TEL_CFG` | **0** | DShot 텔레메트리 미사용 |
+| `UXRCE_DDS_CFG` | **0** | uXRCE-DDS 미사용 |
+| `TEL_FRSKY_CONFIG` / `TEL_HOTT_CONFIG` | **0** | 미사용 |
+| `GPS_2_CONFIG` | **0** | 미사용 |
+
+`ps` 에서도 `ttyS3` 을 여는 태스크는 `mavlink_if1` 하나뿐이고 `crsf_rc`·`rc_input` 은
+아예 안 돈다. **MAVLink 모듈은 단선 반이중 ioctl 을 호출하지 않는다** — 따라서
+소프트웨어가 포트를 반이중으로 만든 것이 아니다.
+
+**하드폴트 이력 없음** — `hardfault_log check` 무응답, SD 에 `fault_*.txt` 없음.
+MCU 크래시로 죽은 흔적은 없다.
+
+**CPU 낭비 (`top once`)** — 죽은 포트에 22kB/s 를 계속 쏘고 그 에코를 파싱하느라
+FC CPU 를 **7.4% 태우고 있다.**
+
+| 태스크 | CPU | 비고 |
+|---|---|---|
+| `mavlink_if1` | 4.269% | TELEM2 송신 |
+| `mavlink_rcv_if1` | 3.176% | **자기 에코 파싱** |
+| (비교) `mavlink_rcv_if0` | 0.625% | 실제 ELRS 링크 수신 |
+
+포트를 고치기 전까지는 `MAV_1_CONFIG=0` 으로 인스턴스를 꺼두는 편이 낫다.
+
+**부수 발견 — 과거 파라미터 임포트 실패 기록.** SD 에 `param_import_fail.txt` 가 있다.
+**PX4 1.16.0 (2025-08-06 빌드) 시절**의 기록으로, 내부 파라미터 저장소가 비어 있었다.
+
+```
+ERROR [parameters] BSON document size (0) doesn't match bytes decoded (5)
+ERROR [param] importing from '/fs/mtd_params' failed (-1)
+INFO  [parameters] summary: 0/2065 (used/total)
+```
+
+지금 문제와 직접 관련은 없으나, **파라미터가 통째로 날아간 적이 있다**는 기록이라
+현재 값이 문서와 어긋나는 항목(`RC_CRSF_PRT_CFG` 등)의 배경일 수 있다.
+
+### 남은 구분 — 기판 단락인지 MCU 핀 손상인지
+
+FC 내부라는 것까지는 확정이나, 물리 기전은 둘로 갈린다. **FC 전원을 끄고** TELEM2
+커넥터 **2번(TX) ↔ 3번(RX)** 도통을 테스터로 재면 갈린다.
+
+- **도통(삐 울림)** → 커넥터/기판 납땜 단락. 재작업으로 복구 가능
+- **비도통** → MCU 핀 또는 트레이스 손상. TX 가 외부로 안 나가면서 내부에서만 되돌이
+
+후자를 시사하는 정황: 단순 핀 단락이라면 FC 의 TX 신호가 커넥터에도 실려 Pi 가 읽을 수
+있어야 하는데 Pi 는 0바이트였다. 8/25 3m 낙하 이력이 있다.
+
+### 대안
+
+TELEM2 를 포기하고 **Pi ↔ FC USB 직결**로 간다. 같은 날 실증됐다 — `/dev/ttyACM0 @2000000`,
+MAVLink Onboard, 22kB/s. `mav_bridge.py` 는 `MAV_SERIAL` 환경변수를 이미 받으므로
+코드 수정 없이 유닛에 한 줄만 넣으면 된다.
+
+```ini
+Environment=MAV_SERIAL=/dev/ttyACM0
+```
+
+⚠️ FC USB 포트를 Pi 가 점유하므로 노트북 USB 직결(경로 B)과 동시 사용 불가.
+USB 커넥터는 JST-GH 보다 진동에 약하니 비행 전 고정 필요.
+
+### 부수 도구 — `pxsh.py`
+
+QGC 없이 MAVLink 로 PX4 셸을 여는 스크립트를 이번에 만들었다. `mavlink status` / `ps` /
+`dmesg` / `ls /dev` 를 원격으로 실행할 수 있어 이번 진단의 핵심이 됐다. 정본은
+[pxsh.py](pxsh.py).
+
+⚠️ MAVLink v2 헤더는 **10바이트**다 (magic, len, incompat, compat, seq, sysid, compid,
+**msgid 3바이트**). msgid 를 2바이트로 넣으면 FC 가 프레임을 통째로 버리며 **아무 에러 없이
+무응답**이 된다. 이번에 이 버그로 "FC 가 파라미터 요청에 응답하지 않는다" 고 오진할 뻔했다.
+
 ## 🔶 확인 필요
 
 - **FC측 PX4 파라미터 실측값 미확인** — Telem2가 921600으로 동작 중인 것으로 보아 `SER_TEL2_BAUD`=921600, `MAV_x_CONFIG`=TELEM2로 설정돼 있을 것이나, `MAV_x_MODE`가 `Onboard`인지 `Normal`인지 등은 QGC에서 직접 읽어 확정 필요. (`px4_param.py`로 조회 가능)
@@ -218,15 +374,8 @@ Telem2를 두고 Pi 5와 RC 수신기가 경합하던 문제는 **수신기를 T
   1. ✅ 재부팅 → `/dev/ttyAMA0` 생성 확인 (`crw-rw---- root dialout 204,64`)
   2. ✅ 유닛 `enabled` + `active`, 부팅 자동기동 확인
   3. ✅ 시리얼 오픈 성공 — `mav_bridge: serial opened: /dev/ttyAMA0 @ 921600`
-  4. 🔴 **결선했는데도 수신 0바이트 (2026-08-31)** — 운용자가 Telem2 ↔ Pi GPIO 를 교차 결선하고
-     메인 배터리를 인가한 상태에서도 `/dev/ttyAMA0` 에 한 바이트도 들어오지 않는다.
-     브리지를 내리고 **921600 / 115200 / 57600** 세 보레이트로 3초씩 raw read 해도 전부 0바이트이고,
-     브리지 프로세스 `/proc/<PID>/io` 의 `rchar` 도 6초간 불변이다. 보레이트 불일치라면 깨진
-     바이트라도 들어와야 하므로, **FC 가 Telem2 로 아예 송신하지 않는 쪽**이 유력하다.
-     다음 확인 순서: (a) USB 직결로 접속해 `MAV_1_CONFIG=102` / `MAV_1_MODE` / `SER_TEL2_BAUD=921600`
-     실측, (b) GND 공통 결선 확인, (c) 커넥터가 TELEM1 이 아니라 TELEM2 인지 확인.
-     **Pi 쪽은 정상**이다 — `enable_uart=1` + `dtoverlay=uart0-pi5`, `pl011-axi 1f00030000.serial`
-     (= uart0 = GPIO14/15) 로드됨, `serial-getty@ttyAMA0` inactive, 포트 오픈 성공.
+  4. 🔴 **FC TELEM2 포트 고장 확정 (2026-08-31)** — [상세](#-fc-telem2-포트-고장-2026-08-31).
+     Pi 는 무죄다. 원인은 FC 쪽 `/dev/ttyS3` 의 TX→RX 내부 되돌이.
   5. ⬜ QGC 에서 기체 인식·배터리·GPS·자세 (4번 이후)
   6. ✅ **GCS→브리지 UDP 경로 검증 (2026-08-31)** — `ku-dgs1` 에서 `:14550` 에 바인드해
      `100.126.161.1:14550` 으로 프로브를 쏘자 브리지 로그에
