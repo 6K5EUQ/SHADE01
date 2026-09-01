@@ -114,6 +114,12 @@ def main():
             print("  %-16s 이미 있음 — 건너뜀" % e.name)
             continue
         print("  %-16s %.2f MB" % (e.name, e.size_b / 1e6), flush=True)
+        # FC 는 한 연결에서 파일 하나만 내준다 — 두 번째부터
+        # 'OpenFileRO failed, no sessions available' 로 0바이트가 된다.
+        # 세션 반납(ResetSessions)으로는 안 풀려서 파일마다 다시 붙는다.
+        m.close()
+        time.sleep(1.0)
+        m, ftp = connect(a.device, a.baud)
         err, size, el = cmd_get(ftp, remote, local, quiet=True)
         ok = "OK" if size == e.size_b else "크기 불일치(%d)" % size
         print("      → %.2f MB  %.0f초  %s" % (size / 1e6, el, ok))
