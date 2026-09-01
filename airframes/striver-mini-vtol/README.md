@@ -124,7 +124,7 @@ PNP는 기체(플랫폼) + 파워 시스템(모터/ESC/프로펠러/서보)만 �
 
 - **FC 무선 연결 성립** — FC를 PC에 USB로 연결하지 않아도 QGC가 붙는다 (raspb2 로 실증, 2026-08-11). 단 로컬 WiFi 직결이 아니라 **인터넷 경유 Tailscale VPN** 링크다. 상세: [Raspberry Pi 5 문서](../../components/companion/raspberry-pi-5/README.md) / 접속 절차: [QGroundControl 연결 절차](../../gcs/qgroundcontrol/README.md)
 - **배터리 잔량 QGC 표시 확인** — PM08의 CAN 센싱값이 FC → Pi → QGC까지 전 구간 도달함이 실증됨. PM08 배선과 CAN 설정이 정상임을 뜻한다.
-- 🔴 **실비행 텔레메트리로는 부적합** — Pi가 학내 WiFi(`eduroam`) 클라이언트라 기체가 WiFi 범위를 벗어나면 링크가 끊긴다. 지상 설정/벤치 테스트용이며, 실비행에는 별도 무선 모뎀(T900 Pro 등) 필요.
+- 🟡 **WiFi + LTE 이중화 (2026-08-31)** — LTE 모뎀 장착으로 WiFi 범위 의존은 해소됐다. 다만 인터넷 + Tailscale 경유라 **장거리 비행 중 신뢰성은 미검증**이다.
 - ✅ **Telem 포트 경합 해소(2026-08-19)** — Pi는 **Telem2(UART5)** 유지, [RP4TD-M 수신기](../../components/receivers/radiomaster-rp4td-m/README.md)는 **Telem1(UART7)**에 배치. 서로 다른 UART라 공존한다: [포트 배정](../../components/fc/holybro-pixhawk-6c-mini/README.md#-uart-포트-배정--충돌-해소-2026-08-19)
 - ✅ **커스텀 펌웨어 적용(2026-08-11)** — PX4 **v1.17.0** + `crsf_rc` 빌드·플래시 완료. ⚠️ 플래시 98.30%로 빠듯: [상세](../../components/fc/holybro-pixhawk-6c-mini/README.md#커스텀-펌웨어-px4-v1170--crsf_rc)
 - ✅ **RC 수신기 연결됨** — Telem1(UART7) CRSF, 바인딩 완료(2026-08-19). 위 계통도에는 미반영이며, 이후 갱신 시 `Telem1 ──► [RP4TD-M 수신기]` 분기를 추가할 것
@@ -282,7 +282,7 @@ PNP는 기체(플랫폼) + 파워 시스템(모터/ESC/프로펠러/서보)만 �
   - 파워 분배: [Holybro PDB 300A Side Entry](../../components/power/holybro-pdb-300a-side-entry/README.md)
   - 파워 모듈: [Holybro PM08-CAN (14S, 200A)](../../components/power/holybro-pm08-can/README.md)
   - 지상통제(GCS): [QGroundControl](../../gcs/qgroundcontrol/README.md) — 접속 절차·트러블슈팅 통합 문서. QGC는 FC에 직접 붙지 않고 Pi의 UDP 14550 브리지에 접속한다
-  - 컴패니언 컴퓨터: [Raspberry Pi 5 "raspb1"](../../components/companion/raspberry-pi-5/README.md) — **이 기체의 유일한 링크 기기.** FC 와 **USB 직결**(`/dev/ttyACM0`), 자체 제작 `mav_bridge.py` 로 MAVLink↔UDP 14550 브리지. 고정 대상 4곳(`ku-dgs1`/`rim`/`rim3`/`gram-labtop`) 동시 수신. ✅ 2026-08-31 실비행 검증 완료. ⚠️ WiFi 의존이라 실비행 텔레메트리로는 부적합
+  - 컴패니언 컴퓨터: [Raspberry Pi 5 "raspb1"](../../components/companion/raspberry-pi-5/README.md) — **이 기체의 유일한 링크 기기.** FC 와 **USB 직결**(`/dev/ttyACM0`), 자체 제작 `mav_bridge.py` 로 MAVLink↔UDP 14550 브리지. 고정 대상 4곳(`ku-dgs1`/`rim`/`rim3`/`gram-labtop`) 동시 수신. ✅ 2026-08-31 실비행 검증 완료(453초). WiFi + LTE 이중화.
   - RC 수신기: [RadioMaster RP4TD-M](../../components/receivers/radiomaster-rp4td-m/README.md) — ✅ **FC Telem1(UART7)에 결선 + ELRS 바인딩 완료**(2026-08-19), `RC_CRSF_PRT_CFG=101`. CRSF 구동을 위해 PX4 v1.17.0 커스텀 펌웨어(`crsf_rc`) 플래시 완료
   - RC 송신기: [RadioMaster Boxer](../../components/transmitters/radiomaster-boxer/README.md) — ELRS 바인딩은 **Binding Phrase 방식**(송신기 웹UI ↔ 수신기 웹UI에 동일 문구 입력)
 - **미포함 (별도 구매 필요)**:
@@ -290,6 +290,20 @@ PNP는 기체(플랫폼) + 파워 시스템(모터/ESC/프로펠러/서보)만 �
   - 카메라/짐벌 등 탑재장비
 - **메인 배터리**: [Fullymax 22.2V 6S 16000mAh 25C (XT90S)](../../components/batteries/fullymax-6s-16000mah/README.md) — Range 1 항속 시나리오와 동일 사양
 - 이 문서의 "구조/캐빈별 사양", "배선 다이어그램" 섹션 중 FC/GPS/디지털전송 관련 부분은 PDF 원문(Makeflyeasy 순정 Pixsurvey V3 기준) 참고 자료이며, 실제 보유 기체는 Holybro Pixhawk 6C Mini로 구성되어 채널 배치가 다를 수 있음 ([Pixhawk 6C Mini 문서](../../components/fc/holybro-pixhawk-6c-mini/README.md)의 "확인 필요" 참조)
+
+## 실측 표면 치수 (SHADE 기체 — 2026-08-22 실측)
+
+기체 표면에 표식(신고번호/제작번호 등)을 부착할 때 쓰는 유효 부착면 실측값. 카탈로그 제원(동체 높이 156mm 등)은 단면 전체 기준이라, 곡률·조종면·개구부를 제외한 실제 부착 가능 면적과 다르다.
+
+| 부위 | 유효 부착면 (세로 × 가로) | 비고 |
+|---|---|---|
+| 동체 옆면 | **100 × 300mm** | 날개 뿌리 아래 구간. 원통 곡면이라 상하 곡률 시작부 제외. 후방은 테이퍼 콘이라 사용 불가 |
+| 수직꼬리 고정 핀 | **250 × 150mm** | 러더(조종면) 제외한 앞쪽 고정부. 평면이지만 가로 폭이 좁음 |
+| 왼쪽 날개 하면 | **100 × 200mm** | 에일러론(조종면) 제외 |
+
+- 동체 높이 156mm는 단면 전체 기준이며, 곡률을 뺀 실제 평면 구간은 **100~110mm**
+- 수직꼬리는 9핀 커넥터로 통째로 탈착되는 구조 → 분리 시 해당 면의 표식도 함께 분리됨
+- 날개/꼬리는 조종면(에일러론·러더)에 표식 부착 불가
 
 ## 안전/면책 (원문 요약)
 

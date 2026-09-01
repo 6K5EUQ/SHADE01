@@ -114,7 +114,7 @@ update-desktop-database ~/.local/share/applications 2>/dev/null
 | **B. USB 직결 (폴백/설정용)** | FC USB-C 포트 → PC 시리얼 | USB 케이블 | ✅ 검증 완료 (2026-08-11) — ⚠️ 수동 링크 등록 금지, [아래 참조](#-수동-usb-링크는-1초-뒤-끊긴다) |
 | ~~C. 무선 모뎀 직결~~ | T900 Pro 등 텔레메트리 라디오 | 900MHz 등 | ❌ 미보유 — [미구매 항목](../../airframes/striver-mini-vtol/README.md#보유-사양-메모-shade-기체--pnp) |
 
-> 🔴 **경로 A는 지상 벤치 테스트/설정 전용이다.** Pi 가 WiFi 클라이언트라 기체가 WiFi 범위를 벗어나면 링크가 끊긴다. 실비행 텔레메트리로는 부적합.
+> 🟡 **경로 A 는 인터넷 경유다.** Pi 가 WiFi/LTE 클라이언트라 두 망이 다 끊기면 링크도 끊긴다. LTE 모뎀 장착(2026-08-31)으로 WiFi 범위 의존은 해소됐으나, **장거리 비행 중 신뢰성은 미검증**이다.
 
 ### 전체 링크 구조
 
@@ -126,7 +126,7 @@ update-desktop-database ~/.local/share/applications 2>/dev/null
         │                                   mav_bridge.py
         └── USB-C ──┐                     (UDP :14550 브리지)
                     │                              │
-              (경로 B 폴백)          WiFi → 인터넷 → Tailscale
+              (경로 B 폴백)          WiFi/LTE → 인터넷 → Tailscale
                     │                              │
                     │                  ┌───────────┴───────────┐
                     ▼                  ▼                       ▼
@@ -410,7 +410,7 @@ FC까지의 CAN 센싱 문제일 가능성이 높다. [PM08-CAN 배선](../../co
 ### 링크가 붙었다 끊긴다
 
 - 경로 A는 **WiFi + 인터넷 + Tailscale** 3중 의존이다. 지상 벤치에서도 WiFi 신호가 약하면 간헐 단절이 발생한다.
-- 기체가 WiFi 커버리지를 벗어나면 즉시 끊긴다. → 🔴 **실비행에는 이 경로를 쓰지 말 것.** 별도 무선 모뎀(T900 Pro 등) 또는 LTE 모뎀 필요.
+- ✅ **LTE 모뎀 장착(2026-08-31)** 으로 WiFi 범위 의존은 해소됐다. ⚠️ 다만 **장거리 비행 중 신뢰성은 미검증** — 실비행 전 LTE 폴백이 실제로 인계받는지 확인할 것.
 - 브리지 서비스가 반복 재시작하는지 확인: `systemctl status mavlink-bridge.service`의 재시작 횟수
 
 ### QGC를 닫았다 켰는데 안 붙는다

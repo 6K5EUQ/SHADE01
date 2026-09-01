@@ -48,7 +48,8 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 - ⛔ **TELEM2 는 죽었다** (2026-08-31). 포트 전원까지 사망 —
   [근거](components/companion/raspberry-pi-5/README.md#-telem2-포트-사망--usb-링크로-전환-2026-08-31)
 - ⚠️ **FC USB 는 하나뿐**이라 Pi 가 잡으면 노트북 직결이 안 된다. 펌웨어 작업 시 Pi USB 를 뽑는다.
-- 🔴 **실비행 텔레메트리로는 부적합** — WiFi 범위를 벗어나면 즉시 끊긴다.
+- ✅ **WiFi + LTE 이중화** (2026-08-31) — LTE 모뎀 장착으로 WiFi 범위 의존이 해소됐다.
+  ⚠️ 비행 중 링크 신뢰성은 아직 장거리로 검증되지 않았다.
 
 상세: [raspb1 브리지 구현](components/companion/raspberry-pi-5/README.md) ·
 [QGC 접속 절차](gcs/qgroundcontrol/README.md)
