@@ -68,6 +68,7 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 | 전원 | [PM08 DroneCAN](components/power/holybro-pm08-can/README.md) — `UAVCAN_ENABLE=2`, `BAT1_SOURCE=1` |
 | 배터리 | [Fullymax 6S 16000mAh](components/batteries/fullymax-6s-16000mah/README.md) |
 | 지상국 | **QGroundControl v5.0.8** (AppImage) — [설치 절차](gcs/qgroundcontrol/README.md#설치-ubuntu--실기-기준) |
+| 저장소 | `github.com/yyrrm/SHADE01` — 클론: `ku`, `rim3` |
 | 파라미터 백업 | `param_backup/px4_params_20260811-121719.params` (1359개) |
 
 ### ELRS
