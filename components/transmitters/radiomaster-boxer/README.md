@@ -15,6 +15,11 @@ RadioMaster의 2.4GHz RC 송신기, **M2 개정판**. [RadioMaster RP4TD-M 수�
 SA/SB/SC/SD/SE 채널 배정, RC 값 규칙(**위=1000 / 아래=2000**), RTL 스위치 설정은
 별도 문서로 정리했다 → [스위치 매핑](switch-mapping.md)
 
+## 텔레메트리 화면
+
+비행값을 한 판에 띄우는 lua 스크립트([`shade.lua`](shade.lua))와 128×64 흑백 화면의
+폭 예산·센서 소수점 함정은 별도 문서로 정리했다 → [텔레메트리 화면](telemetry-screen.md)
+
 ## ⚠️ 내장 ELRS는 커스텀 펌웨어다 (2026-08-22~)
 
 내장 ELRS TX에 **1줄 패치한 4.1.0 커스텀 빌드**가 올라가 있다. [PM08-CAN](../../power/holybro-pm08-can/README.md)
