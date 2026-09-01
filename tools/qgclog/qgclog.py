@@ -220,6 +220,44 @@ def _patch_pyulog():
             raise IndexError("format missing for %s" % (exc,)) from exc
 
     cls._parse_nested_type = lenient
+
+    # 두 번째 구멍 — 짧은 메시지 하나가 로그의 나머지를 통째로 날린다.
+    #
+    # 읽기 루프는 메시지 종류별로 파서를 부르는데, 그 파서들이 `struct.unpack` 을
+    # 길이 검사 없이 호출한다. 본문이 잘려 있으면 struct.error 가 나고, 이 예외는
+    # 루프 안쪽의 `except IndexError` 에 안 걸린 채 바깥의
+    # `except struct.error: pass` 까지 올라간다 — 거기서 루프가 끝난다.
+    # 파일에 데이터가 20MB 더 남아 있어도 그대로 버려진다.
+    #
+    # 실측(2026-09-01, `09_38_28.ulg` 23MB):
+    #   손도 안 댔을 때   1.5MB 에서 멈춤 — DATA  6.1% (비행 27초로 보임)
+    #   DATA 만 고쳤을 때  9.9MB 에서 멈춤 — DATA 42.7% (194초)
+    #   전 메시지 일괄     끝까지 읽음    — DATA  100% (453초 = 실제)
+    # 로그는 멀쩡했다. 3분짜리 비행이 27초로 보이던 것이 이 버그 때문이다.
+    #
+    # struct.error 를 IndexError 로 바꿔 pyulog 가 이미 가진 손상 처리 경로
+    # (그 메시지만 버리고 계속 읽기)에 태운다. 헤더 파서는 건드리지 않는다 —
+    # 거기서 나는 struct.error 는 진짜 EOF 라 루프가 끝나는 게 맞다.
+    for attr in dir(ULog):
+        if not attr.startswith(("_Message", "Message")) or attr == "_MessageHeader":
+            continue
+        mc = getattr(ULog, attr)
+        if not isinstance(mc, type) or getattr(mc, "_shade_patched", False):
+            continue
+        for meth in ("__init__", "initialize"):
+            fn = mc.__dict__.get(meth)
+            if fn is None:
+                continue
+            def wrap(fn):
+                def guarded(self, *args, **kwargs):
+                    try:
+                        return fn(self, *args, **kwargs)
+                    except struct.error as exc:
+                        raise IndexError("truncated message: %s" % (exc,)) from exc
+                return guarded
+            setattr(mc, meth, wrap(fn))
+        mc._shade_patched = True
+
     cls._shade_patched = True
 
 
