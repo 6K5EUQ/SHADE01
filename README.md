@@ -7,7 +7,7 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 |---|---|
 | [`components/`](components/) | 부품별 제원·배선·설정 (FC, ESC, 모터, 전원, 수신기 …) |
 | [`airframes/`](airframes/) | 기체 조립·구성 |
-| [`gcs/`](gcs/) | [QGroundControl 접속 절차](gcs/qgroundcontrol/README.md) |
+| [`gcs/`](gcs/) | [QGroundControl 설치·접속 절차](gcs/qgroundcontrol/README.md) |
 | [`flights/`](flights/) | 비행/세션별 분석 — **로그 원본이 사라져도 남는 정본** |
 | `logs/<날짜>/` | `.ulg` 원본 (git 제외) |
 | [`tools/`](tools/qgclog/) | 로그 수집(`fcfetch.py`)·분석(`qgclog`) |
@@ -67,6 +67,7 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 | 수신기 | [RP4TD-M](components/receivers/radiomaster-rp4td-m/README.md) — TELEM1, 바인딩 완료 |
 | 전원 | [PM08 DroneCAN](components/power/holybro-pm08-can/README.md) — `UAVCAN_ENABLE=2`, `BAT1_SOURCE=1` |
 | 배터리 | [Fullymax 6S 16000mAh](components/batteries/fullymax-6s-16000mah/README.md) |
+| 지상국 | **QGroundControl v5.0.8** (AppImage) — [설치 절차](gcs/qgroundcontrol/README.md#설치-ubuntu--실기-기준) |
 | 파라미터 백업 | `param_backup/px4_params_20260811-121719.params` (1359개) |
 
 ### ELRS

@@ -2,10 +2,105 @@
 
 [Striver Mini VTOL](../../airframes/striver-mini-vtol/README.md) 기체([Pixhawk 6C Mini](../../components/fc/holybro-pixhawk-6c-mini/README.md) / PX4)를 QGroundControl로 감시·설정하기 위한 **접속 절차 통합 문서**. 배선·부품 사양은 각 부품 문서에, **"어디에 어떻게 붙는지"는 이 문서**에 모은다.
 
-- 소프트웨어: QGroundControl (오픈소스 GCS)
-- 공식 문서: https://docs.qgroundcontrol.com
-- 대상 FC 펌웨어: **PX4** (확정 — [FC 문서](../../components/fc/holybro-pixhawk-6c-mini/README.md#-확인-필요) 참조)
-- 프로토콜: MAVLink v2
+| 항목 | 값 |
+|---|---|
+| 버전 | **QGroundControl v5.0.8 (64 bit)** — 2026-09-01 실측 |
+| 배포 형태 | AppImage — `~/Applications/QGroundControl.AppImage` (약 172 MB) |
+| 대상 FC 펌웨어 | **PX4** v1.17.0 커스텀 |
+| 프로토콜 | MAVLink v2 |
+| 공식 문서 | https://docs.qgroundcontrol.com |
+
+> 버전 확인: QGC 실행 → 좌상단 **Q 아이콘** → `About`.
+> `--version` 플래그는 **아무것도 출력하지 않는다** (AppImage 가 GUI 로 바로 뜬다).
+
+---
+
+## 설치 (Ubuntu) — 실기 기준
+
+`ku-dgs1` 에 이 방식으로 설치돼 있다. 새 GCS PC 를 붙일 때 그대로 따르면 된다.
+
+### 1. 사전 조건 — 시리얼 권한
+
+USB 직결(경로 B)을 쓰려면 계정이 `dialout` 그룹이어야 한다. **재로그인해야 적용된다.**
+
+```bash
+sudo usermod -aG dialout $USER
+sudo apt remove -y modemmanager        # FC USB 포트를 가로채므로 제거 권장
+```
+
+무선(경로 A)만 쓸 거면 이 단계는 건너뛰어도 된다.
+
+### 2. AppImage 내려받기
+
+```bash
+mkdir -p ~/Applications
+cd ~/Applications
+# https://github.com/mavlink/qgroundcontrol/releases 에서 x86_64 AppImage 를 받는다
+chmod +x QGroundControl.AppImage
+```
+
+> ⚠️ **버전을 임의로 올리지 마라.** 이 기체는 PX4 v1.17.0 **커스텀 빌드**라 QGC 가
+> 표준 릴리스 기준으로 검사하며 파라미터 경고를 낼 수 있다. 지금 v5.0.8 로 검증돼 있다.
+
+### 3. 실행
+
+```bash
+~/Applications/QGroundControl.AppImage
+```
+
+⚠️ 터미널에서 백그라운드로 띄울 때는 **`setsid` 로 세션에서 분리**할 것 —
+그냥 `&` 로 띄우면 셸이 종료될 때 QGC 도 같이 죽는다.
+
+```bash
+setsid ~/Applications/QGroundControl.AppImage >/dev/null 2>&1 &
+```
+
+### 4. 바탕화면 아이콘 등록
+
+아이콘 파일을 먼저 넣는다 (AppImage 안에서 꺼내거나 저장소 사본을 쓴다):
+
+```bash
+mkdir -p ~/.local/share/icons/hicolor/128x128/apps
+# qgroundcontrol.png 를 위 경로에 둔다
+```
+
+`.desktop` 항목을 만든다. **바탕화면용과 앱 목록용 두 곳**에 같은 내용을 둔다:
+
+```bash
+cat > ~/.local/share/applications/qgroundcontrol.desktop <<'DESKTOP'
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=QGroundControl
+GenericName=Ground Control Station
+Comment=Ground control station for MAVLink vehicles
+Exec=/home/ku/Applications/QGroundControl.AppImage
+Icon=qgroundcontrol
+Terminal=false
+StartupWMClass=QGroundControl
+StartupNotify=true
+Categories=Science;Robotics;
+Keywords=MAVLink;PX4;drone;UAV;QGC;
+DESKTOP
+
+cp ~/.local/share/applications/qgroundcontrol.desktop ~/Desktop/
+chmod +x ~/Desktop/qgroundcontrol.desktop
+gio set ~/Desktop/qgroundcontrol.desktop metadata::trusted true   # GNOME 신뢰 표시
+update-desktop-database ~/.local/share/applications 2>/dev/null
+```
+
+- `Exec` 은 **절대경로**여야 한다. `~` 는 `.desktop` 에서 확장되지 않는다.
+- 계정명이 PC 마다 다르므로(`ku`/`dsa`/`raspb1`) 경로를 그대로 복사하지 말 것.
+- 바탕화면 아이콘이 회색 물음표로 뜨면 `gio set ... trusted` 를 안 한 것이다.
+
+### 5. 연결
+
+설치가 끝나면 [경로 A](#경로-a--무선-접속-tailscale--udp-14550)(무선) 또는
+[경로 B](#경로-b--usb-직결-폴백--펌웨어-작업용)(USB)로 붙는다.
+
+> 🔴 **무선으로 붙으려면 이 PC 가 브리지의 고정 송신 대상에 등록돼 있어야 한다.**
+> QGC 의 UDP 링크는 기체가 먼저 말을 걸어오기를 기다릴 뿐 스스로 쏘지 않기 때문이다.
+> [3단계 — 새 GCS PC 추가](#3단계--새-gcs-pc-추가-필요시) 참조.
 
 ---
 
