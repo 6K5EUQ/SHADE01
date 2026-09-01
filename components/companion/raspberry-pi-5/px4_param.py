@@ -25,7 +25,7 @@ import time
 
 import serial
 
-SERIAL_PORT = os.environ.get("MAV_SERIAL", "/dev/ttyAMA0")
+SERIAL_PORT = os.environ.get("MAV_SERIAL", "/dev/ttyACM0")
 BAUD = int(os.environ.get("MAV_BAUD", "921600"))
 
 # 우리가 흉내내는 GCS 의 신원. QGC 기본값(255/190)과 겹치지 않게 잡는다.

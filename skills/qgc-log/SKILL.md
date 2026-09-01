@@ -7,16 +7,16 @@ description: PX4/QGC 비행 로그(.ulg) 목록·분석. "qgc log list" 로 최�
 
 PX4 ULog 를 읽어 **무엇이 문제였고, 무엇이 잘 됐고, 다음에 뭘 고쳐야 하는지**를 뽑는다.
 
-**이 스킬은 SHADE_parts 리포가 정본이다** (`skills/qgc-log/SKILL.md`).
+**이 스킬은 SHADE01 리포가 정본이다** (`skills/qgc-log/SKILL.md`).
 `~/.claude/skills/qgc-log` 는 그쪽을 가리키는 심볼릭이다 — 사본을 만들지 마라.
 판정 임계값이 이 기체 하드웨어에 묶여 있어 기체 문서와 함께 버전 관리되어야 한다.
 
 도구 본체:
 
 ```
-<SHADE_parts>/tools/qgclog/qgclog        런처 (bash)
-<SHADE_parts>/tools/qgclog/qgclog.py     분석기 (python)
-<SHADE_parts>/qgc                        진입점 — ./qgc log ...
+<SHADE01>/tools/qgclog/qgclog        런처 (bash)
+<SHADE01>/tools/qgclog/qgclog.py     분석기 (python)
+<SHADE01>/qgc                        진입점 — ./qgc log ...
 ```
 
 ## 사용법
@@ -33,9 +33,9 @@ qgclog 1 --dir ~/다른/Logs
 
 ## 실행 절차
 
-1. **리포를 찾는다.** `SHADE_parts` 경로는 PC 마다 다르다. 하드코딩하지 마라.
+1. **리포를 찾는다.** `SHADE01` 경로는 PC 마다 다르다. 하드코딩하지 마라.
    ```bash
-   for d in ~/QGroundControl/SHADE_parts ~/SHADE_parts ./SHADE_parts; do
+   for d in ~/QGroundControl/SHADE01 ~/SHADE01 ./SHADE01; do
      [ -x "$d/tools/qgclog/qgclog" ] && { QL="$d/tools/qgclog/qgclog"; break; }
    done
    ```
@@ -50,8 +50,8 @@ qgclog 1 --dir ~/다른/Logs
 로그가 로컬에 없으면 **FC 내장 SD 에서 직접** 받는다. QGC 불필요, USB 만 있으면 된다.
 
 ```bash
-~/.venv-mav/bin/python <SHADE_parts>/tools/qgclog/fcfetch.py ls /fs/microsd/log/2026-08-24
-~/.venv-mav/bin/python <SHADE_parts>/tools/qgclog/fcfetch.py fetch 2026-08-24 /tmp/fclogs
+~/.venv-mav/bin/python <SHADE01>/tools/qgclog/fcfetch.py ls /fs/microsd/log/2026-08-24
+~/.venv-mav/bin/python <SHADE01>/tools/qgclog/fcfetch.py fetch 2026-08-24 /tmp/fclogs
 ```
 
 ⚠️ **파일명은 UTC** — KST = UTC+9. 19시 비행은 `10_*.ulg` 다.
@@ -121,10 +121,10 @@ PID 를 낮추라고 권했다면 회복이 더 느려져 오히려 위험해졌
 
 ## 리포트를 남길 때
 
-분석 결과를 문서로 남기면 `<SHADE_parts>/flights/` 아래에 날짜-번호로 둔다.
+분석 결과를 문서로 남기면 `<SHADE01>/flights/` 아래에 날짜-번호로 둔다.
 비행마다 누적되면 추세(진동 증가, 전류 상승, 배터리 열화)가 보인다.
 
 **조종자 증언은 반드시 리포트에 적어라.** 로그에 없는 정보이고, 나중에
 같은 로그를 다시 볼 때 그 맥락이 없으면 같은 오진을 반복한다.
 
-관련 문서: `<SHADE_parts>/BRINGUP.md`, `components/power/holybro-pm08-can/README.md`
+관련 문서: `<SHADE01>/README.md`, `components/power/holybro-pm08-can/README.md`

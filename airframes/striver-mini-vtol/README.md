@@ -282,7 +282,7 @@ PNP는 기체(플랫폼) + 파워 시스템(모터/ESC/프로펠러/서보)만 �
   - 파워 분배: [Holybro PDB 300A Side Entry](../../components/power/holybro-pdb-300a-side-entry/README.md)
   - 파워 모듈: [Holybro PM08-CAN (14S, 200A)](../../components/power/holybro-pm08-can/README.md)
   - 지상통제(GCS): [QGroundControl](../../gcs/qgroundcontrol/README.md) — 접속 절차·트러블슈팅 통합 문서. QGC는 FC에 직접 붙지 않고 Pi의 UDP 14550 브리지에 접속한다
-  - 컴패니언 컴퓨터: [Raspberry Pi 5 "raspb1"](../../components/companion/raspberry-pi-5/README.md) — FC Telem2에 UART(921600) 연결, 자체 제작 `mav_bridge.py`로 MAVLink↔UDP 브리지. GCS 3대(`ku-dgs1`/`rim`/`rim3`) 동시 수신. GCS 2대 동시 수신과 배터리 텔레메트리는 2026-08-11 에 이전 기기(`raspb2`)로 검증 완료. 🔶 **2026-08-30 raspb1 로 이설 — FC 결선·재부팅 후 재검증 필요.** ⚠️ WiFi 의존이라 실비행 텔레메트리로는 부적합
+  - 컴패니언 컴퓨터: [Raspberry Pi 5 "raspb1"](../../components/companion/raspberry-pi-5/README.md) — **이 기체의 유일한 링크 기기.** FC 와 **USB 직결**(`/dev/ttyACM0`), 자체 제작 `mav_bridge.py` 로 MAVLink↔UDP 14550 브리지. 고정 대상 4곳(`ku-dgs1`/`rim`/`rim3`/`gram-labtop`) 동시 수신. ✅ 2026-08-31 실비행 검증 완료. ⚠️ WiFi 의존이라 실비행 텔레메트리로는 부적합
   - RC 수신기: [RadioMaster RP4TD-M](../../components/receivers/radiomaster-rp4td-m/README.md) — ✅ **FC Telem1(UART7)에 결선 + ELRS 바인딩 완료**(2026-08-19), `RC_CRSF_PRT_CFG=101`. CRSF 구동을 위해 PX4 v1.17.0 커스텀 펌웨어(`crsf_rc`) 플래시 완료
   - RC 송신기: [RadioMaster Boxer](../../components/transmitters/radiomaster-boxer/README.md) — ELRS 바인딩은 **Binding Phrase 방식**(송신기 웹UI ↔ 수신기 웹UI에 동일 문구 입력)
 - **미포함 (별도 구매 필요)**:

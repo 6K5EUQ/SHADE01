@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """FC 시리얼 ↔ UDP MAVLink 브리지.
 
-기체에 탑재된 Raspberry Pi 5 에서 돈다. FC 의 Telem2 를 UART 로 읽어
+기체에 탑재된 Raspberry Pi 5 에서 돈다. FC 를 USB 로 읽어
 지상국(QGC)에 UDP 14550 으로 중계하고, 반대 방향도 그대로 흘린다.
 
     ./mav_bridge.py 100.99.120.110:14550 100.107.83.47:14550
@@ -11,7 +11,7 @@
 인자 없이 띄우면 먼저 말을 걸어온 GCS 에게만 보낸다.
 
 환경변수:
-    MAV_SERIAL   시리얼 포트 (기본 /dev/ttyAMA0)
+    MAV_SERIAL   시리얼 포트 (기본 /dev/ttyACM0 — FC USB 직결)
     MAV_BAUD     보레이트   (기본 921600)
     MAV_UDP_PORT UDP 리슨 포트 (기본 14550)
 
@@ -27,7 +27,7 @@ import time
 
 import serial
 
-SERIAL_PORT = os.environ.get("MAV_SERIAL", "/dev/ttyAMA0")
+SERIAL_PORT = os.environ.get("MAV_SERIAL", "/dev/ttyACM0")
 BAUD = int(os.environ.get("MAV_BAUD", "921600"))
 UDP_PORT = int(os.environ.get("MAV_UDP_PORT", "14550"))
 

@@ -2,7 +2,7 @@
 
 [Boxer](README.md) 물리 스위치가 어느 채널로 나가고 FC에서 무슨 기능인지. 실측 기준 (2026-08-24).
 
-관련: [Boxer](README.md) · [RP4TD-M 수신기](../../receivers/radiomaster-rp4td-m/README.md) · [BRINGUP.md](../../../BRINGUP.md)
+관련: [Boxer](README.md) · [RP4TD-M 수신기](../../receivers/radiomaster-rp4td-m/README.md) · [SHADE01 개요](../../../README.md)
 
 ## 하드웨어 구성 (radio.yml `switchConfig` / `potsConfig`)
 

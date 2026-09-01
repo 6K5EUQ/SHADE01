@@ -2,7 +2,7 @@
 
 Boxer 내장 ELRS TX 펌웨어를 1줄 패치해 **조종기 화면의 배터리 텔레메트리를 복구**한 작업 기록. 해결일 **2026-08-22**.
 
-관련: [Boxer 조종기](README.md) · [RP4TD-M 수신기](../../receivers/radiomaster-rp4td-m/README.md) · [PM08-CAN](../../power/holybro-pm08-can/README.md) · [BRINGUP.md](../../../BRINGUP.md)
+관련: [Boxer 조종기](README.md) · [RP4TD-M 수신기](../../receivers/radiomaster-rp4td-m/README.md) · [PM08-CAN](../../power/holybro-pm08-can/README.md) · [SHADE01 개요](../../../README.md)
 
 ## 증상
 

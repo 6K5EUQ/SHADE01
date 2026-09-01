@@ -26,7 +26,7 @@ RC 조종과 텔레메트리가 MAVLink 단일 링크로 흐르며, `RC_CRSF_*` 
 > **본 수신기는 패치 대상이 아니다.** MAVLink→CRSF 변환은 TX에서만 일어나므로(`tx_main.cpp:1544` 단독 호출,
 > `rx_main.cpp`에 해당 코드 없음), 배터리 텔레메트리 문제는 TX 펌웨어만 고쳐 해결했다. RX는 공식 3.5.6 유지.
 
-전체 브링업 현황: [BRINGUP.md](../../../BRINGUP.md)
+전체 현황: [SHADE01 개요](../../../README.md)
 
 ## FC 연결 방법 (Pixhawk 6C Mini)
 

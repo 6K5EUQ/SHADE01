@@ -9,6 +9,8 @@
 """
 import argparse
 import contextlib
+import math
+import warnings
 import glob
 import io
 import os
@@ -27,7 +29,7 @@ DEFAULT_DIRS = [
 ]
 
 # ── 판정 임계값 ──────────────────────────────────────────────────────
-# 근거는 SHADE_parts 문서에 기록. 기체별로 다르면 여기만 고친다.
+# 근거는 SHADE01 문서에 기록. 기체별로 다르면 여기만 고친다.
 XT90_CONT_A = 45.0        # Holybro 커넥터 정격 (연속)
 XT90_PEAK_A = 90.0        # 동 순간
 CELL_LOW_V = 3.5          # 6S LiPo 셀당 경고선
@@ -46,6 +48,10 @@ NAV_STATE = {
 }
 VTOL_STATE = {0: "UNDEFINED", 1: "TRANSITION_TO_FW", 2: "TRANSITION_TO_MC",
               3: "MC", 4: "FW"}
+
+
+class LogUnreadable(Exception):
+    """로그를 읽을 수 없다. 호출자가 그 파일만 건너뛰게 하기 위한 신호."""
 
 
 def kst(boot_us):
@@ -170,6 +176,53 @@ def get(ulog, name):
     return None
 
 
+def stat(arr, fn, default=None):
+    """빈 배열이면 default. arm 구간에 그 토픽 샘플이 하나도 없으면 빈 배열이 된다.
+
+    numpy 집계는 빈 배열에 ValueError 를 던지고, 전부 NaN 이면 float(nan) 이
+    되어 리포트에 nan 이 샌다. 둘 다 여기서 막는다.
+    """
+    if arr is None or len(arr) == 0:
+        return default
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")      # all-NaN slice 경고
+        v = fn(arr)
+    v = float(v)
+    return default if math.isnan(v) else v
+
+
+def _patch_pyulog():
+    """포맷 정의를 잃은 토픽 하나 때문에 로그 전체를 버리지 않게 한다.
+
+    ULog 정의 구간에 깨진 바이트가 있어 'A'(0x41) 로 오독되면 pyulog 는
+    거기서 정의 읽기를 멈춘다(core.py `_read_file_definitions`). 그러면 뒤에
+    오는 'F'(포맷) 정의가 통째로 유실되고, 나중에 그 토픽을 참조하는 시점에
+    `message_formats[type_name]` 이 KeyError 로 터져 나온다.
+
+    pyulog 는 데이터 구간의 손상을 이미 IndexError 로 처리한다 — 잡아서
+    _file_corrupt 만 세우고 계속 읽는다. KeyError 를 그 IndexError 로 바꿔
+    같은 복구 경로에 태운다. 결과적으로 포맷을 잃은 그 토픽만 빠지고
+    나머지 토픽은 전부 살아난다.
+
+    참고: message_name_filter_list 로는 못 피한다. _parse_format() 이
+    필터 검사보다 먼저 돌기 때문이다.
+    """
+    from pyulog.core import ULog
+    cls = ULog._MessageAddLogged
+    if getattr(cls, "_shade_patched", False):
+        return
+    original = cls._parse_nested_type
+
+    def lenient(self, prefix_str, type_name, message_formats):
+        try:
+            return original(self, prefix_str, type_name, message_formats)
+        except KeyError as exc:
+            raise IndexError("format missing for %s" % (exc,)) from exc
+
+    cls._parse_nested_type = lenient
+    cls._shade_patched = True
+
+
 def _scan_sections(raw):
     """ULog 메시지를 훑어 (타입, offset, length) 목록을 만든다."""
     out = []
@@ -254,10 +307,18 @@ def _repair(path):
 
 
 def _load(path):
-    """ULog 를 연다. 구독 섹션이 없으면 한 번 복구를 시도한다."""
+    """ULog 를 연다. 구독 섹션이 없으면 한 번 복구를 시도한다.
+
+    실패하면 LogUnreadable 을 던진다 — 배치 처리에서 한 파일 때문에
+    전체가 멈추지 않도록.
+    """
     from pyulog import ULog
-    with contextlib.redirect_stdout(io.StringIO()):
-        ulog = ULog(path)
+    _patch_pyulog()
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            ulog = ULog(path)
+    except Exception as exc:
+        raise LogUnreadable(_why_broken(path) or str(exc)) from exc
     if ulog.data_list:
         return ulog, False
     repaired = _repair(path)
@@ -266,6 +327,8 @@ def _load(path):
     try:
         with contextlib.redirect_stdout(io.StringIO()):
             ulog = ULog(repaired)
+    except Exception:
+        return ulog, False
     finally:
         os.unlink(repaired)
     return ulog, bool(ulog.data_list)
@@ -290,11 +353,11 @@ def analyse(path):
     # ── 비행 구간 ────────────────────────────────────────────────
     armed = get(ulog, "actuator_armed")
     if armed is None:
-        sys.exit("actuator_armed 토픽이 없다. 로그가 손상됐을 수 있다.")
+        raise LogUnreadable("actuator_armed 토픽이 없다. 로그가 손상됐을 수 있다.")
     t_arm = armed.data["timestamp"] / 1e6
     is_armed = armed.data["armed"].astype(bool)
     if not is_armed.any():
-        sys.exit("arm 된 구간이 없다 (지상 로그).")
+        raise LogUnreadable("arm 된 구간이 없다 (지상 로그).")
     t0, t1 = t_arm[is_armed][0], t_arm[is_armed][-1]
     rep["t0"], rep["t1"] = t0, t1
     rep["duration"] = t1 - t0
@@ -325,10 +388,17 @@ def analyse(path):
     if pos is not None:
         t, mask = window(pos)
         alt = -pos.data["z"][mask]
-        rep["alt_max"] = float(alt.max())
-        rep["climb_max"] = float((-pos.data["vz"][mask]).max())
-        rep["descent_max"] = float((-pos.data["vz"][mask]).min())
-        rep["speed_max"] = float(np.hypot(pos.data["vx"][mask], pos.data["vy"][mask]).max())
+        vz = -pos.data["vz"][mask]
+        spd = np.hypot(pos.data["vx"][mask], pos.data["vy"][mask])
+        alt_max = stat(alt, np.max)
+        speed_max = stat(spd, np.max)
+        # print_report 가 alt_max 로 게이트를 열고 speed_max 를 무조건 읽는다.
+        # 둘은 같이 있거나 같이 없어야 한다.
+        if alt_max is not None and speed_max is not None:
+            rep["alt_max"] = alt_max
+            rep["speed_max"] = speed_max
+        rep["climb_max"] = stat(vz, np.max, 0.0)
+        rep["descent_max"] = stat(vz, np.min, 0.0)
 
     # ── 배터리 ───────────────────────────────────────────────────
     batt = get(ulog, "battery_status")
@@ -336,11 +406,15 @@ def analyse(path):
         t, mask = window(batt)
         volt = batt.data["voltage_v"][mask]
         cur = batt.data["current_a"][mask]
-        cells = int(np.nanmax(batt.data.get("cell_count", [6])))or 6
-        rep["v_min"], rep["v_max"] = float(volt.min()), float(volt.max())
-        rep["cell_min"] = float(volt.min() / cells)
-        rep["cur_max"] = float(cur.max())
-        rep["cur_mean"] = float(cur.mean())
+        cells = int(stat(batt.data.get("cell_count", [6]), np.nanmax, 6)) or 6
+        v_min = stat(volt, np.min)
+        v_max = stat(volt, np.max)
+        # v_min 게이트가 열리면 print_report 가 형제 6개를 무조건 읽는다.
+        if v_min is not None and v_max is not None:
+            rep["v_min"], rep["v_max"] = v_min, v_max
+            rep["cell_min"] = v_min / cells
+            rep["cur_max"] = stat(cur, np.max, 0.0)
+            rep["cur_mean"] = stat(cur, np.mean, 0.0)
         # discharged_mah 는 FC 부팅 후 누적치다. 이 비행분만 보려면 증가분을 써야 한다.
         dis = batt.data.get("discharged_mah")
         if dis is not None and mask.any():
@@ -350,7 +424,7 @@ def analyse(path):
             rep["mah_total"] = float(win[-1]) if len(win) else 0.0
         else:
             rep["mah"] = 0.0
-        rep["sag"] = float(volt.max() - volt.min())
+        rep["sag"] = stat(volt, np.max, 0.0) - stat(volt, np.min, 0.0)
 
         for thresh in (XT90_CONT_A, 60.0, XT90_PEAK_A):
             over = cur > thresh
@@ -364,11 +438,11 @@ def analyse(path):
             rep.setdefault("over", []).append(
                 (thresh, len(starts), float(sum(durs)), float(max(durs))))
 
-        if rep["cur_max"] > XT90_CONT_A:
+        if rep.get("cur_max", 0.0) > XT90_CONT_A:
             rep["findings"].append(
                 ("전류", "최대 %.1fA — 커넥터 연속 정격 %.0fA 초과" % (rep["cur_max"], XT90_CONT_A),
                  "비행 후 XT90 커넥터 발열 확인. 지속되면 AS150/XT120 교체"))
-        if rep["cell_min"] < CELL_LOW_V:
+        if rep.get("cell_min", 99.0) < CELL_LOW_V:
             rep["findings"].append(
                 ("배터리", "셀당 최저 %.2fV (경고선 %.1fV)" % (rep["cell_min"], CELL_LOW_V),
                  "부하 시 전압 강하 %.2fV. 배터리 내부저항·용량 점검" % rep["sag"]))
@@ -377,11 +451,15 @@ def analyse(path):
     gps = get(ulog, "sensor_gps")
     if gps is not None:
         t, mask = window(gps)
-        rep["sats"] = float(gps.data["satellites_used"][mask].mean())
-        rep["eph"] = float(gps.data["eph"][mask].mean())
-        rep["epv"] = float(gps.data["epv"][mask].mean())
-        rep["fix"] = int(gps.data["fix_type"][mask].max())
-        if rep["sats"] >= 12 and rep["eph"] < 1.0:
+        sats = stat(gps.data["satellites_used"][mask], np.mean)
+        eph = stat(gps.data["eph"][mask], np.mean)
+        epv = stat(gps.data["epv"][mask], np.mean)
+        fix = stat(gps.data["fix_type"][mask], np.max)
+        # sats 게이트가 열리면 eph/epv/fix 를 무조건 읽는다 — 넷은 한 묶음이다.
+        if None not in (sats, eph, epv, fix):
+            rep["sats"], rep["eph"], rep["epv"] = sats, eph, epv
+            rep["fix"] = int(fix)
+        if rep.get("sats", 0) >= 12 and rep.get("eph", 99) < 1.0:
             rep["good"].append("GPS 양호 — 위성 %.0f개, eph %.2fm" % (rep["sats"], rep["eph"]))
 
     # ── 진동 ─────────────────────────────────────────────────────
@@ -389,9 +467,11 @@ def analyse(path):
     if imu is not None:
         t, mask = window(imu)
         vib = imu.data.get("accel_vibration_metric")
-        if vib is not None:
-            rep["vib_mean"] = float(vib[mask].mean())
-            rep["vib_max"] = float(vib[mask].max())
+        vib_mean = stat(vib[mask], np.mean) if vib is not None else None
+        vib_max = stat(vib[mask], np.max) if vib is not None else None
+        # vib_max 게이트가 열리면 vib_mean 을 무조건 읽는다.
+        if vib_mean is not None and vib_max is not None:
+            rep["vib_mean"], rep["vib_max"] = vib_mean, vib_max
             if rep["vib_max"] > VIB_BAD:
                 rep["findings"].append(
                     ("진동", "accel_vibration 최대 %.1f (위험선 %.0f)" % (rep["vib_max"], VIB_BAD),
@@ -402,7 +482,7 @@ def analyse(path):
                      "프로펠러 밸런싱 권장. 추세 관찰"))
             else:
                 rep["good"].append("진동 양호 — 최대 %.1f" % rep["vib_max"])
-        clip = sum(float(imu.data.get("accel_clipping[%d]" % i, [0])[mask].max())
+        clip = sum(stat(imu.data["accel_clipping[%d]" % i][mask], np.max, 0.0)
                    for i in range(3) if "accel_clipping[%d]" % i in imu.data)
         rep["clip"] = clip
         if clip > 0:
@@ -430,8 +510,9 @@ def analyse(path):
         val = asp.data["true_airspeed_m_s"][mask]
         val = val[~np.isnan(val)]
         if val.size:
-            rep["as_mean"] = float(val.mean())
-            rep["as_min"], rep["as_max"] = float(val.min()), float(val.max())
+            rep["as_mean"] = stat(val, np.mean, 0.0)
+            rep["as_min"] = stat(val, np.min, 0.0)
+            rep["as_max"] = stat(val, np.max, 0.0)
             if rep["as_mean"] < 0:
                 rep["findings"].append(
                     ("에어스피드", "평균 %.1f m/s — 음수 (물리적으로 불가)" % rep["as_mean"],
@@ -447,14 +528,14 @@ def analyse(path):
                                      1 - 2 * (q[1] ** 2 + q[2] ** 2)))
         pitch = np.degrees(np.arcsin(np.clip(2 * (q[0] * q[2] - q[3] * q[1]), -1, 1)))
         tw = t[mask]
-        if land is not None:
-            tl = land.data["timestamp"] / 1e6
+        tl = land.data["timestamp"] / 1e6 if land is not None else np.empty(0)
+        if tl.size:
             flying = np.interp(tw, tl, land.data["landed"].astype(float)) < 0.5
         else:
             flying = np.ones(len(tw), bool)
         if flying.any():
-            rep["roll_max"] = float(np.abs(roll[flying]).max())
-            rep["pitch_max"] = float(np.abs(pitch[flying]).max())
+            rep["roll_max"] = stat(np.abs(roll[flying]), np.max, 0.0)
+            rep["pitch_max"] = stat(np.abs(pitch[flying]), np.max, 0.0)
             rep["tilt_t"] = float(tw[flying][np.argmax(np.abs(roll[flying]))])
             if max(rep["roll_max"], rep["pitch_max"]) > TILT_WARN:
                 rep["findings"].append(
@@ -470,7 +551,7 @@ def analyse(path):
         for axis, key in enumerate(("unallocated_torque[0]", "unallocated_torque[1]",
                                     "unallocated_torque[2]", "unallocated_thrust[2]")):
             if key in alloc.data:
-                peaks[key] = float(np.nanmax(np.abs(alloc.data[key][mask])))
+                peaks[key] = stat(np.abs(alloc.data[key][mask]), np.nanmax, 0.0)
         rep["alloc"] = peaks
         worst = max(peaks.values()) if peaks else 0.0
         if worst > 0.3:
@@ -485,11 +566,12 @@ def analyse(path):
         comps = [mag.data["magnetometer_ga[%d]" % i][mask] for i in range(3)]
         norm = np.sqrt(sum(c ** 2 for c in comps))
         tb, mb = window(batt)
-        cur_i = np.interp(t[mask], tb[mb], batt.data["current_a"][mb])
-        if norm.size > 10:
+        # np.interp 는 xp 가 비면 ValueError — 가드가 먼저 와야 한다.
+        if norm.size > 10 and tb[mb].size:
+            cur_i = np.interp(t[mask], tb[mb], batt.data["current_a"][mb])
             corr = float(np.corrcoef(cur_i, norm)[0, 1])
             rep["mag_corr"] = corr
-            rep["mag_mean"] = float(norm.mean())
+            rep["mag_mean"] = stat(norm, np.mean, 0.0)
             if abs(corr) > 0.5:
                 rep["findings"].append(
                     ("자기 간섭", "전류-자기장 상관 %.2f" % corr,
@@ -505,16 +587,20 @@ def analyse(path):
                 continue
             v = val[mask]
             if v.size and set(np.unique(v)).issubset({0, 1}) and v.any():
-                active.append((key, float(v.mean() * 100)))
+                active.append((key, stat(v, np.mean, 0.0) * 100))
         rep["failsafe"] = sorted(active, key=lambda x: -x[1])
 
     # ── CPU ─────────────────────────────────────────────────────
     cpu = get(ulog, "cpuload")
     if cpu is not None:
         t, mask = window(cpu)
-        rep["cpu_max"] = float(cpu.data["load"][mask].max() * 100)
-        rep["ram_max"] = float(cpu.data["ram_usage"][mask].max() * 100)
-        if rep["cpu_max"] < 70:
+        cpu_max = stat(cpu.data["load"][mask], np.max)
+        ram_max = stat(cpu.data["ram_usage"][mask], np.max)
+        # cpu_max 게이트가 열리면 ram_max 를 무조건 읽는다.
+        if cpu_max is not None and ram_max is not None:
+            rep["cpu_max"] = cpu_max * 100
+            rep["ram_max"] = ram_max * 100
+        if rep.get("cpu_max", 100) < 70:
             rep["good"].append("CPU 여유 — 최대 %.0f%%" % rep["cpu_max"])
 
     # ── 로그 메시지 ─────────────────────────────────────────────
@@ -609,7 +695,11 @@ def main():
     args = ap.parse_args()
 
     if args.target.lower().endswith(".ulg"):
-        print_report(analyse(os.path.expanduser(args.target)))
+        target = os.path.expanduser(args.target)
+        try:
+            print_report(analyse(target))
+        except LogUnreadable as exc:
+            sys.exit("읽을 수 없다: %s\n  %s" % (os.path.basename(target), exc))
         return
 
     log_dir = find_log_dir(args.dir)
@@ -640,7 +730,10 @@ def main():
         sys.exit("번호나 'list' 또는 .ulg 경로를 넣어라: %s" % args.target)
     if not 1 <= idx <= len(logs):
         sys.exit("범위 밖이다 (1..%d)" % len(logs))
-    print_report(analyse(logs[idx - 1]))
+    try:
+        print_report(analyse(logs[idx - 1]))
+    except LogUnreadable as exc:
+        sys.exit("읽을 수 없다: %s\n  %s" % (os.path.basename(logs[idx - 1]), exc))
 
 
 if __name__ == "__main__":

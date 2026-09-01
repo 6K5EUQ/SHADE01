@@ -47,20 +47,20 @@ ssh raspb1@100.126.161.1 'sudo systemctl start mavlink-bridge.service'
 ### 1-5. 회수
 
 ```bash
-mkdir -p SHADE01/logs/2026-08-31
-scp 'raspb1@100.126.161.1:/tmp/fclogs/*.ulg' SHADE01/logs/2026-08-31/
+mkdir -p logs/2026-08-31
+scp 'raspb1@100.126.161.1:/tmp/fclogs/*.ulg' logs/2026-08-31/
 ```
 
 ## 2. 분석
 
 ```bash
-./qgc log SHADE01/logs/2026-08-31/2026-08-31_09_17_02.ulg
+./qgc log logs/2026-08-31/2026-08-31_09_17_02.ulg
 ```
 
 하루치 요약표:
 
 ```bash
-for f in SHADE01/logs/2026-08-31/*.ulg; do
+for f in logs/2026-08-31/*.ulg; do
   echo "=== $(basename "$f") ==="
   ./qgc log "$f" 2>&1 | sed -n '4,12p'
 done
@@ -81,17 +81,27 @@ done
 세션 반납(`ResetSessions`)으로는 안 풀린다 — 실측 확인.
 **`fcfetch.py` 는 파일마다 재연결하도록 고쳐 두었다** (2026-09-01). 21개 45MB 를 238초에 받았다.
 
-### 분석기가 일부 로그에서 죽는다
+### 분석기 — 손상된 로그도 읽는다 (2026-09-01 수정)
 
-2026-08-31 자 21개 중 **7개가 파싱 실패**했다. 원인 세 갈래:
+21개 중 7개가 파싱 실패하던 문제를 고쳤다. **지금은 21/21 이 읽힌다.**
 
-| 증상 | 뜻 |
-|---|---|
-| `ValueError: zero-size array` | 고도 데이터가 아예 없음 — 부팅 직후 짧은 로그 |
-| `KeyError: 'estimator_*'` / `'actuator_servos'` | 그 토픽이 로그에 없음 |
-| `KeyError: 'DIS3\x03...'` | 로그 파일 자체 손상 |
+원인은 `qgclog.py` 가 아니라 **pyulog** 였다. ULog 정의 구간에 깨진 바이트가 있어
+`A`(0x41) 로 오독되면 pyulog 가 거기서 정의 읽기를 멈추고, 뒤따르는 `F`(포맷) 정의가
+유실된다. 나중에 그 토픽을 참조하는 시점에 `message_formats[type_name]` 이 KeyError 로
+터진다 — `estimator_*` · `actuator_servos` · `DIS3\x03...` 3종이 **전부 같은 한 줄**이었다.
 
-`qgclog.py` 가 이 경우를 방어하지 않는다. **고칠 값어치가 있는 개선점이다.**
+`_patch_pyulog()` 가 그 KeyError 를 **IndexError 로 바꾼다.** pyulog 는 데이터 구간
+손상을 이미 IndexError 로 처리하므로(`_file_corrupt` 만 세우고 계속 읽음), 같은 복구
+경로에 태우면 **포맷을 잃은 그 토픽만 빠지고 나머지는 전부 살아난다.**
+
+⚠️ `message_name_filter_list` 로는 못 피한다 — `_parse_format()` 이 필터 검사보다 먼저 돈다.
+
+빈 배열 문제도 함께 고쳤다. arm 구간에 그 토픽 샘플이 하나도 없으면 numpy 집계가
+ValueError 를 던지거나 조용히 `nan` 을 리포트에 넣었다. `stat()` 헬퍼로 16곳을 막았다.
+
+⚠️ **알려진 한계** — `_repair()` 의 `_scan_sections()` 는 경계 검사 없이 파일 전체를
+훑어서, 데이터 바이트를 가짜 포맷 정의로 잡을 수 있다. 그래서 도너 매칭이 실패할 수
+있다. 현재 로그는 이 경로를 타지 않아 손대지 않았다.
 
 ### MAVFTP API
 

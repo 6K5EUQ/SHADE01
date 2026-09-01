@@ -74,7 +74,7 @@ S3 6단 재구성이 실제 비행에서 동작한 증거다. RTL 도 실제로 
 
 이는 기준점(홈) 대비 상대고도인데, **이륙 지점보다 낮은 곳으로 갔거나 기준점이
 잘못 잡힌 것**이다. 지면 기복이 있는 곳이었다면 설명되나,
-[미션 고도 프로파일 검토](../../components/companion/raspberry-pi-5/README.md) 때 확인한
+[미션 고도 프로파일 검토](../components/companion/raspberry-pi-5/README.md) 때 확인한
 Copernicus 지형 데이터와 대조가 필요하다.
 
 ⚠️ **미션 고도가 홈 기준 상대고도(`GLOBAL_REL_ALT`)** 라 이 문제가 그대로 미션에 옮는다.

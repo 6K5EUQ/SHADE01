@@ -62,45 +62,17 @@ mav_bridge: serial opened: /dev/ttyACM0 @ 921600
 - `MAV_1_CONFIG`(TELEM2) 는 이제 쓰이지 않는다. 죽은 포트에 계속 쏘느라 FC CPU 7.4% 를
   태우므로 **`MAV_1_CONFIG=0` 으로 꺼두는 것을 권장**한다 (미적용 시 낭비만 발생, 기능 영향 없음).
 
-## 배선 (FC Telem2 ↔ RPi GPIO) — ⛔ 폐기된 경로
+## ⛔ 폐기된 경로 — TELEM2 GPIO UART
 
-> ⛔ **이 절은 더 이상 현행이 아니다 (2026-08-31).** 케이블 FC측 커넥터 단락으로 포기했고
-> 지금은 [USB 직결](#-fc--raspb1-usb-직결-2026-08-31-현행)을 쓴다.
-> 케이블을 새로 만들어 UART 로 돌아갈 경우를 대비해 결선 정보만 남긴다.
+2026-08-31 이전에는 FC TELEM2(JST-GH 6핀)와 Pi 40핀 GPIO 를 3선으로 묶어
+`/dev/ttyAMA0` @921600 으로 썼다. **TELEM2 포트가 죽어 USB 로 옮겼다**
+([근거](#-telem2-포트-사망--usb-링크로-전환-2026-08-31)).
 
-FC의 Telem2(JST-GH 1.25mm 6핀)와 Pi 5의 40핀 GPIO 헤더를 3선(TX/RX/GND)으로 연결한다.
-
-| Pixhawk 6C Mini Telem2 핀 | 신호 | → | RPi 5 GPIO 물리핀 | RPi 신호 |
-|---|---|---|---|---|
-| 2 | UART5_TX (out) | → | **10** | GPIO15 / RXD (in) |
-| 3 | UART5_RX (in) | → | **8** | GPIO14 / TXD (out) |
-| 6 | GND | → | **6** | GND |
-| 1 | VCC 5V | ✕ | — | **연결하지 않음** |
-
-- ⚠️ **TX/RX 교차 필수** — FC TX(2번) → Pi RX(물리 10번), FC RX(3번) → Pi TX(물리 8번).
-- ⚠️ **Telem2의 5V로 Pi 5에 급전하지 말 것** — FC의 Telem1+GPS1 합산 출력 제한은 1.5A인데 Pi 5는 피크 5A급을 요구한다. Pi 전원은 별도 계통에서 공급한다.
-- GND는 반드시 공통으로 묶어야 UART 기준전위가 잡힌다. 신호 레벨은 양쪽 다 3.3V라 레벨 시프터 불필요.
-
-> 핀 번호 기준: FC측은 [6C Mini 커넥터 Pin1 도해](../../fc/holybro-pixhawk-6c-mini/images/04-pin-number.png), RPi측은 40핀 헤더 **물리 핀 번호**(BCM 번호 아님).
-
-### Pi측 UART 활성화 설정
-
-`/boot/firmware/config.txt`에 아래 2줄이 들어가 있어야 `/dev/ttyAMA0`이 GPIO 14/15에 연결된다.
-**raspb1 에 2026-08-30 추가 완료** (추가 전 백업 `/root/config.txt.bak-20260830-231430`).
-
-```ini
-dtoverlay=uart0-pi5
-enable_uart=1
-```
-
-- Pi 5는 이전 세대와 UART 매핑이 달라 **`uart0-pi5` 전용 오버레이**가 필요하다.
-- `serial-getty@ttyAMA0`는 **disabled** 상태 — 시리얼 콘솔이 포트를 잡으면 MAVLink와 충돌하므로 반드시 꺼두어야 한다. ✅ 확인됨.
-- `/boot/firmware/cmdline.txt`에 `console=serial0` 항목 없음(콘솔은 `tty1`만) — 정상.
-- 실행 계정 `raspb1`은 `dialout` 그룹 소속이라 포트 접근 권한 있음. ✅ (2026-08-30 `usermod -aG dialout` 실행)
-- ⚠️ **두 줄을 넣어도 재부팅 전에는 `/dev/ttyAMA0`이 생기지 않는다.** 재부팅 전 상태에서는
-  `/dev/ttyAMA10`(전용 디버그 UART)만 보이며, 이건 FC 연결과 무관하다.
-- Pi 5 는 Bluetooth 가 **별도 내부 UART**(`107d50c000.serial`)에 붙어 있어 GPIO 14/15 를
-  건드리지 않는다. Pi 4 이하에서 필요하던 `dtoverlay=disable-bt` 는 불필요하다.
+되살릴 일이 생기면 결선은 이렇다 — FC 2번(TX) → Pi 물리 10번(RX), FC 3번(RX) →
+Pi 물리 8번(TX), 6번 GND ↔ 물리 6번. **1번 5V 는 연결하지 않는다**(FC 출력 한계 1.5A,
+Pi 5 는 피크 5A 급). Pi 쪽은 `/boot/firmware/config.txt` 에 `dtoverlay=uart0-pi5` +
+`enable_uart=1` 이 있어야 하고 **재부팅해야** 포트가 생긴다. `serial-getty@ttyAMA0` 는
+꺼져 있어야 하며, 실행 계정은 `dialout` 그룹이어야 한다.
 
 ## MAVLink 브리지 (`mav_bridge.py`)
 
@@ -227,21 +199,24 @@ QGC가 UDP 14550을 바인딩하면 **링크 수동 추가 없이** 기체가 �
   AP 가 사라지면 다음 순위로 자동 폴백한다 (실증 확인).
 - ✅ **배터리 잔량 QGC 표시 가능** — [PM08-CAN](../../power/holybro-pm08-can/README.md)이 CAN1으로 FC에 보낸 전압/전류 센싱값이 MAVLink를 타고 QGC까지 도달함. PM08 → FC → Pi → QGC 전 구간이 검증된 셈이다.
 
-## ✅ Telem2 포트 충돌 — 해소 (2026-08-19)
+## UART 포트 현황
 
-Telem2를 두고 Pi 5와 RC 수신기가 경합하던 문제는 **수신기를 Telem1(UART7)로 배치**해 해소했다. **Pi는 Telem2를 그대로 유지**한다 — 브리지가 이미 검증·가동 중이었으므로 건드리지 않는 쪽이 안전했다.
+| 포트 | 쓰임 | 파라미터 |
+|---|---|---|
+| TELEM1 (UART7) | [RadioMaster RP4TD-M](../../receivers/radiomaster-rp4td-m/README.md) — MAVLink over ELRS | `MAV_0_CONFIG=101` @460800 |
+| TELEM2 (UART5) | ⛔ **폐기** — 케이블 단락으로 사망 | `MAV_1_CONFIG=102` (아직 켜져 있다, 아래 참조) |
+| GPS1 | [M10N](../../gps/holybro-m10n/README.md) | `GPS_1_CONFIG=201` |
+| GPS2 (UART8) | 비어 있음 | — |
 
-| 부품 | 포트 | 파라미터 | 상태 |
-|---|---|---|---|
-| Raspberry Pi 5 (본 문서) | **Telem2 (UART5)** | `MAV_1_CONFIG=102` @921600 | ✅ 가동 중, 변경 없음 |
-| [RadioMaster RP4TD-M](../../receivers/radiomaster-rp4td-m/README.md) | **Telem1 (UART7)** | `RC_CRSF_PRT_CFG=101` | ✅ 결선·바인딩 완료 |
-
-- 서로 다른 UART이므로 **두 링크가 공존**한다. 수신기 설정 과정에서 Telem2의 MAVLink 매핑을 제거할 필요가 없다 — 이전 판 문서의 해당 경고는 무효다.
-- ⚠️ 남은 여유 UART는 **GPS2(UART8)뿐**이다. T900 Pro 등 지상국 무선모듈 도입 시 포트 재배치를 검토해야 한다.
+- Pi 는 UART 를 쓰지 않는다. **USB(`/dev/ttyACM0`)로 붙는다.**
+- 🟡 **`MAV_1_CONFIG` 가 아직 `102`(TELEM2)다** — 2026-09-01 FC 실측. 죽은 포트에 계속
+  송신하느라 FC CPU 7.4% 를 태운다. `0` 으로 꺼두는 것이 맞다. (기능 영향은 없다.)
+- 이 보드의 UART 는 셋뿐이다. 지상국 무선모듈(T900 Pro 등)을 넣으려면 GPS2 를 쓰거나
+  포트를 재배치해야 한다.
 
 ## 부수 도구 — `px4_param.py`
 
-`/home/raspb1/px4_param.py` (정본: [px4_param.py](px4_param.py)) — **pymavlink 없이** MAVLink v2 프레임을 직접 만들어 시리얼로 PX4 파라미터를 읽고 쓰는 자체 제작 스크립트. `PARAM_SET`(msgid 23) / `PARAM_REQUEST_READ`(msgid 20)를 구현하며, 포트·보레이트는 브리지와 같은 환경변수(`MAV_SERIAL` / `MAV_BAUD`, 기본 `/dev/ttyAMA0` @ 921600)를 쓴다.
+`/home/raspb1/px4_param.py` (정본: [px4_param.py](px4_param.py)) — **pymavlink 없이** MAVLink v2 프레임을 직접 만들어 시리얼로 PX4 파라미터를 읽고 쓰는 자체 제작 스크립트. `PARAM_SET`(msgid 23) / `PARAM_REQUEST_READ`(msgid 20)를 구현하며, 포트·보레이트는 브리지와 같은 환경변수(`MAV_SERIAL` / `MAV_BAUD`, 기본 `/dev/ttyACM0` @ 921600)를 쓴다.
 
 ```bash
 ./px4_param.py get SENS_DPRES_OFF
@@ -269,45 +244,28 @@ raspb2→raspb1 교체와도 무관하다 — 시점만 겹쳤다.
 
 TELEM2 (GPIO UART) 는 **더 이상 쓰지 않는다.**
 
-### 증상
+### 판정 근거
 
-Telem2 ↔ Pi GPIO 를 교차 결선하고 메인 배터리를 인가해도 `/dev/ttyAMA0` 수신이 0바이트.
-**9600 / 19200 / 38400 / 57600 / 115200 / 230400 / 460800 / 500000 / 921600 / 1M / 1.5M**
-11개 보레이트를 전부 raw read 해도 0바이트다. `px4_param.py` 도 무응답이라 양방향이 죽어 있었다.
+Telem2 ↔ Pi GPIO 를 교차 결선하고 **11개 보레이트**(9600~1.5M)를 전부 raw read 해도
+`/dev/ttyAMA0` 수신이 0바이트였다. 아래 셋이 포트 사망을 확정한다.
 
-### 포트 사망의 근거
+- **빈 포트 자기 수신** — 커넥터를 완전히 뽑은 상태에서 `mavlink status` 인스턴스 #1 이
+  `rx ≈ tx ≈ 22.4 kB/s`, `sysid:1 compid:1`(자기 자신) 을 계속 파싱했다. 재부팅해도 즉시 재발.
+- **5V 출력까지 사망** — TELEM1 에서 멀쩡히 돌던 **수신기와 그 케이블 그대로** TELEM2 로
+  옮기자 **LED 조차 안 켜졌다.** 신호선뿐 아니라 포트 전원이 죽었다.
+- **대조군** — 아무것도 안 꽂힌 `ttyS4` 는 rx 339 B/s 노이즈뿐 **유효 프레임 0** →
+  "PX4 가 자기 송신을 세는 것" 이라는 해석은 배제된다. TELEM1(`ttyS5`) 은 정상.
 
-| 검증 | 결과 |
-|---|---|
-| **빈 포트 자기 수신** | 커넥터를 완전히 뽑은 상태에서 `mavlink status` 인스턴스 #1 이 `rx ≈ tx ≈ 22.4 kB/s`, `sysid:1 compid:1`(자기 자신) 을 계속 파싱. 카운터가 40만 이상 증가 |
-| **재부팅 무효** | 재부팅 직후 즉시 재발 |
-| **미연결 대조군** | 아무것도 안 꽂힌 `ttyS4` 에 임시 인스턴스를 띄우면 rx 339 B/s 노이즈뿐, **유효 프레임 0** → "PX4 가 자기 송신을 카운트한다" 는 해석 배제 |
-| **5V 출력 사망** | TELEM1 에서 정상 동작하던 **수신기 + 그 케이블 그대로** TELEM2 로 옮기자 **수신기 LED 자체가 안 켜졌다.** 신호선뿐 아니라 포트 전원까지 죽었다 |
-| **TELEM1 은 정상** | 같은 FC 의 `ttyS5` 는 ELRS 와 정상 통신 (`sysid:255 compid:68`, RSSI 보고) |
+Pi(물리 8↔10 루프백 64/64) · 케이블 · 네트워크 · FC 펌웨어 설정은 모두 무죄로 확인됐고,
+raspb2→raspb1 교체와도 무관하다 — 시점만 겹쳤다.
 
-### 배제된 것들
+### ⚠️ 두 번 오진했다 — 같은 함정을 피하려면
 
-| 대상 | 판정 | 근거 |
-|---|---|---|
-| FC 펌웨어 설정 | 정상 | `MAV_1_CONFIG=102`, `MAV_1_MODE=2`(Onboard), `SER_TEL2_BAUD=921600`, 부팅 로그 무에러 |
-| 포트 경합 | 없음 | `ps` 상 `ttyS3` 을 여는 것은 `mavlink_if1` 단독. `crsf_rc`·`rc_input` 미실행 |
-| 반이중(single-wire) 오설정 | 배제 | `RC_CRSF_PRT_CFG`·`DSHOT_TEL_CFG`·`UXRCE_DDS_CFG`·`TEL_FRSKY_CONFIG`·`TEL_HOTT_CONFIG`·`GPS_2_CONFIG` **전부 0**. MAVLink 모듈은 `TIOCSSINGLEWIRE` 를 호출하지 않는다 |
-| 하드웨어 흐름제어 | 배제 | `MAV_1_FLOW_CTRL` 2(Auto) → **0(강제 off)** 로 바꿔도 동일 |
-| 인스턴스 중복 | 배제 | `MAV_2_CONFIG=101` 이 TELEM1 과 겹쳐 있어 **0 으로 껐다**. 증상 불변 |
-| Pi UART 설정 | 정상 | DT `serial0=/axi/pcie@120000/rp1/serial@30000`, pinctrl phandle → `rp1_uart0_14_15` (= GPIO14/15) |
-| Pi 물리 핀 | 정상 | 물리 8↔10 루프백 **64/64 왕복 성공** |
-| Pi 포트 점유 | 없음 | HAT EEPROM 없음, `fuser` 상 브리지 python3 하나뿐 |
-| 케이블 | 무죄 | 교체·재정리·핀 조합 변경 모두 무효. 빈 포트에서도 증상 유지 |
-| 네트워크 | 정상 | `GCS connected: ('100.99.120.110', 14550)`, Tailscale RTT 43~130ms |
-
-### ⚠️ 진단 중 두 번 오진했다 — 같은 함정을 피하려면
-
-1. **"뽑았다" 가 어느 쪽인지 확인하지 않았다.** 운용자가 뽑은 것은 Pi 쪽이었는데 FC 쪽으로
-   가정해 판정했다. **어느 끝을 분리했는지 매번 명시할 것.**
-2. **부하가 걸린 상태의 `rx 0` 을 "포트 정상" 의 증거로 삼았다.** 수신기를 꽂았을 때
-   자기 수신이 사라진 것을 보고 포트가 멀쩡하다고 결론냈으나, **그 수신기는 전원조차
-   안 들어온 상태**였다. 되돌이가 사라진 것이 아니라 라인 임피던스가 바뀌어 가려진 것이었다.
-   **빈 포트에서의 측정만이 유효한 판정 근거다.**
+1. **어느 끝을 분리했는지 매번 명시할 것.** 운용자가 뽑은 것은 Pi 쪽이었는데 FC 쪽으로
+   가정해 판정했다.
+2. **빈 포트에서의 측정만이 유효하다.** 수신기를 꽂았을 때 자기 수신이 사라진 것을 보고
+   포트가 멀쩡하다 결론냈으나, 그 수신기는 **전원조차 안 들어온 상태**였다. 되돌이가
+   사라진 게 아니라 라인 임피던스가 바뀌어 가려진 것이었다.
 
 ### 남은 확인 (물리)
 
@@ -347,9 +305,9 @@ Environment=MAV_SERIAL=/dev/ttyACM0
 - FC USB 포트를 Pi 가 점유하므로 **노트북 USB 직결(경로 B)과 동시 사용 불가.**
   펌웨어 플래싱·ESC 캘리브레이션을 하려면 Pi 쪽 USB 를 뽑아야 한다.
 - USB 커넥터는 JST-GH 보다 진동에 약하다. **비행 전 케이블 타이로 고정할 것.**
-- `MAV_1_CONFIG` 는 **0 으로 꺼 두었다.** 죽은 TELEM2 에 22kB/s 를 쏘며 자기 에코를
-  파싱하느라 FC CPU 를 **7.4% 태우고 있었다** (`mavlink_if1` 4.27% + `mavlink_rcv_if1` 3.18%,
-  비교: 실제 ELRS 링크 수신 `mavlink_rcv_if0` 는 0.625%). 포트를 고치면 102 로 되돌린다.
+- 🟡 `MAV_1_CONFIG` 는 **아직 `102` 다** (2026-09-01 FC 실측). 죽은 TELEM2 에 22kB/s 를
+  쏘며 자기 에코를 파싱하느라 FC CPU 를 **7.4% 태운다** (`mavlink_if1` 4.27% + `mavlink_rcv_if1` 3.18%,
+  비교: 실제 ELRS 링크 수신 `mavlink_rcv_if0` 는 0.625%). **`0` 으로 꺼두는 것이 맞다.**
 - `SER_TEL2_BAUD` 는 921600 으로 원복해 두었다 (수신기 테스트로 460800 에 두었던 것).
 
 ### 부수 발견 — 과거 파라미터 임포트 실패
@@ -389,39 +347,19 @@ QGC 없이 MAVLink SERIAL_CONTROL(msgid 126) 로 PX4 NSH 셸을 여는 스크립
 
 ## 🔶 확인 필요
 
-- **FC측 USB 링크 MAVLink 모드 미확정** — USB 경로는 `MAV_x_CONFIG` 없이도 PX4 가 기본
-  MAVLink 인스턴스를 띄운다. 스트림 구성(`Normal` vs `Onboard`)은 QGC 파라미터 화면에서
-  확정할 것. 참고: USB 직결 실측에서 22~24 kB/s 가 나오는 것으로 보아 `Onboard` 급 고레이트다.
-- **`MAV_1_CONFIG`(TELEM2) 정리 미적용** — 죽은 포트에 계속 송신하며 FC CPU 7.4% 를 태운다.
-  `0` 으로 꺼두기 권장. 기능 영향은 없고 낭비만 발생.
-- **Pi 전원 공급 계통 미기록** — 어느 BEC/배터리에서 5V를 받는지, 전류 여유가 충분한지. Pi 5는 순간 소비가 커서 [UBEC(5.3V/10A)](../../fc/holybro-pixhawk-6c-mini/README.md#서보-전원-mfe-ubec-연결)를 서보와 공유하면 서보 동작 시 전압 강하 위험.
-- 🔴 **실비행 텔레메트리로 부적합** — 현재 링크는 WiFi + 인터넷 + Tailscale 경유다. 지상 벤치 테스트/설정용으로는 충분하나, **기체가 WiFi 범위를 벗어나면 즉시 끊긴다.** 실비행에는 별도 무선 모뎀(T900 Pro 등) 또는 LTE 모뎀이 필요하다.
-- **비행 중 링크 신뢰성 미검증** — 위 사유로 지상 테스트만 완료.
-- 🟡 **raspb1 실측 — 절반 완료 (2026-08-30 23:21 확인)**
-  1. ✅ 재부팅 → `/dev/ttyAMA0` 생성 확인 (`crw-rw---- root dialout 204,64`)
-  2. ✅ 유닛 `enabled` + `active`, 부팅 자동기동 확인
-  3. ✅ 시리얼 오픈 성공 — `mav_bridge: serial opened: /dev/ttyAMA0 @ 921600`
-  4. 🔴 **TELEM2 포트 사망 → USB 로 전환 (2026-08-31)** — GPIO UART 는 폐기했다.
-     Pi 는 이제 **FC USB(`/dev/ttyACM0`)** 로 붙으며 21.8 KB/s 로 실측 검증됐다.
-     [상세](#-telem2-포트-사망--usb-링크로-전환-2026-08-31)
-  5. ✅ **QGC 수신 확인** — `ku-dgs1` UDP 14550 에서 2572패킷/8초, RC_CHANNELS 포함
-  6. ✅ **GCS→브리지 UDP 경로 검증 (2026-08-31)** — `ku-dgs1` 에서 `:14550` 에 바인드해
-     `100.126.161.1:14550` 으로 프로브를 쏘자 브리지 로그에
-     `GCS connected: ('100.99.120.110', 14550)` 가 찍혔다. Tailscale RTT 43~130ms.
-     즉 **남은 구간은 FC→Pi 시리얼 하나뿐**이다.
-
-  현재 `ExecStart` 고정 타겟: `100.99.120.110:14550`(ku-dgs1), `100.107.83.47:14550`(rim),
-  `100.105.212.78:14550`.
-  ✅ **`gram-labtop`(`100.66.204.25`) 도 고정 타겟에 등록됐다 (2026-08-31).** 유닛의
-  `ExecStart` 에 추가하고 재시작했으며, 원본은 `mavlink-bridge.service.bak-20260831-*` 로
-  백업돼 있다. 이제 gram 의 QGC 는 링크만 Connect 하면 FC 데이터가 도착하는 대로 붙는다.
-
-  참고로 QGC 의 UDP 링크는 **기체가 먼저 말을 걸어오기를 기다린다** — 스스로 먼저 쏘지 않는다.
-  그래서 브리지의 동적 peer 등록(먼저 패킷을 보내온 GCS 를 30초간 기억)만으로는 QGC 가 절대
-  등록되지 않는다. GCS 를 추가하려면 반드시 **유닛의 고정 타겟에 넣어야 한다.**
-- 🔴 **전원 감시 부재** — raspb1 에는 UPS/배터리 모니터가 없다 (머리말 참조). 기체 탑재 시
-  저전압 상황을 소프트웨어로 알 수 없다.
-- ~~Telem2 포트 충돌 해소 방안 미확정~~ → **해소(2026-08-19)**: 수신기를 Telem1로 배치. [Telem2 포트 충돌 — 해소](#-telem2-포트-충돌--해소-2026-08-19) 참조.
+- 🟡 **`MAV_1_CONFIG` 가 아직 `102`** (2026-09-01 FC 실측) — 죽은 TELEM2 에 송신하며
+  FC CPU 7.4% 낭비. `0` 으로 꺼두는 것이 맞다. 기능 영향은 없다.
+- **USB 링크의 MAVLink 스트림 모드 미확정** — USB 는 `MAV_x_CONFIG` 없이도 기본 인스턴스가
+  뜬다. `Normal` 인지 `Onboard` 인지는 QGC 파라미터 화면에서 확정할 것.
+  (실측 21~24 kB/s 로 보아 `Onboard` 급 고레이트로 보인다.)
+- **Pi 전원 계통 미기록** — 어느 BEC/배터리에서 5V 를 받는지, 전류 여유가 충분한지.
+  Pi 5 는 순간 소비가 커서 [UBEC(5.3V/10A)](../../power/mfe-ubec-3s14s-10a/README.md) 를
+  서보와 공유하면 서보 동작 시 전압 강하 위험.
+- 🔴 **전원 감시 부재** — raspb1 에 UPS/배터리 모니터가 없다. 기체 탑재 시 저전압을
+  소프트웨어로 알 수 없다.
+- 🔴 **실비행 텔레메트리로는 부적합** — WiFi + 인터넷 + Tailscale 경유라 **기체가 WiFi 범위를
+  벗어나면 즉시 끊긴다.** 실비행에는 별도 무선 모뎀(T900 Pro 등)이나 LTE 가 필요하다.
+  2026-08-31 비행은 WiFi 범위 안이었다.
 
 ## 보유 수량 (SHADE 기체)
 
@@ -431,33 +369,11 @@ QGC 없이 MAVLink SERIAL_CONTROL(msgid 126) 로 PX4 NSH 셸을 여는 스크립
 
 ---
 
-## 이전 구성 (raspb2, 2026-08-11)
+## 이전 구성 — raspb2 (2026-08-11, 폐기)
 
-2026-08-30 이전에는 컴패니언 Pi 가 **`raspb2`** (Tailscale `raspb2-dgsx`, `100.123.59.3`) 였다.
-아래는 그 기기에서 나온 **실측 기록**이다. 지금 기체에 실린 것은 raspb1 이지만, PM08 → FC →
-Pi → QGC 전 구간이 한 번 실증됐다는 근거는 여기에 있다.
+2026-08-30 이전 컴패니언은 `raspb2`(`raspb2-dgsx`, `100.123.59.3`) 였다. **하드웨어 고장으로
+기체에서 제거했고 복귀 계획은 없다.** 그 기기에서 PM08 → FC → Pi → QGC 전 구간이 한 번
+실증됐다는 것이 남은 의미의 전부다 (배터리 22.88V / 잔량 48% 도달 확인).
 
-| 항목 | 값 |
-|---|---|
-| 호스트명 / 노드 | `raspb2` / `raspb2-dgsx` (`100.123.59.3`) |
-| OS | Ubuntu 24.04.4 LTS (aarch64, kernel 6.8.0-1060-raspi) |
-| 스크립트 | `/home/raspb2/mav_bridge.py`, `/home/raspb2/px4_param.py` |
-| ExecStart | `/usr/bin/python3 /home/raspb2/mav_bridge.py 100.99.120.110:14550 100.107.83.47:14550` |
-| WiFi | `eduroam` 클라이언트 (wlan0: 10.200.114.166/17) |
-| 겸업 | KrakenSDR 기반 BEWE DGS-X 서비스 |
-
-**`rim` PC 수신 검증 (2026-08-11)** — UDP 14550 수신 150패킷 / 17.4KB (출처 `100.123.59.2`),
-ATTITUDE·HIGHRES_IMU·GPS_RAW_INT·ALTITUDE·VFR_HUD·SYS_STATUS·EXTENDED_SYS_STATE 수신,
-배터리 **22.88V (셀당 3.81V) / 잔량 48% / 0.17A** 도달, QGC 자동 연결, 양방향 통신
-(`GCS connected: ('100.107.83.47', 14550)`), `ku-dgs1` 동시 수신 유지.
-변경 전 유닛 백업은 그 기기의 `/etc/systemd/system/mavlink-bridge.service.bak-20260811`.
-
-### 왜 옮겼나
-
-raspb2 는 드론 탑재 Pi 인 동시에 BEWE DGS-X 기지였는데, **2026-08-21 무렵부터 오프라인**
-(Tailscale `last seen 9d ago`, ping 100% 손실)이라 브리지를 띄울 수 없었다.
-**2026-08-30 운용자가 하드웨어 고장으로 확정했다** — 복구·재사용 계획 없음.
-
-**이때 드러난 문제 — 스크립트가 기기 안에만 있었다.** `mav_bridge.py` / `px4_param.py` 가
-git 에 없어 기기가 꺼지자 회수 불가였고, README 에 남은 동작 명세를 근거로 **재작성**해야 했다.
-그래서 지금은 두 스크립트와 유닛 파일 모두 이 폴더에 정본으로 둔다.
+교훈: 스크립트가 **기기 안에만 있어서** 기기가 죽자 회수할 수 없었다. 그래서 지금은
+`mav_bridge.py` · `px4_param.py` · `pxsh.py` 와 유닛 파일 모두 이 repo 가 정본이다.

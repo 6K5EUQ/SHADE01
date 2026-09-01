@@ -46,7 +46,7 @@ MAVFTP 버스트로 7.6MB 를 18초에. `fcfetch.py` 사용.
 | 미배분 토크 | 0.3 | 제어 배분 여유 소진 |
 | 자기 간섭 | 전류-자기장 상관 0.5 | 전력선 간섭 판정 |
 
-**기체가 바뀌면 `qgclog.py` 상단 상수를 고친다.** 위 값은 [SHADE 기체](../../BRINGUP.md) 기준
+**기체가 바뀌면 `qgclog.py` 상단 상수를 고친다.** 위 값은 [SHADE 기체](../../README.md) 기준
 — 특히 45A 는 [PM08 XT90 병목](../../components/power/holybro-pm08-can/README.md#️-전류-용량-주의)에서 온 값이다.
 
 ## 해석 주의

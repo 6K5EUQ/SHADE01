@@ -19,7 +19,7 @@
 | **B. USB 직결 (폴백/설정용)** | FC USB-C 포트 → PC 시리얼 | USB 케이블 | ✅ 검증 완료 (2026-08-11) — ⚠️ 수동 링크 등록 금지, [아래 참조](#-수동-usb-링크는-1초-뒤-끊긴다) |
 | ~~C. 무선 모뎀 직결~~ | T900 Pro 등 텔레메트리 라디오 | 900MHz 등 | ❌ 미보유 — [미구매 항목](../../airframes/striver-mini-vtol/README.md#보유-사양-메모-shade-기체--pnp) |
 
-> 🔴 **경로 A는 지상 벤치 테스트/설정 전용이다.** Pi가 학내 WiFi(`eduroam`) 클라이언트라 기체가 WiFi 범위를 벗어나면 링크가 끊긴다. 실비행 텔레메트리로는 부적합.
+> 🔴 **경로 A는 지상 벤치 테스트/설정 전용이다.** Pi 가 WiFi 클라이언트라 기체가 WiFi 범위를 벗어나면 링크가 끊긴다. 실비행 텔레메트리로는 부적합.
 
 ### 전체 링크 구조
 
@@ -31,7 +31,7 @@
         │                                   mav_bridge.py
         └── USB-C ──┐                     (UDP :14550 브리지)
                     │                              │
-              (경로 B 폴백)          WiFi(eduroam) → 인터넷 → Tailscale
+              (경로 B 폴백)          WiFi → 인터넷 → Tailscale
                     │                              │
                     │                  ┌───────────┴───────────┐
                     ▼                  ▼                       ▼
@@ -158,24 +158,6 @@ journalctl -u mavlink-bridge.service -f | grep "GCS connected"
 
 `GCS connected: ('100.107.83.47', 14550)` 처럼 내 PC IP가 등록되면 명령 전송·파라미터 읽기/쓰기가 가능한 상태다.
 
-### ✅ 실측 검증 기록 (2026-08-11, `rim` PC — 당시 브리지는 `raspb2`)
-
-| 확인 항목 | 결과 |
-|---|---|
-| UDP 14550 수신 | ✅ 150패킷 / 17.4KB / 출처 `100.123.59.2` |
-| 수신 메시지 | ATTITUDE, HIGHRES_IMU, GPS_RAW_INT, ALTITUDE, VFR_HUD, SYS_STATUS, EXTENDED_SYS_STATE 등 |
-| 배터리 텔레메트리 | ✅ **22.88V (셀당 3.81V) / 잔량 48% / 0.17A** — PM08 CAN 센싱값 도달 |
-| QGC 자동 연결 | ✅ 링크 수동 설정 없이 UDP 14550 바인딩 후 자동 인식 |
-| 양방향 통신 | ✅ `GCS connected: ('100.107.83.47', 14550)` 등록 |
-| GCS 2대 동시 | ✅ `ku-dgs1` + `rim` 병행 동작, 상호 간섭 없음 |
-
-전 구간(PM08 → FC → Pi → QGC)이 실증된 상태다. 상세: [RPi 5 문서](../../components/companion/raspberry-pi-5/README.md#이전-구성-raspb2-2026-08-11)
-
-> 🔶 **위 기록은 브리지가 `raspb2` 에 있던 때의 것이다.** raspb2 는 **고장 확정(2026-08-30)** 이라
-> 되돌아가지 않는다. 같은 날 `raspb1` 로 옮겼고,
-> FC 결선·재부팅이 남아 있어 **같은 수준의 재검증은 아직이다.**
-
----
 
 ## 경로 B — USB 직결 (폴백 / 펌웨어 작업용)
 
@@ -228,7 +210,6 @@ QGC 접속이 성립한 뒤 진행할 기체 설정 항목과 참조 문서.
 | 채널 배정안 (ESC 5 + 서보 5) | Vehicle Setup → Actuators | [FC — 채널 배정안](../../components/fc/holybro-pixhawk-6c-mini/README.md#채널-배정안-px4-기준) |
 | ESC 캘리브레이션 | Vehicle Setup → Power (⚠️ **프로펠러 제거 필수**, 🔴 **USB 직결에서만 동작**) | [ESC 650 튜닝](../../components/esc/mfe-esc-650-50a/README.md#튜닝-프로세스-throttle-travel-tuning) |
 | 배터리 / 전원 파라미터 확인 | Vehicle Setup → Power / Parameters | [PM08-CAN](../../components/power/holybro-pm08-can/README.md) |
-| Telem2 시리얼 파라미터 확인 | Parameters → `SER_TEL2_BAUD`, `MAV_*_CONFIG`, `MAV_*_MODE` | [RPi 5 — 확인 필요](../../components/companion/raspberry-pi-5/README.md#-확인-필요) |
 | CAN 파라미터 확인 | Parameters → `UAVCAN_ENABLE`, `UAVCAN_SUB_BAT`, `BAT1_SOURCE` | [PM08-CAN](../../components/power/holybro-pm08-can/README.md) |
 | RC 수신기 설정 | Vehicle Setup → Radio | [RP4TD-M](../../components/receivers/radiomaster-rp4td-m/README.md) — ✅ Telem1 결선 완료. `RC_CRSF_PRT_CFG=101`, `COM_RC_IN_MODE` 확인 필수 |
 
@@ -352,7 +333,6 @@ FC까지의 CAN 센싱 문제일 가능성이 높다. [PM08-CAN 배선](../../co
   `ku-dgs1` 설치 형태는 확인됨 (2026-08-31): **AppImage** `~/Applications/QGroundControl.AppImage` (2026-07-24 내려받음, 180MB), 셸 런처 `~/.local/bin/qgroundcontrol`, 앱 메뉴 항목 `~/.local/share/applications/qgroundcontrol.desktop`, 바탕화면 아이콘 `~/Desktop/qgroundcontrol.desktop` (아이콘은 AppImage 에서 꺼내 `~/.local/share/icons/hicolor/128x128/apps/qgroundcontrol.png` 에 설치). AppImage 는 `--version` 을 지원하지 않아 버전 문자열은 QGC 실행 후 화면에서 확인해야 한다.
 - ⚠️ **커스텀 펌웨어로 인한 QGC 경고** — FC에 PX4 v1.17.0 커스텀 빌드(플래시 98.30%)가 올라가 있어, QGC가 표준 릴리스 기준으로 검사하며 **"파라미터 누락" 경고**를 띄울 수 있다. 경고 자체보다 실제 기능 오작동 여부로 판단할 것. ([상세](../../components/fc/holybro-pixhawk-6c-mini/README.md#-플래시-용량-9830의-부작용))
 - 🔴 **실비행 텔레메트리 경로 미확보** — 경로 A는 지상 전용. T900 Pro 등 [미구매 항목](../../airframes/striver-mini-vtol/README.md#보유-사양-메모-shade-기체--pnp).
-- ~~Telem2 포트 충돌 미해소~~ → **해소(2026-08-19)**: 수신기를 **Telem1(UART7)**에, Pi는 **Telem2(UART5)** 유지. 두 링크 공존하므로 이 문서의 포트 표기는 그대로 유효하다. ([포트 배정](../../components/fc/holybro-pixhawk-6c-mini/README.md#-uart-포트-배정--충돌-해소-2026-08-19))
 - **비행 중 링크 신뢰성 미검증** — 지상 테스트만 완료.
 
 ## 관련 문서
@@ -363,4 +343,4 @@ FC까지의 CAN 센싱 문제일 가능성이 높다. [PM08-CAN 배선](../../co
 | [Pixhawk 6C Mini](../../components/fc/holybro-pixhawk-6c-mini/README.md) | FC 포트/파라미터/Actuators 설정 |
 | [Striver Mini VTOL](../../airframes/striver-mini-vtol/README.md) | 기체 전체 구성 계통도 |
 | [PM08-CAN](../../components/power/holybro-pm08-can/README.md) | 배터리 텔레메트리 소스 |
-| [RadioMaster RP4TD-M](../../components/receivers/radiomaster-rp4td-m/README.md) | Telem2 포트 경합 상대 |
+| [RadioMaster RP4TD-M](../../components/receivers/radiomaster-rp4td-m/README.md) | TELEM1 의 RC 수신기 (MAVLink over ELRS) |
