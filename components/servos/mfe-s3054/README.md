@@ -29,7 +29,7 @@ Makeflyeasy(MFE)의 풀메탈 기어 디지털 서보. [Striver Mini VTOL](../..
 | 케이블 길이 | 25cm |
 | 무게 | 23g |
 
-> 🔶 **동작 주파수(refresh rate) 미기재** — 제조사 스펙시트에 PWM 갱신 주파수 항목이 없어 허용 상한을 알 수 없다. PX4 공식 문서는 *"Servos typically operate safely at lower PWM rates (50-100Hz)"* 로 안내하므로, [QGC Actuators 설정](../../fc/holybro-pixhawk-6c-mini/README.md#qgc-actuators-화면-설정)에서 이 서보가 속한 출력 그룹은 **50Hz로 운용**한다. 400Hz 적용 시 과열·소손 위험이 있으므로 실측 확인 전까지 올리지 말 것.
+> ⚠️ **동작 주파수(refresh rate) 미기재** — 제조사 스펙시트에 PWM 갱신 주파수 항목이 없어 허용 상한을 알 수 없다. 업계 자료는 **안전 범위를 40~200Hz** 로 보며, **400Hz 는 대부분의 서보를 손상시킨다**고 경고한다 ([근거](https://zbotic.in/servo-pwm-frequency-50hz-vs-333hz-vs-1khz-trade-offs-explained/), [ArduPilot 사례](https://discuss.ardupilot.org/t/tricopter-bicopter-with-400hz-pwm-frequency-on-servo-outputs/57500)). 333Hz 만 돼도 연속 운용에서 발열로 수명이 짧아진다. **실기는 2026-09-01 부터 100Hz** 로 운용한다 — 안전 범위 안이면서 50Hz 보다 응답이 2배 빠르다. 🔴 **2026-08-22 ~ 08-31 에는 400Hz 로 돌아갔다** (서보가 모터와 같은 PWM 타이머 그룹에 섞여 있어 분리가 불가능했다). 4회 세션에서 즉시 고장은 없었으나 그동안 수명이 소모됐을 수 있으므로 **에일러론 서보의 유격·발열을 주기적으로 확인**할 것. 그룹 분리 경위는 [6C Mini — PWM 타이머 그룹](../../fc/holybro-pixhawk-6c-mini/README.md#-pwm-타이머-그룹--서보모터를-섞지-마라).
 
 ## 성능 파라미터 (Performance parameter)
 
