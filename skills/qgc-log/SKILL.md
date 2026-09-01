@@ -44,6 +44,10 @@ qgclog 1 --dir ~/다른/Logs
 3. **`qgclog <N>` 결과를 그대로 보여주고**, 그 위에 해석을 붙인다.
    자동 판정은 임계값 기반이라 **맥락을 모른다** — 지상 테스트인지 실비행인지,
    의도한 기동인지 사고인지는 로그만으로 구분 못 한다. 그 판단을 네가 채워라.
+4. **비행시간이 조종자 기억보다 짧으면 파싱을 의심하라.** 이건 흔한 오해의
+   출발점이다 — "SD 카드가 손상됐다" 로 넘어가기 전에 [파싱 절](#-파싱--반드시-qgclog-를-거쳐라)을
+   먼저 확인한다. 파일 크기 대비 비행시간이 안 맞는 것이 신호다
+   (23MB 로그가 27초일 수는 없다).
 
 ## FC 에서 로그 받아오기
 
@@ -63,12 +67,72 @@ qgclog 1 --dir ~/다른/Logs
 
 `--dir` > `$QGC_LOG_DIR` > `~/QGroundControl/Logs` > `~/Documents/QGroundControl/Logs` > `./Logs` 순으로 찾는다.
 
+## 🔴 파싱 — 반드시 `qgclog` 를 거쳐라
+
+**`pyulog` 를 직접 부르지 마라.** 로그의 대부분을 조용히 잃는다.
+
+`pyulog` 의 읽기 루프는 메시지 종류마다 파서를 부르는데, 그 파서들이 `struct.unpack` 을
+길이 검사 없이 호출한다. **잘린 메시지 하나**를 만나면 `struct.error` 가 나고, 이 예외는
+루프 안쪽의 `except IndexError` 에 안 걸린 채 바깥의 `except struct.error: pass` 까지
+올라간다 — 거기서 **루프가 끝난다.** 파일에 데이터가 20MB 더 남아 있어도 버려진다.
+
+에러도 경고도 없다. **짧은 비행처럼 보일 뿐이다.**
+
+`qgclog.py` 의 `_patch_pyulog()` 가 이걸 막는다 (import 시 자동 적용).
+`_load()` 를 쓰면 구독 섹션이 통째로 없는 로그도 `_repair()` 로 복구한다.
+
+**실측 — `09_38_28.ulg` (23MB, 2026-09-01):**
+
+| | 읽은 지점 | DATA | 비행시간 |
+|---|---|---|---|
+| 순정 pyulog | 1.5 MB | 6.1% | **27초 (거짓)** |
+| `qgclog` | 22.97 MB (끝) | **100%** | **453초 (실제)** |
+
+7분 33초 비행이 27초로 보였다. 로그는 멀쩡했다.
+
+**전수 실측 (2026-08-31 자 21개):** 순정 pyulog 는 7개가 예외로 죽고 나머지도 값이
+축소됐다. `qgclog` 경로는 **실패 0개, DATA 99.36%** (805,765 → 800,602 포인트).
+15개는 100%. 남은 손실은 대부분 `09_12_51` 하나(20.4%, 구독 섹션 결손)다.
+
+### 직접 파싱해야 할 때 (커스텀 분석)
+
+리포트 밖의 값을 뽑아야 하면 **패치를 먼저 적용**한다:
+
+```python
+import sys; sys.path.insert(0, '<SHADE01>/tools/qgclog')
+import qgclog
+qgclog._patch_pyulog()          # ← 이 줄 없이는 데이터 대부분을 잃는다
+from pyulog import ULog
+ulog = ULog(path)
+
+# 또는 _repair 까지 포함한 완전한 경로
+ulog, repaired = qgclog._load(path)
+```
+
+> 🔴 **오래된 분석 문서를 의심하라.** 2026-09-01 이전에 쓰인 기록은 비행시간·고도·
+> 전류·소모량이 전부 축소돼 있을 수 있다. 파싱이 멈춘 지점까지만 본 값이다.
+> 결론을 인용하기 전에 **재분석하라.**
+
+원인·수정 상세: [PROCEDURE.md](../../PROCEDURE.md#분석기--잘린-메시지에서-멈추지-않는다-2026-09-01-수정)
+
 ## 의존성
 
 `pyulog`, `numpy`. 런처가 아래 순으로 인터프리터를 찾는다:
 `$QGCLOG_PYTHON` → `~/venv-ardupilot/bin/python` → `python3` → `python`.
 
-없으면: `python3 -m pip install pyulog numpy`
+**새 PC 설치** — Ubuntu 24.04 는 `pip` 가 없을 수 있다. 그러면 venv 를 부트스트랩한다
+(런처가 `~/venv-ardupilot` 을 먼저 찾으므로 이 이름을 쓴다):
+
+```bash
+python3 -m venv --without-pip ~/venv-ardupilot
+curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+~/venv-ardupilot/bin/python /tmp/get-pip.py -q
+~/venv-ardupilot/bin/pip install pyulog numpy
+rm -f /tmp/get-pip.py
+~/venv-ardupilot/bin/python -c "import pyulog, numpy; print('ok')"
+```
+
+`python3 -m pip install pyulog numpy` 가 되면 그걸 써도 된다.
 
 ## 자동 검출 항목
 
@@ -87,6 +151,13 @@ qgclog 1 --dir ~/다른/Logs
 **임계값은 기체마다 다르다.** SHADE 기준값이므로 다른 기체면 `qgclog.py` 상단 상수를 고친다.
 
 ## 해석 시 주의
+
+- 🔴 **비행시간·고도·소모량이 조종자 증언과 다르면 데이터를 의심하기 전에 파서를 의심하라.**
+  2026-09-01 이전에는 잘린 메시지 하나로 로그 대부분을 잃고 있었다.
+  파일 크기와 비행시간의 비율을 눈으로 대조하는 습관을 들여라.
+- **음수 고도는 대개 기준 프레임 문제다.** 로그의 `z` 는 EKF 원점(`ref_alt`) 기준이고,
+  미션은 홈(`home_position.alt`) 기준이다. 기압계가 오염돼 있으면 둘이 십수 미터 어긋난다.
+  GPS AMSL 과 대조해 판정하라 — 둘이 일치하면 EKF 는 정상이고 원점만 틀린 것이다.
 
 - **failsafe 플래그는 대부분 정상이다.** `auto_mission_missing`, `gcs_connection_lost`,
   `offboard_control_signal_lost` 는 미션 없이 수동 비행하면 항상 뜬다. 실제 failsafe 발동은
