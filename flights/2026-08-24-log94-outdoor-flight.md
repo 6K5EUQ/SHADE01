@@ -96,7 +96,7 @@ accel_vibration  평균 5.6  최대 10.6
 8/22 는 순간 피크였지만, **8/24 는 77초를 연속으로 정격 초과**했다.
 
 🔴 **XT90 커넥터 발열 확인이 필요하다.**
-[Holybro 정격](../components/power/holybro-pm08-can/README.md#️-전류-용량-주의)은 10AWG에서 연속 45A다.
+[Holybro 정격](../components/power/holybro-pm08-can/README.md#-전류-용량-주의)은 10AWG에서 연속 45A다.
 XT90-S는 프리차지 저항이 내장돼 일반 XT90보다 발열에 불리하다.
 
 > 평균 전류가 오른 데는 **M2 프로펠러 손상**도 기여했을 것이다(아래 참조).
@@ -199,7 +199,7 @@ GPS 품질이 나빠지는 상황에서 방위 오차로 이어진다.
 ```
 
 미해결. **고정익 전환 금지** 상태 유지.
-배관은 정상이므로 [영점 재보정만](../components/sensors/holybro-airspeed-dronecan/README.md#️-영점-오프셋-어긋남--미해결-2026-08-24) 하면 된다.
+배관은 정상이므로 [영점 재보정만](../components/sensors/holybro-airspeed-dronecan/README.md#-영점-오프셋-어긋남--미해결-2026-08-24) 하면 된다.
 
 ---
 

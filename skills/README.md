@@ -20,5 +20,5 @@ ln -sfn "$(pwd)/skills/qgc-log" ~/.claude/skills/qgc-log
 ## 왜 여기 있나
 
 `qgc-log` 의 판정 임계값(전류 45A, 진동 10/30 등)은 **이 기체에 묶여 있다**.
-45A 는 [PM08 의 XT90 병목](../components/power/holybro-pm08-can/README.md#️-전류-용량-주의)에서 온 값이고,
+45A 는 [PM08 의 XT90 병목](../components/power/holybro-pm08-can/README.md#-전류-용량-주의)에서 온 값이고,
 다른 기체에서는 틀린 값이다. 스킬과 기체 문서가 같이 움직여야 한다.

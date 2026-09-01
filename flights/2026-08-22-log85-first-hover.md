@@ -120,7 +120,7 @@ SENS_DPRES_OFF = -4.518 Pa   ← 보정값이 실제 오프셋보다 작다
 >70A:   4회, 누적 0.8초
 ```
 
-[PM08 문서](../components/power/holybro-pm08-can/README.md#️-전류-용량-주의)에 예측해둔
+[PM08 문서](../components/power/holybro-pm08-can/README.md#-전류-용량-주의)에 예측해둔
 **XT90 연속 45A 병목이 실측으로 확인**됐다. 비행 시간의 40%가 정격 초과 구간이다.
 
 다만 **최장 연속 초과가 2.4초**로 짧고, 78A도 순간값이다. 즉각 위험은 아니나

@@ -65,8 +65,8 @@ Holybro의 고전류 파워 분배 보드. 배터리 전원을 각 ESC(VTOL ×4,
 
 | 부품 | 전원 입력 끝단 | 출처 |
 |---|---|---|
-| VTOL ESC ×4 ([MFE ESC 650 50A](../../esc/mfe-esc-650-50a/README.md#커넥터--단자-구성)) | 16AWG, **OT2.5-4 링터미널** 압착 | 문서 기재 + [product-photos.webp](../../esc/mfe-esc-650-50a/images/product-photos.webp) 실물 사진에서 적색선 끝 링터미널 확인 |
-| 크루즈 ESC ×1 ([MFE ESC 6S 100A](../../esc/mfe-esc-6s-100a/README.md#커넥터--단자-구성)) | 12AWG, **OT2.5-4 링터미널** 압착 | 문서 기재 |
+| VTOL ESC ×4 ([MFE ESC 650 50A](../../esc/mfe-esc-650-50a/README.md#외형--단자-구성)) | 16AWG, **OT2.5-4 링터미널** 압착 | 문서 기재 + [product-photos.webp](../../esc/mfe-esc-650-50a/images/product-photos.webp) 실물 사진에서 적색선 끝 링터미널 확인 |
+| 크루즈 ESC ×1 ([MFE ESC 6S 100A](../../esc/mfe-esc-6s-100a/README.md#외형--단자-구성)) | 12AWG, **OT2.5-4 링터미널** 압착 | 문서 기재 |
 
 PDB의 스크류터미널은 **BAT-IN 입력 전용 1개소**라 ESC 5개를 여기에 물릴 수 없다.
 

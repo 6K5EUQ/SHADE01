@@ -87,7 +87,7 @@ PNP는 기체(플랫폼) + 파워 시스템(모터/ESC/프로펠러/서보)만 �
                           날개 내부 배선 ──► 로터암 ──► VTOL ESC ×4
 ```
 
-- **PM08은 배터리와 PDB 사이 직렬**로 들어간다. 배터리를 PDB에 직결하면 전류 측정이 되지 않는다. 상세: [PM08-CAN 전력 경로](../../components/power/holybro-pm08-can/README.md#전력-경로-inline-passthrough)
+- **PM08은 배터리와 PDB 사이 직렬**로 들어간다. 배터리를 PDB에 직결하면 전류 측정이 되지 않는다. 상세: [PM08-CAN 전력 경로](../../components/power/holybro-pm08-can/README.md#전력-경로-in-line-passthrough)
 - 시스템 연속 전류 상한은 PM08의 **200A** (PDB는 300A이나 직렬 경로상 PM08이 병목)
 - 커넥터 정격 주의 — XT90은 연속 45A. 주 간선(배터리→PM08→PDB)은 링터미널+8AWG 이상 권장
 - ⚠️ **PM08↔FC 연결에 분기 케이블 필요** — PM08은 전원+CAN 통합 6핀(Molex 2.0mm), 6C Mini는 CAN1 4핀 + Power1 6핀(JST-GH 1.25mm)으로 분리 수용. 상세: [PM08-CAN FC 연결](../../components/power/holybro-pm08-can/README.md#fc-연결-pixhawk-6c-mini)

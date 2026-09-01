@@ -273,7 +273,7 @@ PX4 v1.13+ 는 QGC **Vehicle Setup → Actuators** 화면에서 채널을 배정
 - **MAIN 레일과 AUX 레일의 기판 내부 공통 여부 미검증** — UBEC 출력 2가닥을 양쪽에 하나씩 꽂아 회피 가능하나, 테스터 도통 확인이 확실.
 - **신호선 길이** — FC 캐빈에서 꼬리 커넥터까지 50~70cm 추정. ESC/서보 기본 신호선(20~30cm)으로는 부족하므로 연장 케이블 다수 필요.
 - **동체측 기존 배선 상태 확인** — PNP 기체이므로 날개/꼬리 커넥터 안쪽에서 서보 3핀 커넥터가 FC 캐빈까지 이미 나와 있을 가능성이 높음([기체 PDF p.13 FC 캐빈 사진](../../../airframes/striver-mini-vtol/images/10-flight-control-cabin.png)의 서보 케이블 다발). 나와 있다면 FC 헤더에 꽂기만 하면 되고, 없다면 D-sub 핀 직접 결선 필요.
-- 원문 PDF 기반 [Striver 배선 다이어그램](../../../airframes/striver-mini-vtol/README.md#4-1-모드-배선-다이어그램-요약-참고용--pixsurvey-v3-fc-기준-pnp에는-fc-미포함)은 **Pixsurvey V3** FC 기준이므로 채널 배치(A1~A5, M1~M8)가 그대로 적용되지 않음. 위 [채널 배정안](#채널-배정안-px4-기준) 참조.
+- 원문 PDF 기반 [Striver 배선 다이어그램](../../../airframes/striver-mini-vtol/README.md#41-모드-배선-다이어그램-요약-참고용--pixsurvey-v3-fc-기준-pnp에는-fc-미포함)은 **Pixsurvey V3** FC 기준이므로 채널 배치(A1~A5, M1~M8)가 그대로 적용되지 않음. 위 [채널 배정안](#채널-배정안-px4-기준) 참조.
 - 실제 장착 모델(A 레거시/A 현재/B) 확인 필요 — 치수/무게가 모델별로 다름. 위 도면 3종과 대조.
 
 ## 보유 수량 (SHADE 기체)

@@ -8,7 +8,7 @@ Holybro의 DroneCAN 파워모듈. 배터리 전압/전류를 센싱해 CAN 버�
 - 제품 페이지: https://holybro.com/products/dronecan-pm08-power-module-14s-200a
 - 용도: 배터리 전압/전류 센싱(DroneCAN) + FC 전원 공급
 - ⚠️ **본 기체에서는 FC 전원 이중화 불가** — [Pixhawk 6C Mini](../../fc/holybro-pixhawk-6c-mini/README.md)에 Power2 포트가 없음. 자세한 내용은 [FC 연결](#fc-연결-pixhawk-6c-mini) 참조
-- **배선 위치: 배터리와 부하 사이 직렬(in-line)** — 자세한 내용은 [전력 경로](#전력-경로-inline-passthrough) 참조
+- **배선 위치: 배터리와 부하 사이 직렬(in-line)** — 자세한 내용은 [전력 경로](#전력-경로-in-line-passthrough) 참조
 - 작성 근거: 제품 페이지 스크린샷(PDF)이 없어 Holybro 공식 문서 MCP(`askQuestion`)로 조회한 텍스트 답변을 기반으로 작성함 (PDB 300A 문서는 실제 스크린샷 대조, 본 문서는 스크린샷 미확보 — 스펙 자체는 공식 문서 근거이나 이미지로 직접 검증하지는 못함). 전력 경로 구조는 Holybro 제품 페이지의 "Battery IN/OUT Options" 표기로 확인(2026-08-03).
 
 ## 사양
@@ -227,15 +227,15 @@ Striver 기체의 [배전 캐빈 사양](../../../airframes/striver-mini-vtol/RE
 
 [Holybro PDB 300A Side Entry](../holybro-pdb-300a-side-entry/README.md) 제품 페이지에 **"PM08 시리즈 파워모듈과 호환(compatible with PM08 series power modules)"**이라고 명시되어 있어 두 부품의 조합 사용이 공식 확인됨.
 
-배선 순서는 **배터리 → PM08(BAT IN → BAT OUT) → PDB BAT-IN 스크류터미널 → 각 ESC**. PM08이 직렬로 들어가므로 PDB는 PM08의 OUT 쪽에 위치한다 ([전력 경로](#전력-경로-inline-passthrough) 참조).
+배선 순서는 **배터리 → PM08(BAT IN → BAT OUT) → PDB BAT-IN 스크류터미널 → 각 ESC**. PM08이 직렬로 들어가므로 PDB는 PM08의 OUT 쪽에 위치한다 ([전력 경로](#전력-경로-in-line-passthrough) 참조).
 
 ## 🔶 확인 필요
 
 - ~~PM08과 PDB 300A 간 정확한 배선 순서~~ → **해소(2026-08-03)**: 제품 페이지 "Battery IN/OUT Options" 표기로 직렬(in-line) 구조 확인
 - ~~Pixhawk 6C Mini와의 호환 여부~~ → **해소(2026-08-03)**: 공식 문서상 CAN 버스 보유 Pixhawk 표준 FC에 적용 가능, 6C Mini는 CAN1/CAN2 보유 → 호환. 단 [분기 케이블 필요 + 이중화 불가](#fc-연결-pixhawk-6c-mini)
-- ~~보유 개체의 실제 IN/OUT 커넥터 옵션~~ → **해소(2026-08-04)**: 실물 사진으로 **XT90(BAT IN) + 링터미널(BAT OUT)** 사양 확인. BAT OUT→PDB는 병목 없으나, **배터리→PM08 XT90 구간이 45A 병목으로 남음** ([전류 용량 주의](#️-전류-용량-주의) 2항)
+- ~~보유 개체의 실제 IN/OUT 커넥터 옵션~~ → **해소(2026-08-04)**: 실물 사진으로 **XT90(BAT IN) + 링터미널(BAT OUT)** 사양 확인. BAT OUT→PDB는 병목 없으나, **배터리→PM08 XT90 구간이 45A 병목으로 남음** ([전류 용량 주의](#-전류-용량-주의) 2항)
 - ~~PM08 6핀 커넥터의 핀 배열 미확보~~ → **해소(2026-08-08)**: 제품 페이지 Pinout 도해로 `5V / 5V / CAN-H / CAN-L / GND / GND` 확정. [결선표](#pm08-power1--power2-6핀-배열---확정) 참조
-- ~~배터리 ↔ PM08 BAT IN 암수 대조~~ → **해소(2026-08-08)**: 제품 사진 판독으로 **배터리 XT90-S = 수(male), PM08 BAT IN = 암(female)** 확인 → 변환 없이 체결 가능. XT90 계열 관행에 맞는 정상 방향이며, XT90-S의 프리차지 저항은 수 커넥터 측 내장이라 일반 XT90 암과 물려도 스파크 방지 정상 작동. **단 전류 병목(연속 45A)은 그대로 남음** ([전류 용량 주의](#️-전류-용량-주의) 2항)
+- ~~배터리 ↔ PM08 BAT IN 암수 대조~~ → **해소(2026-08-08)**: 제품 사진 판독으로 **배터리 XT90-S = 수(male), PM08 BAT IN = 암(female)** 확인 → 변환 없이 체결 가능. XT90 계열 관행에 맞는 정상 방향이며, XT90-S의 프리차지 저항은 수 커넥터 측 내장이라 일반 XT90 암과 물려도 스파크 방지 정상 작동. **단 전류 병목(연속 45A)은 그대로 남음** ([전류 용량 주의](#-전류-용량-주의) 2항)
 - ~~분기 케이블 미동봉 — 자작/별도 구매 필요~~ → **정정 및 해소(2026-08-11)**: **분기 케이블은 동봉품이었다.** 제품 사진에 6핀→(6핀+4핀) Y자 분기 케이블 2개가 확인됨([동봉 케이블 구성](#동봉-케이블-구성)). 이전 "미동봉" 기재는 제품 사진 미확보 상태에서 스펙표의 "Include Cable" 문구만으로 추정한 오류. 실제로 이 동봉 케이블로 결선 완료 및 작동 확인
   - 참고: 제품 페이지 "You may also like"에 [CAN Hub $27.59](https://holybro.com/products/can-hub) 노출 — CAN 노드가 늘어날 때 배선 정리용으로 검토 가능
 - ~~Power1의 CURRENT1/VOLTAGE1 미결선 상태로 CAN 센싱만 동작하는지 실물 검증~~ → **해소(2026-08-11)**: 두 핀을 비운 채 CAN 센싱만으로 **QGC에 22.88V / 48% / 0.17A 정상 표시** 확인. 아날로그 센싱 핀 없이 동작함이 실증됨
