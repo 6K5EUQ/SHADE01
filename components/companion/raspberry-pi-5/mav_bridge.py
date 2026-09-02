@@ -31,6 +31,19 @@ SERIAL_PORT = os.environ.get("MAV_SERIAL", "/dev/ttyACM0")
 BAUD = int(os.environ.get("MAV_BAUD", "921600"))
 UDP_PORT = int(os.environ.get("MAV_UDP_PORT", "14550"))
 
+# 어느 주소에 바인딩할지. 비워두면 Tailscale 주소를 찾아 거기에만 연다.
+# 0.0.0.0 을 명시하면 모든 인터페이스에 열린다 — 공인 IP 가 있는 PC 에서는 위험하다.
+BIND_ADDR = os.environ.get("MAV_BIND", "")
+
+# 이 IP 들에서 온 UDP 만 FC 로 흘린다. 고정 대상 + 로컬 + 자기 자신은 자동 포함.
+# 쉼표로 더 추가할 수 있다.  MAV_ALLOW_ANY=1 이면 검사를 끈다 (권장하지 않음).
+ALLOW_EXTRA = [x.strip() for x in os.environ.get("MAV_ALLOW", "").split(",") if x.strip()]
+ALLOW_ANY = os.environ.get("MAV_ALLOW_ANY", "") == "1"
+
+# Tailscale 이 쓰는 CGNAT 대역 100.64.0.0/10.
+TAILSCALE_NET = (100 << 24) | (64 << 16)
+TAILSCALE_MASK = 0xFFC00000
+
 # 이 시간 동안 아무 것도 안 보낸 GCS 는 목록에서 뺀다. 고정 대상은 영향 없다.
 PEER_TIMEOUT = 30.0
 
@@ -53,6 +66,51 @@ def parse_target(s):
     return (s, UDP_PORT)
 
 
+def ip_to_int(ip):
+    try:
+        a, b, c, d = (int(x) for x in ip.split("."))
+    except ValueError:
+        return None
+    return (a << 24) | (b << 16) | (c << 8) | d
+
+
+def is_tailscale(ip):
+    v = ip_to_int(ip)
+    return v is not None and (v & TAILSCALE_MASK) == TAILSCALE_NET
+
+
+def local_addr_for(target_ip):
+    """target 으로 나갈 때 커널이 고를 로컬 주소. 패킷은 보내지 않는다."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect((target_ip, 9))
+        return s.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        s.close()
+
+
+def pick_bind_addr(fixed):
+    """바인딩할 주소를 고른다. Tailscale 주소가 있으면 거기에만 연다."""
+    if BIND_ADDR:
+        return BIND_ADDR, "MAV_BIND 지정"
+
+    # 고정 대상 중 Tailscale 주소로 나가는 경로의 로컬 주소를 쓴다.
+    for host, _ in fixed:
+        if is_tailscale(host):
+            local = local_addr_for(host)
+            if local and is_tailscale(local):
+                return local, "Tailscale 자동탐지"
+
+    # 고정 대상이 없으면 Tailscale 의 MagicDNS 주소로 경로를 물어본다.
+    local = local_addr_for("100.100.100.100")
+    if local and is_tailscale(local):
+        return local, "Tailscale 자동탐지"
+
+    return "0.0.0.0", "Tailscale 주소를 못 찾음"
+
+
 def open_serial():
     """시리얼을 연다. 실패하면 None — 호출자가 재시도한다."""
     try:
@@ -65,16 +123,38 @@ def open_serial():
 def main():
     fixed = [parse_target(a) for a in sys.argv[1:]]
 
+    bind_addr, why = pick_bind_addr(fixed)
+
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(("0.0.0.0", UDP_PORT))
+    sock.bind((bind_addr, UDP_PORT))
     sock.setblocking(False)
 
-    log("mav_bridge: serial=%s baud=%d udp=:%d" % (SERIAL_PORT, BAUD, UDP_PORT))
+    # 받은 UDP 를 FC 로 흘려보낼 IP. 여기 없는 곳에서 온 것은 버린다.
+    allowed = set(ALLOW_EXTRA)
+    allowed.update(host for host, _ in fixed)
+    allowed.update(("127.0.0.1", bind_addr))
+    allowed.discard("0.0.0.0")
+
+    log("mav_bridge: serial=%s baud=%d udp=%s:%d (%s)"
+        % (SERIAL_PORT, BAUD, bind_addr, UDP_PORT, why))
     if fixed:
         log("mav_bridge: fixed targets: " + ", ".join("%s:%d" % t for t in fixed))
     else:
         log("mav_bridge: no fixed targets - waiting for a GCS to speak first")
+
+    if ALLOW_ANY:
+        log("mav_bridge: ⚠️  MAV_ALLOW_ANY=1 - 송신자 검사를 하지 않는다")
+    else:
+        log("mav_bridge: 허용 송신자: " + ", ".join(sorted(allowed)))
+
+    if bind_addr == "0.0.0.0":
+        log("mav_bridge: ⚠️  모든 인터페이스에 열렸다. 이 호스트에 공인 IP 가 있으면")
+        log("mav_bridge: ⚠️  인터넷에서 FC 로 MAVLink 를 주입할 수 있다.")
+        log("mav_bridge: ⚠️  MAV_BIND=<tailscale 주소> 로 좁혀라.")
+
+    # 이미 거절을 알린 송신자. 로그가 넘치지 않게 IP 당 한 번만 찍는다.
+    refused = set()
 
     # 최근에 패킷을 보내온 GCS. {(ip, port): 마지막 수신 시각}
     peers = {}
@@ -157,6 +237,11 @@ def main():
                     break
                 if not data:
                     break
+                if not ALLOW_ANY and addr[0] not in allowed:
+                    if addr[0] not in refused:
+                        refused.add(addr[0])
+                        log("mav_bridge: 거절 %s - 허용 목록에 없다 (FC 로 안 보냄)" % (addr[0],))
+                    continue
                 if addr not in peers:
                     log("GCS connected: %s" % (addr,))
                 peers[addr] = now
