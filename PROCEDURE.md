@@ -53,6 +53,26 @@ scp 'raspb1@100.126.161.1:/tmp/fclogs/*.ulg' logs/2026-08-31/
 
 ## 2. 분석
 
+### 2-0. 분석 PC 준비 (새 PC 최초 1회)
+
+`./qgc` 는 `pyulog` + `numpy` 가 있는 인터프리터를 찾는다. 없으면
+**"pyulog/numpy 를 가진 python 을 못 찾았다"** 로 멈춘다. 런처가 기본으로 보는 경로가
+`~/venv-ardupilot` 이므로 거기에 만든다.
+
+⚠️ Ubuntu 기본 python 은 `ensurepip` 가 빠져 있어 `python3 -m venv` 가 pip 없이 끝난다.
+raspb1 과 **같은 우회**를 쓴다:
+
+```bash
+python3 -m venv --without-pip ~/venv-ardupilot
+curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+~/venv-ardupilot/bin/python /tmp/get-pip.py -q
+rm -f /tmp/get-pip.py
+~/venv-ardupilot/bin/pip install pyulog numpy pymavlink pyserial
+```
+
+확인: `./qgc log list` 가 표를 뿌리면 된다.
+다른 경로에 있으면 `QGCLOG_PYTHON=/path/to/python` 으로 지정한다.
+
 ```bash
 ./qgc log list                                  # 번호로 나열
 ./qgc log 1                                     # 번호로 분석
