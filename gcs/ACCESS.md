@@ -44,6 +44,39 @@ ssh rim3@100.117.47.105 'cd ~/SHADE01 && git pull && ./qgc log list'
 ⚠️ **로그는 PC 마다 다르다.** 각자 자기 `~/QGroundControl/Logs` 만 본다 — 공유 저장소가
 아니다. 어느 PC 에 어느 비행이 있는지는 `./qgc log list` 로 확인한다.
 
+## 🔴 ku 는 인터넷이 없다
+
+`ku` 는 **Tailscale 만** 붙어 있고 DNS 부터 안 된다. `git pull` 도 `pip install` 도
+`Could not resolve host` 로 죽는다. 아래처럼 **gram 을 경유**한다.
+
+### git — Tailscale 로 직접 밀어넣기
+
+```bash
+git push ssh://ku@100.99.120.110/home/ku/QGroundControl/SHADE01 main:refs/heads/from-gram
+ssh ku@100.99.120.110 'cd ~/QGroundControl/SHADE01 && git merge --ff-only from-gram && git branch -d from-gram'
+```
+
+⚠️ 체크아웃된 브랜치(`main`)로 직접 push 하면 거부된다. 임시 브랜치로 받아 병합한다.
+
+### pip — 휠을 미리 받아 옮기기
+
+`ku` 도 Python **3.12.3** 이라 gram 에서 받은 `cp312` 휠이 그대로 맞는다.
+
+```bash
+# gram 에서
+.venv/bin/pip download -d /tmp/wheels pyulog numpy pymavlink pyserial
+scp /tmp/wheels/*.whl ku@100.99.120.110:/tmp/shade-wheels/
+
+# ku 에서 — 새 venv 는 pip 이 없으므로 기존 venv 의 pip 을 빌려 쓴다
+cd ~/QGroundControl/SHADE01
+python3 -m venv --without-pip .venv
+~/venv-ardupilot/bin/python -m pip --python .venv/bin/python install \
+  --no-index --find-links /tmp/shade-wheels pyulog numpy pymavlink pyserial
+```
+
+⚠️ `--python` 은 **`install` 앞에** 와야 한다. 뒤에 두면
+`The --python option must be placed before the pip subcommand name` 로 죽는다.
+
 ## 파일 주고받기
 
 ```bash
