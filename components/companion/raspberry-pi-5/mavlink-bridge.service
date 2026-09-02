@@ -8,7 +8,7 @@ Wants=network-online.target
 Environment=MAV_SERIAL=/dev/ttyACM0
 Type=simple
 User=raspb1
-ExecStart=/usr/bin/python3 /home/raspb1/mav_bridge.py 100.99.120.110:14550 100.107.83.47:14550 100.105.212.78:14550 100.66.204.25:14550
+ExecStart=/usr/bin/python3 /home/raspb1/mav_bridge.py 100.99.120.110:14550 100.107.83.47:14550 100.117.47.105:14550 100.66.204.25:14550
 Restart=always
 RestartSec=3
 

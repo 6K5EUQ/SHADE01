@@ -64,7 +64,7 @@ QGC 가 잡고 있으면 종료한다. ⚠️ **사용자가 보고 있는 창�
 ### 4. 원격 PC 라면 회수
 
 ```bash
-scp -o BatchMode=yes 'rim3@100.105.212.78:/tmp/fclogs/*.ulg' ~/QGroundControl/Logs/
+scp -o BatchMode=yes 'rim3@100.117.47.105:/tmp/fclogs/*.ulg' ~/QGroundControl/Logs/
 ```
 
 ⚠️ rim3 는 Tailscale relay 경유라 RTT 가 수백 ms~1.6초다.

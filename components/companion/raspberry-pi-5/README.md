@@ -47,7 +47,7 @@ UART 경로를 포기하고, FC 의 USB-C 를 Pi 5 의 USB-A 포트에 직접 �
 
 ```
 mav_bridge: serial=/dev/ttyACM0 baud=921600 udp=:14550
-mav_bridge: fixed targets: 100.99.120.110:14550, 100.107.83.47:14550, 100.105.212.78:14550, 100.66.204.25:14550
+mav_bridge: fixed targets: 100.99.120.110:14550, 100.107.83.47:14550, 100.117.47.105:14550, 100.66.204.25:14550
 mav_bridge: serial opened: /dev/ttyACM0 @ 921600
 ```
 
@@ -89,14 +89,14 @@ Pi 5 는 피크 5A 급). Pi 쪽은 `/boot/firmware/config.txt` 에 `dtoverlay=ua
 | systemd 유닛 | `/etc/systemd/system/mavlink-bridge.service` (정본: [mavlink-bridge.service](mavlink-bridge.service)) |
 | 시리얼 | **`/dev/ttyACM0`** @ 921600 — FC USB 직결 (2026-08-31 전환). 유닛의 `Environment=MAV_SERIAL` 로 지정. 구 경로 `/dev/ttyAMA0`(TELEM2 UART)는 폐기 |
 | UDP 리슨 | `0.0.0.0:14550` (환경변수 `MAV_UDP_PORT`) |
-| 고정 송신 대상 | `100.99.120.110:14550` (**`ku-dgs1`**) + `100.107.83.47:14550` (**`rim`**) + `100.105.212.78:14550` (**`rim3`**) + `100.66.204.25:14550` (**`gram-labtop`**, 2026-08-31 추가) — 유닛의 ExecStart 인자 |
+| 고정 송신 대상 | `100.99.120.110:14550` (**`ku-dgs1`**) + `100.107.83.47:14550` (**`rim`**) + `100.117.47.105:14550` (**`rim3`**) + `100.66.204.25:14550` (**`gram-labtop`**, 2026-08-31 추가) — 유닛의 ExecStart 인자 |
 | 자동 시작 | `enabled` (부팅 시 기동) |
 | 재시작 정책 | `Restart=always`, `RestartSec=3` |
 
 현재 ExecStart 행:
 
 ```ini
-ExecStart=/usr/bin/python3 /home/raspb1/mav_bridge.py 100.99.120.110:14550 100.107.83.47:14550 100.105.212.78:14550 100.66.204.25:14550
+ExecStart=/usr/bin/python3 /home/raspb1/mav_bridge.py 100.99.120.110:14550 100.107.83.47:14550 100.117.47.105:14550 100.66.204.25:14550
 ```
 
 동작 방식:
@@ -184,7 +184,7 @@ QGC가 UDP 14550을 바인딩하면 **링크 수동 추가 없이** 기체가 �
                                                   │
                           ┌───────────────────────┼───────────────────────┐
                           ▼                       ▼                       ▼
-              [ku-dgs1 100.99.120.110]  [rim 100.107.83.47]   [rim3 100.105.212.78]
+              [ku-dgs1 100.99.120.110]  [rim 100.107.83.47]   [rim3 100.117.47.105]
                   QGroundControl            QGroundControl        QGroundControl
                                     + [gram-labtop 100.66.204.25]
 ```
