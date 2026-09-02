@@ -129,7 +129,7 @@ Telem2를 두고 Pi 5와 RC 수신기가 경합하던 문제는 **수신기를 T
 | 포트 | UART | 사용처 | 파라미터 | 상태 |
 |---|---|---|---|---|
 | **Telem1** | UART7 | [RP4TD-M 수신기](../../receivers/radiomaster-rp4td-m/README.md) (CRSF) | `RC_CRSF_PRT_CFG=101` | ✅ 결선·바인딩 완료 |
-| **Telem2** | UART5 | ~~[Raspberry Pi 5](../../companion/raspberry-pi-5/README.md) (MAVLink 브리지)~~ → **비어 있음** | `MAV_1_CONFIG=102` @921600 → **`0` 권장** | ⛔ **폐기 (2026-08-31)** — 케이블 FC측 커넥터 단락. Pi 는 USB 로 이설 |
+| **Telem2** | UART5 | ~~[Raspberry Pi 5](../../companion/raspberry-pi-5/README.md) (MAVLink 브리지)~~ → **비어 있음** | ~~`MAV_1_CONFIG=102`~~ → **`0` (2026-09-02 적용)** | ⛔ **폐기 (2026-08-31)** — 케이블 FC측 커넥터 단락. Pi 는 USB 로 이설 |
 
 - 두 링크는 **서로 다른 UART이므로 공존**한다. 수신기 설정 시 Telem2의 MAVLink 매핑을 제거할 필요가 없다.
 - ⚠️ T900 Pro 등 지상국 텔레메트리 무선모듈을 추가하려면 **남은 UART가 GPS2(UART8)뿐**이다. 도입 시 포트 재배치 검토 필요.

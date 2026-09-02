@@ -59,7 +59,7 @@ mav_bridge: serial opened: /dev/ttyACM0 @ 921600
   비행 중 빠지면 링크가 통째로 죽는다.
 - ⚠️ **FC 를 USB 로만 급전하지 말 것** — 메인 배터리 없이 USB 만으로 켜면 서보·ESC 계통이
   죽은 채로 부팅된다. 진단용으로만.
-- `MAV_1_CONFIG`(TELEM2) 는 이제 쓰이지 않는다. 죽은 포트에 계속 쏘느라 FC CPU 7.4% 를
+- `MAV_1_CONFIG`(TELEM2) 는 이제 쓰이지 않는다. **2026-09-02 에 `0` 으로 내렸다.** 그전에는 죽은 포트에 계속 쏘느라 FC CPU 7.4% 를
   태우므로 **`MAV_1_CONFIG=0` 으로 꺼두는 것을 권장**한다 (미적용 시 낭비만 발생, 기능 영향 없음).
 
 ## ⛔ 폐기된 경로 — TELEM2 GPIO UART
@@ -204,12 +204,12 @@ QGC가 UDP 14550을 바인딩하면 **링크 수동 추가 없이** 기체가 �
 | 포트 | 쓰임 | 파라미터 |
 |---|---|---|
 | TELEM1 (UART7) | [RadioMaster RP4TD-M](../../receivers/radiomaster-rp4td-m/README.md) — MAVLink over ELRS | `MAV_0_CONFIG=101` @460800 |
-| TELEM2 (UART5) | ⛔ **폐기** — 케이블 단락으로 사망 | `MAV_1_CONFIG=102` (아직 켜져 있다, 아래 참조) |
+| TELEM2 (UART5) | ⛔ **폐기** — 케이블 단락으로 사망 | `MAV_1_CONFIG=0` (2026-09-02 에 102 → 0) |
 | GPS1 | [M10N](../../gps/holybro-m10n/README.md) | `GPS_1_CONFIG=201` |
 | GPS2 (UART8) | 비어 있음 | — |
 
 - Pi 는 UART 를 쓰지 않는다. **USB(`/dev/ttyACM0`)로 붙는다.**
-- 🟡 **`MAV_1_CONFIG` 가 아직 `102`(TELEM2)다** — 2026-09-01 FC 실측. 죽은 포트에 계속
+- ✅ **`MAV_1_CONFIG` 는 `0` 이다** (2026-09-02 적용). 그전까지는 `102`(TELEM2) 였고 죽은 포트에 계속
   송신하느라 FC CPU 7.4% 를 태운다. `0` 으로 꺼두는 것이 맞다. (기능 영향은 없다.)
 - 이 보드의 UART 는 셋뿐이다. 지상국 무선모듈(T900 Pro 등)을 넣으려면 GPS2 를 쓰거나
   포트를 재배치해야 한다.
@@ -305,7 +305,7 @@ Environment=MAV_SERIAL=/dev/ttyACM0
 - FC USB 포트를 Pi 가 점유하므로 **노트북 USB 직결(경로 B)과 동시 사용 불가.**
   펌웨어 플래싱·ESC 캘리브레이션을 하려면 Pi 쪽 USB 를 뽑아야 한다.
 - USB 커넥터는 JST-GH 보다 진동에 약하다. **비행 전 케이블 타이로 고정할 것.**
-- 🟡 `MAV_1_CONFIG` 는 **아직 `102` 다** (2026-09-01 FC 실측). 죽은 TELEM2 에 22kB/s 를
+- ✅ `MAV_1_CONFIG` 는 **`0` 이다** (2026-09-02 적용). 그전에는 `102` 로 죽은 TELEM2 에 22kB/s 를
   쏘며 자기 에코를 파싱하느라 FC CPU 를 **7.4% 태운다** (`mavlink_if1` 4.27% + `mavlink_rcv_if1` 3.18%,
   비교: 실제 ELRS 링크 수신 `mavlink_rcv_if0` 는 0.625%). **`0` 으로 꺼두는 것이 맞다.**
 - `SER_TEL2_BAUD` 는 921600 으로 원복해 두었다 (수신기 테스트로 460800 에 두었던 것).
@@ -347,7 +347,7 @@ QGC 없이 MAVLink SERIAL_CONTROL(msgid 126) 로 PX4 NSH 셸을 여는 스크립
 
 ## 🔶 확인 필요
 
-- 🟡 **`MAV_1_CONFIG` 가 아직 `102`** (2026-09-01 FC 실측) — 죽은 TELEM2 에 송신하며
+- ✅ **`MAV_1_CONFIG` = `0`** (2026-09-02 적용). 그전에는 `102` 로 죽은 TELEM2 에 송신하며
   FC CPU 7.4% 낭비. `0` 으로 꺼두는 것이 맞다. 기능 영향은 없다.
 - **USB 링크의 MAVLink 스트림 모드 미확정** — USB 는 `MAV_x_CONFIG` 없이도 기본 인스턴스가
   뜬다. `Normal` 인지 `Onboard` 인지는 QGC 파라미터 화면에서 확정할 것.

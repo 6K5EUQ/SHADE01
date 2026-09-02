@@ -76,7 +76,7 @@ make holybro_6c-mini_default upload
 | `RC_CRSF_PRT_CFG` | **101 (Telem1)** | CRSF를 쓸 UART 지정 |
 | `RC_CRSF_TEL_EN` | Enabled | 텔레메트리 활성화 |
 
-- ✅ **Telem2 충돌 해소** — 수신기를 Telem1에 두어 Pi 5의 Telem2 MAVLink 매핑(`MAV_1_CONFIG=102`)을 **건드리지 않는다.** 두 링크가 공존한다.
+- ✅ **Telem2 충돌 해소** — 수신기를 Telem1에 두어 Pi 5의 Telem2 MAVLink 매핑(당시 `MAV_1_CONFIG=102`, 2026-09-02 에 `0` 으로 내림)을 **건드리지 않는다.** 두 링크가 공존한다.
 - ⚠️ `RC_CRSF_PRT_CFG = 0`(미할당)이면 **FC가 해당 UART를 열지 않아 스틱 입력이 전혀 들어오지 않는다.** 배선을 마쳤는데 RC가 안 잡히면 이 값부터 확인할 것.
 - ⚠️ **`COM_RC_IN_MODE` 확인 필수** — 이 값이 `1`이면 *Joystick only* 모드라 **RC 입력을 통째로 무시**한다. 스틱을 움직여도 제어면이 반응하지 않는 직접적 원인이 된다. QGC가 이 파라미터를 `1065353216`처럼 표시하는 경우가 있는데, 이는 float `1.0`의 비트 패턴을 정수로 잘못 읽은 것으로 **실제 값은 `1`**이다.
 - 빌드 타깃명(`holybro_6c-mini_default`)은 PX4 버전에 따라 다를 수 있으므로 `make list_config_targets`로 확인할 것.
