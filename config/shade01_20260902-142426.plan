@@ -1,0 +1,156 @@
+{
+    "fileType": "Plan",
+    "version": 1,
+    "groundStation": "QGroundControl",
+    "geoFence": {
+        "circles": [],
+        "polygons": [
+            {
+                "inclusion": true,
+                "polygon": [
+                    [
+                        35.1813273,
+                        128.5535243
+                    ],
+                    [
+                        35.1812423,
+                        128.5542367
+                    ],
+                    [
+                        35.1802373,
+                        128.5540374
+                    ],
+                    [
+                        35.180346,
+                        128.5534639
+                    ],
+                    [
+                        35.180524,
+                        128.5533912
+                    ],
+                    [
+                        35.1810344,
+                        128.5534745
+                    ]
+                ],
+                "version": 1
+            }
+        ],
+        "version": 2
+    },
+    "mission": {
+        "cruiseSpeed": 15,
+        "firmwareType": 12,
+        "globalPlanAltitudeMode": 1,
+        "hoverSpeed": 5,
+        "items": [
+            {
+                "autoContinue": true,
+                "command": 84,
+                "doJumpId": 1,
+                "frame": 6,
+                "params": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    null,
+                    35.1810871,
+                    128.5538216,
+                    5.0
+                ],
+                "type": "SimpleItem"
+            },
+            {
+                "autoContinue": true,
+                "command": 16,
+                "doJumpId": 2,
+                "frame": 6,
+                "params": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    null,
+                    35.1809392,
+                    128.5539346,
+                    5.0
+                ],
+                "type": "SimpleItem"
+            },
+            {
+                "autoContinue": true,
+                "command": 16,
+                "doJumpId": 3,
+                "frame": 6,
+                "params": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    null,
+                    35.1805049,
+                    128.5538287,
+                    5.0
+                ],
+                "type": "SimpleItem"
+            },
+            {
+                "autoContinue": true,
+                "command": 16,
+                "doJumpId": 4,
+                "frame": 6,
+                "params": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    null,
+                    35.1805582,
+                    128.5535262,
+                    5.0
+                ],
+                "type": "SimpleItem"
+            },
+            {
+                "autoContinue": true,
+                "command": 16,
+                "doJumpId": 5,
+                "frame": 6,
+                "params": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    null,
+                    35.1809775,
+                    128.5536296,
+                    5.0
+                ],
+                "type": "SimpleItem"
+            },
+            {
+                "autoContinue": true,
+                "command": 85,
+                "doJumpId": 6,
+                "frame": 6,
+                "params": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    null,
+                    35.1810927,
+                    128.5537881,
+                    0.0
+                ],
+                "type": "SimpleItem"
+            }
+        ],
+        "plannedHomePosition": [
+            35.1810871,
+            128.5538216,
+            5.0
+        ],
+        "vehicleType": 20,
+        "version": 2
+    },
+    "rallyPoints": {
+        "points": [],
+        "version": 2
+    }
+}
