@@ -4,7 +4,8 @@
 
 | 항목 | 값 |
 |---|---|
-| 버전 | **QGroundControl v5.0.8 (64 bit)** — 2026-09-01 실측 |
+| 버전 | **QGroundControl v5.1.4** — 직접 빌드 + VTOL 패치 ([BUILD.md](BUILD.md), 2026-09-02) |
+| 이전 | v5.0.8 AppImage — `~/Applications/QGroundControl.AppImage` 에 남겨 뒀다 (되돌아갈 때) |
 | 배포 형태 | AppImage — `~/Applications/QGroundControl.AppImage` (약 172 MB) |
 | 대상 FC 펌웨어 | **PX4** v1.17.0 커스텀 |
 | 프로토콜 | MAVLink v2 |
@@ -40,7 +41,12 @@ chmod +x QGroundControl.AppImage
 ```
 
 > ⚠️ **버전을 임의로 올리지 마라.** 이 기체는 PX4 v1.17.0 **커스텀 빌드**라 QGC 가
-> 표준 릴리스 기준으로 검사하며 파라미터 경고를 낼 수 있다. 지금 v5.0.8 로 검증돼 있다.
+> 표준 릴리스 기준으로 검사하며 파라미터 경고를 낼 수 있다.
+>
+> 🔵 **2026-09-02 — v5.0.8 → v5.1.4 로 올렸다.** 공식 AppImage 가 아니라 [직접 빌드](BUILD.md)
+> 다. VTOL 에서 미션 예상시간이 안 맞고 기종이 Tailsitter 로 잘못 뜨는 버그 3곳을 고쳤다.
+> 올리기 전에 회귀를 실측으로 확인했다 — MAVLink v1 프레임 0개, compid 전부 1,
+> 파라미터·미션·지오펜스 FC 실제값과 일치. 상세는 BUILD.md.
 
 ### 3. 실행
 

@@ -1,0 +1,62 @@
+diff --git a/src/MissionManager/MissionController.cc b/src/MissionManager/MissionController.cc
+index 57af9b5..a65bdc6 100644
+--- a/src/MissionManager/MissionController.cc
++++ b/src/MissionManager/MissionController.cc
+@@ -1634,6 +1634,13 @@ void MissionController::_managerVehicleChanged(Vehicle* managerVehicle)
+     connect(_managerVehicle, &Vehicle::defaultHoverSpeedChanged,        this, &MissionController::_recalcMissionFlightStatusSignal, Qt::QueuedConnection);
+     connect(_managerVehicle, &Vehicle::vehicleTypeChanged,              this, &MissionController::complexMissionItemsChanged);
+ 
++    // The flight status calculator reads speeds from _controllerVehicle, not _managerVehicle. Without these
++    // the mission time never updates while a vehicle is connected, since the two are different objects then.
++    if (_controllerVehicle != _managerVehicle) {
++        connect(_controllerVehicle, &Vehicle::defaultCruiseSpeedChanged, this, &MissionController::_recalcMissionFlightStatusSignal, Qt::QueuedConnection);
++        connect(_controllerVehicle, &Vehicle::defaultHoverSpeedChanged,  this, &MissionController::_recalcMissionFlightStatusSignal, Qt::QueuedConnection);
++    }
++
+     emit complexMissionItemsChanged();
+     emit resumeMissionIndexChanged();
+ }
+diff --git a/src/MissionManager/SpeedSection.cc b/src/MissionManager/SpeedSection.cc
+index cf3ce0c..c1c05e9 100644
+--- a/src/MissionManager/SpeedSection.cc
++++ b/src/MissionManager/SpeedSection.cc
+@@ -45,7 +45,7 @@ bool SpeedSection::settingsSpecified(void) const
+ void SpeedSection::setAvailable(bool available)
+ {
+     if (available != _available) {
+-        if (available && (_masterController->controllerVehicle()->multiRotor() || _masterController->controllerVehicle()->fixedWing())) {
++        if (available && (_masterController->controllerVehicle()->multiRotor() || _masterController->controllerVehicle()->fixedWing() || _masterController->controllerVehicle()->vtol())) {
+             _available = available;
+             emit availableChanged(available);
+         }
+diff --git a/src/PlanView/PlanInfoEditor.qml b/src/PlanView/PlanInfoEditor.qml
+index f315bca..98979fb 100644
+--- a/src/PlanView/PlanInfoEditor.qml
++++ b/src/PlanView/PlanInfoEditor.qml
+@@ -77,7 +77,10 @@ Rectangle {
+             QGCLabel {
+                 objectName: "planInfo_firmwareLabel"
+                 text: _root._controllerVehicle ? _root._controllerVehicle.firmwareTypeString : ""
++                elide: Text.ElideRight
+                 Layout.fillWidth: true
++                Layout.minimumWidth: 0
++                Layout.preferredWidth: 0
+                 visible: _root._multipleFirmware && !_root._allowFWVehicleTypeSelection
+             }
+ 
+@@ -90,8 +93,14 @@ Rectangle {
+             }
+             QGCLabel {
+                 objectName: "planInfo_vehicleTypeLabel"
+-                text: _root._controllerVehicle ? _root._controllerVehicle.vehicleTypeString : ""
++                // Prefer the connected vehicle: offlineEditingVehicleClass collapses every VTOL
++                // MAV_TYPE onto one class value, so _controllerVehicle reports the wrong airframe.
++                text: globals.activeVehicle ? globals.activeVehicle.vehicleTypeString
++                                            : (_root._controllerVehicle ? _root._controllerVehicle.vehicleTypeString : "")
++                elide: Text.ElideRight
+                 Layout.fillWidth: true
++                Layout.minimumWidth: 0
++                Layout.preferredWidth: 0
+                 visible: _root._multipleVehicleTypes && !_root._allowFWVehicleTypeSelection
+             }
+         }
