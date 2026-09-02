@@ -112,9 +112,14 @@ def pick_bind_addr(fixed):
 
 
 def open_serial():
-    """시리얼을 연다. 실패하면 None — 호출자가 재시도한다."""
+    """시리얼을 연다. 실패하면 None — 호출자가 재시도한다.
+
+    exclusive=True 로 연다. QGC 의 autoConnectPixhawk 가 켜져 있으면 QGC 가
+    같은 /dev/ttyACM* 를 먼저 잡아 FC 를 낚아채고, 브리지는 읽기가 빈 채로
+    도는 좀비가 된다 — 다른 PC 에서는 기체가 그냥 사라진 것처럼 보인다.
+    """
     try:
-        ser = serial.Serial(SERIAL_PORT, BAUD, timeout=0)
+        ser = serial.Serial(SERIAL_PORT, BAUD, timeout=0, exclusive=True)
     except (serial.SerialException, OSError) as e:
         return None, e
     return ser, None

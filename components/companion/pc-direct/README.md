@@ -79,6 +79,76 @@ MAV_BIND=100.99.120.110 ./pc_bridge.sh
 ss -ulnp | grep 14550     # 0.0.0.0 이 아니라 100.x 로 떠야 한다
 ```
 
+## 🔴 QGC 의 autoConnectPixhawk 를 반드시 꺼라
+
+QGC 는 기본으로 USB 에 붙은 Pixhawk 를 **직접 시리얼로 낚아챈다**. FC 가 꽂힌 PC 에서
+QGC 를 켜는 순간 브리지가 `/dev/ttyACM0` 을 빼앗기고, 다른 PC 에서는 기체가 그냥
+사라진 것처럼 보인다. **FC USB 는 하나뿐**이라 둘이 나눠 쓸 수 없다.
+
+4 대 전부에 이렇게 둔다 (`~/.config/QGroundControl/QGroundControl.ini`):
+
+```ini
+[AutoConnect]
+autoConnectPixhawk=false   # QGC 가 시리얼을 직접 잡지 않는다 — 브리지가 잡는다
+autoConnectUDP=true        # 브리지가 밀어주는 UDP 14550 을 자동으로 잡는다
+```
+
+⚠️ QGC 는 **종료할 때 설정을 덮어쓴다.** 켜져 있는 동안 `.ini` 를 고치면 날아간다.
+반드시 QGC 를 끄고 고쳐라.
+
+브리지도 `exclusive=True` 로 시리얼을 열어 뺏기지 않게 해 뒀다 (2026-09-02). 그래도
+QGC 가 먼저 잡으면 브리지가 못 여니, 설정을 끄는 것이 근본이다.
+
+## 자동 시작 — systemd user 서비스
+
+`nohup ... &` 로 띄우면 SSH 세션이 닫힐 때 같이 죽는다. 서비스로 올린다.
+
+```bash
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/shade-bridge.service <<'EOF'
+[Unit]
+Description=SHADE01 MAVLink bridge (FC USB -> UDP 14550 over Tailscale)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/shade-bridge/pc_bridge.sh
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+EOF
+systemctl --user daemon-reload
+systemctl --user enable --now shade-bridge      # FC 가 꽂힌 PC 에서만
+```
+
+확인:
+
+```bash
+systemctl --user is-active shade-bridge
+journalctl --user -u shade-bridge -n 20 --no-pager
+ss -ulnp | grep 14550          # 100.x 주소로 떠야 한다
+fuser -v /dev/ttyACM0          # 브리지(python3) 가 잡고 있어야 한다
+```
+
+⚠️ **FC 가 꽂힌 PC 에서만 `enable --now` 한다.** 나머지는 서비스 파일만 두고 끈 채로
+둔다 (`ku`, `rim` 은 2026-09-02 기준 배치만 해 뒀다). FC 를 옮기면 옛 PC 에서
+`systemctl --user disable --now shade-bridge`, 새 PC 에서 `enable --now` 한다.
+
+## 어느 PC 에 꽂아도 나머지가 본다
+
+```
+FC ──USB── (raspb1 | ku | rim | rim3 중 하나) ──브리지── UDP 14550
+                                                    │ Tailscale 내부로만
+                        ┌──────────┬────────────────┼──────────┐
+                        ▼          ▼                ▼          ▼
+                     ku-dgs1      rim             rim3    gram-labtop
+```
+
+브리지가 도는 PC 한 대만 시리얼을 잡고, 나머지 세 대는 UDP 로 붙는다. 브리지가 도는
+PC 의 QGC 도 자기 자신에게 UDP 로 붙는다 — `TARGETS` 에 자기 IP 가 들어 있는 이유다.
+
 ## 함정
 
 ### raspb1 브리지를 먼저 멈춰라
