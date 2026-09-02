@@ -118,18 +118,19 @@ ulog, repaired = qgclog._load(path)
 ## 의존성
 
 `pyulog`, `numpy`. 런처가 아래 순으로 인터프리터를 찾는다:
-`$QGCLOG_PYTHON` → `~/venv-ardupilot/bin/python` → `python3` → `python`.
+`$QGCLOG_PYTHON` → **리포의 `.venv/bin/python`** → `~/venv-ardupilot/bin/python` →
+`python3` → `python`.
 
-**새 PC 설치** — Ubuntu 24.04 는 `pip` 가 없을 수 있다. 그러면 venv 를 부트스트랩한다
-(런처가 `~/venv-ardupilot` 을 먼저 찾으므로 이 이름을 쓴다):
+**새 PC 설치** — Ubuntu 24.04 는 `pip` 가 없을 수 있다. 그러면 venv 를 부트스트랩한다.
+**리포 안 `.venv/`** 에 만든다 (`.gitignore` 로 제외돼 있어 홈이 지저분해지지 않는다):
 
 ```bash
-python3 -m venv --without-pip ~/venv-ardupilot
+python3 -m venv --without-pip .venv
 curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
-~/venv-ardupilot/bin/python /tmp/get-pip.py -q
-~/venv-ardupilot/bin/pip install pyulog numpy
+.venv/bin/python /tmp/get-pip.py -q
+.venv/bin/pip install pyulog numpy
 rm -f /tmp/get-pip.py
-~/venv-ardupilot/bin/python -c "import pyulog, numpy; print('ok')"
+.venv/bin/python -c "import pyulog, numpy; print('ok')"
 ```
 
 `python3 -m pip install pyulog numpy` 가 되면 그걸 써도 된다.
