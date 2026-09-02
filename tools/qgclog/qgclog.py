@@ -6,6 +6,7 @@
   qgclog <path.ulg>    경로를 직접 지정해 분석
 
 로그 디렉토리는 --dir, 환경변수 QGC_LOG_DIR, 그리고 아래 기본 후보 순으로 찾는다.
+기본은 리포의 logs/ 다 — 회수한 로그는 전부 거기로 모은다.
 """
 import argparse
 import contextlib
@@ -22,7 +23,15 @@ from datetime import datetime, timedelta, timezone
 
 import numpy as np
 
+# 리포의 logs/ 가 정본이다. QGC 폴더는 QGC 자신이 쓰는 곳일 뿐이고,
+# 회수한 로그는 SHADE01/logs/ 로 모은다 (*.ulg 는 .gitignore 됨).
+REPO_LOGS = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))), "logs")
+
 DEFAULT_DIRS = [
+    REPO_LOGS,
+    "~/SHADE01/logs",
+    "~/QGroundControl/SHADE01/logs",
     "~/QGroundControl/Logs",
     "~/Documents/QGroundControl/Logs",
     "./Logs",

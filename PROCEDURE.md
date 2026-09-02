@@ -48,10 +48,23 @@ ssh raspb1@100.126.161.1 'sudo systemctl start mavlink-bridge.service'
 
 ### 1-5. 회수
 
+**받는 곳은 언제나 리포의 `logs/` 다 — 평면으로 쌓는다. 날짜별 하위 폴더를 만들지 마라.**
+파일명에 이미 날짜가 들어 있고, `./qgc log list` 가 한 번에 전부 보여준다.
+
 ```bash
-mkdir -p logs/2026-08-31
-scp 'raspb1@100.126.161.1:/tmp/fclogs/*.ulg' logs/2026-08-31/
+scp 'raspb1@100.126.161.1:/tmp/fclogs/*.ulg' logs/
 ```
+
+`~/QGroundControl/Logs` 는 **QGC 자신이 쓰는 폴더일 뿐이다.** 거기 쌓인 로그도 옮겨 온다 —
+분석·비교·리포트는 전부 리포 안에서 한다.
+
+```bash
+mv ~/QGroundControl/Logs/*.ulg logs/
+```
+
+`qgclog` 는 `logs/` 를 **1순위 기본 디렉토리**로 찾는다. `*.ulg` 는 `.gitignore` 되어
+커밋되지 않으므로, 한곳에 모아도 리포가 무거워지지 않는다. 구독 섹션 유실 복구가
+**같은 디렉토리의 다른 로그를 도너로 쓰기 때문에**, 모아 두는 편이 복구 성공률도 높다.
 
 ## 2. 분석
 
@@ -81,7 +94,7 @@ rm -f /tmp/get-pip.py
 ```bash
 ./qgc log list                                  # 번호로 나열
 ./qgc log 1                                     # 번호로 분석
-./qgc log logs/2026-08-31/2026-08-31_09_17_02.ulg
+./qgc log logs/2026-08-31_09_17_02.ulg   # 경로 직접 지정
 ```
 
 > 🔴 **`pyulog` 를 직접 부르지 마라.** 잘린 메시지 하나에서 읽기를 포기해 로그 대부분을
@@ -91,7 +104,7 @@ rm -f /tmp/get-pip.py
 하루치 요약표:
 
 ```bash
-for f in logs/2026-08-31/*.ulg; do
+for f in logs/2026-08-31_*.ulg; do
   echo "=== $(basename "$f") ==="
   ./qgc log "$f" 2>&1 | sed -n '4,12p'
 done
@@ -103,7 +116,7 @@ done
 말이 되는지** 부터 본다 — 23MB 로그가 27초일 수는 없다.
 
 ```bash
-for f in logs/2026-08-31/*.ulg; do
+for f in logs/2026-08-31_*.ulg; do
   printf "%-34s %6s  %s\n" "$(basename "$f")" "$(du -h "$f" | cut -f1)" \
     "$(./qgc log "$f" 2>/dev/null | grep 비행시간 | grep -oE '[0-9]+초')"
 done
@@ -112,7 +125,7 @@ done
 디코딩률을 숫자로 재려면 `tools/qgclog/decode_rate.py` 를 쓴다:
 
 ```bash
-.venv/bin/python tools/qgclog/decode_rate.py logs/2026-08-31
+.venv/bin/python tools/qgclog/decode_rate.py logs
 ```
 
 **기준치 — 2026-08-31 자 21개 실측(2026-09-01): DATA 99.36%, 실패 0개.**

@@ -41,8 +41,9 @@ ssh ku@100.99.120.110 'cd ~/QGroundControl/SHADE01 && git pull && ./qgc log list
 ssh rim3@100.117.47.105 'cd ~/SHADE01 && git pull && ./qgc log list'
 ```
 
-⚠️ **로그는 PC 마다 다르다.** 각자 자기 `~/QGroundControl/Logs` 만 본다 — 공유 저장소가
-아니다. 어느 PC 에 어느 비행이 있는지는 `./qgc log list` 로 확인한다.
+⚠️ **로그는 PC 마다 다르다.** 각자 자기 리포의 `logs/` 만 본다 — 공유 저장소가
+아니다 (`.ulg` 는 `.gitignore` 되어 git 으로 오가지 않는다). 회수는 `scp` 로 한다.
+어느 PC 에 어느 비행이 있는지는 `./qgc log list` 로 확인한다.
 
 ## 🔴 ku 는 인터넷이 없다
 
@@ -80,7 +81,7 @@ python3 -m venv --without-pip .venv
 ## 파일 주고받기
 
 ```bash
-scp ku@100.99.120.110:'~/QGroundControl/Logs/*.ulg' logs/2026-08-25/
+scp ku@100.99.120.110:'~/QGroundControl/SHADE01/logs/*.ulg' logs/
 ```
 
 ⚠️ `.ulg` 는 git 에 안 들어간다 (`.gitignore`). 분석 **수치를 문서로** 남기는 것이

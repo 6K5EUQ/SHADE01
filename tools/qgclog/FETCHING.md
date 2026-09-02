@@ -14,6 +14,24 @@ FC 내장 SD 에서 **QGC 없이 USB 만으로** 로그를 받는다. 2026-08-25
 | **MAVFTP 버스트** | **18초** |
 | 하루치 6개(19.8MB) 일괄 | **42초** |
 
+## 🔴 로그는 `SHADE01/logs/` 에 모은다
+
+**회수한 `.ulg` 는 전부 리포의 `logs/` 로 가져온다.** 어느 PC 에서 받든, FC SD 에서
+직접 받든 마찬가지다.
+
+`~/QGroundControl/Logs` 는 **QGC 가 자기 용도로 쓰는 폴더일 뿐이다.** 분석·리포트·
+비교는 리포 안에서 넓게 한다. QGC 폴더에 있는 로그는 `logs/` 로 옮겨서 본다.
+
+```bash
+mv ~/QGroundControl/Logs/*.ulg <SHADE01>/logs/
+```
+
+`qgclog` 는 `logs/` 를 **1순위 기본 디렉토리**로 찾는다 (`DEFAULT_DIRS`).
+`*.ulg` 는 `.gitignore` 되어 있어 리포에 커밋되지 않는다 — 경로만 공유되고 파일은 안 간다.
+
+구독 섹션 유실 복구가 **같은 디렉토리의 다른 로그를 도너로 쓰기 때문에**, 한 곳에
+모아 두는 것이 복구 성공률도 올린다.
+
 ## 준비 — pymavlink (sudo 없이)
 
 Ubuntu 24.04 는 `python3-venv` 가 없어 `python3 -m venv` 가 실패한다.
@@ -53,19 +71,26 @@ QGC 가 잡고 있으면 종료한다. ⚠️ **사용자가 보고 있는 창�
 
 ### 3. 받기
 
+**받는 곳은 리포의 `logs/` 다** — `/tmp` 로 받고 나중에 옮기지 마라. 잊는다.
+
 ```bash
 # 하루치 전부 (이미 받은 것은 크기 비교 후 건너뜀)
-~/.venv-mav/bin/python fcfetch.py fetch 2026-08-24 /tmp/fclogs
+~/.venv-mav/bin/python fcfetch.py fetch 2026-08-24 <SHADE01>/logs
 
 # 하나만
-~/.venv-mav/bin/python fcfetch.py get /fs/microsd/log/2026-08-24/10_11_12.ulg /tmp/log_94.ulg
+~/.venv-mav/bin/python fcfetch.py get /fs/microsd/log/2026-08-24/10_11_12.ulg <SHADE01>/logs/log_94.ulg
 ```
 
 ### 4. 원격 PC 라면 회수
 
+**받는 곳은 언제나 리포의 `logs/` 다.**
+
 ```bash
-scp -o BatchMode=yes 'rim3@100.117.47.105:/tmp/fclogs/*.ulg' ~/QGroundControl/Logs/
+scp -o BatchMode=yes -o ConnectTimeout=200 \
+    'rim3@100.117.47.105:~/SHADE01/logs/*.ulg' <SHADE01>/logs/
 ```
+
+원격 PC 에 아직 회수 전이면 그쪽에서도 `~/SHADE01/logs/` 로 받게 한다.
 
 ⚠️ rim3 는 Tailscale relay 경유라 RTT 가 수백 ms~1.6초다.
 `ConnectTimeout` 을 **200초 이상**으로 잡아야 붙는다.
