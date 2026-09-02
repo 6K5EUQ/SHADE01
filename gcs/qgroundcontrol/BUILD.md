@@ -133,6 +133,59 @@ python3 -c "import json; print(json.load(open('.github/build-config.json'))['qt'
 | v5.0.8 | 6.8.3 |
 | v5.1.0 ~ v5.1.4 | **6.11.1** |
 
+## 설치 — 홈에 풀어 쓴다
+
+`ninja -C build qgc-package` 가 `.deb` 를 만든다. 시스템에 넣지 않고 홈에 풀어 쓰면
+sudo 가 필요 없고, 기존 AppImage 를 남겨둔 채 되돌아갈 수 있다.
+
+```bash
+dpkg-deb -x build/QGroundControl_5.1.4-*_amd64.deb /tmp/qgcpkg
+rm -rf ~/qgc-5.1.4 && mkdir -p ~/qgc-5.1.4
+cp -a /tmp/qgcpkg/usr/. ~/qgc-5.1.4/
+~/qgc-5.1.4/bin/QGroundControl --version    # v5.1.4 가 나와야 한다
+```
+
+⚠️ **`.deb` 를 만들려면 `gstreamer1.0-plugins-bad` 가 깔려 있어야 한다.** 없으면
+CPack 이 `missing required plugins in lib/gstreamer-1.0: videoparsersbad` 로 멈춘다.
+설치한 뒤에는 **cmake 를 다시 구성해야** 한다 — 번들할 플러그인 목록이 구성 시점에
+고정되기 때문이다.
+
+### 메뉴·아이콘으로 띄우기
+
+터미널 런처(`gcs/qgroundcontrol/qgc`)만으로는 데스크톱 메뉴가 안 바뀐다. 메뉴는 별도
+`.desktop` 을 읽으므로 거기도 고쳐야 **여전히 옛 버전이 뜨는 일**이 없다.
+
+```bash
+cp ~/.local/share/applications/qgroundcontrol.desktop{,.bak.5.0.8}
+sed -i "s|^Exec=.*|Exec=env QT_QPA_PLATFORM=xcb $HOME/qgc-5.1.4/bin/QGroundControl|" \
+  ~/.local/share/applications/qgroundcontrol.desktop
+sed -i "s|^Icon=.*|Icon=QGroundControl|" ~/.local/share/applications/qgroundcontrol.desktop
+
+mkdir -p ~/.local/share/icons/hicolor/{256x256,scalable}/apps
+cp ~/qgc-5.1.4/share/icons/hicolor/256x256/apps/QGroundControl.png \
+   ~/.local/share/icons/hicolor/256x256/apps/
+cp ~/qgc-5.1.4/share/icons/hicolor/scalable/apps/QGroundControl.svg \
+   ~/.local/share/icons/hicolor/scalable/apps/
+gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
+update-desktop-database ~/.local/share/applications
+```
+
+⚠️ `Icon=` 은 **대문자 `QGroundControl`** 이다. 기존 항목은 소문자 `qgroundcontrol` 을
+가리키는데 새 아이콘 파일명은 대문자라 안 맞는다.
+
+⚠️ 메뉴에 옛 항목이 남아 보이면 로그아웃 후 재로그인한다 (GNOME 은 `Alt+F2` → `r`).
+
+되돌리려면 `Exec=` 한 줄만 AppImage 경로로 바꾸면 된다. 백업이 옆에 있다.
+
+### 다른 PC 로 옮기기
+
+같은 배포판·아키텍처(Ubuntu 24.04.4 / x86_64)면 `.deb` 를 그대로 옮겨 같은 절차를 쓴다.
+2026-09-02 에 `ku` 에서 빌드한 것을 `rim3` 로 옮겨 두 대가 같은 바이너리를 쓴다.
+
+```bash
+scp build/QGroundControl_5.1.4-*_amd64.deb rim3@100.117.47.105:/tmp/
+```
+
 ## 함정
 
 ### 기존 AppImage 를 먼저 지우지 마라
