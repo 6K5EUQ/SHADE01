@@ -104,6 +104,104 @@ update-desktop-database ~/.local/share/applications 2>/dev/null
 
 ---
 
+## 링크 3개 구성 (2026-09-02 확정)
+
+경로가 셋이라 QGC 에 **각각 이름 붙은 링크**로 등록해 두고 필요한 것을 고른다.
+`~/.config/QGroundControl/QGroundControl.ini` 의 `[LinkConfigurations]` 절이다.
+
+| # | 이름 | 방식 | 자동연결 | 쓰는 때 |
+|---|---|---|---|---|
+| 1 | **Pi 브리지** (raspb1 / LTE·WiFi) | UDP **14550** 리슨 | **ON** | 평소 비행 — 주 경로 |
+| 2 | **ELRS 백팩** (조종기 WiFi) | UDP **14555** → `10.0.0.1:14550` | OFF | Pi 가 죽었을 때 |
+| 3 | **FC USB 직결** | Serial `/dev/ttyACM0` @921600 | OFF | 펌웨어·캘리브레이션 |
+
+### 🔴 `autoConnectUDP` 를 꺼야 한다
+
+**이걸 켜두면 QGC 가 등록된 링크와 별개로 익명 UDP 링크를 하나 더 만든다.** 같은 기체가
+두 링크로 보여 `Comm Lost` → `Switching communication to secondary link` 팝업이 뜨고,
+어느 링크로 붙었는지 알 수 없게 된다.
+
+```ini
+[AutoConnect]
+autoConnectPixhawk=true      ← 유지. USB 로 FC 꽂으면 자동으로 잡아준다
+autoConnectUDP=false         ← 반드시 끈다
+```
+
+증상 확인: `ss -ulpn | grep QGroundControl` 이 **14550 소켓을 2개** 보이면 익명 링크가
+살아 있는 것이다. 정상이면 1개다.
+
+### ⚠️ 리슨 포트를 겹치지 마라
+
+1번과 2번을 **둘 다 14550 으로 두면 안 된다.** ELRS 백팩은 조종기 AP 에 붙었을 때만 쓰는
+경로라 리슨 포트를 겹칠 이유가 없다 — **14555** 로 분리해 둔다.
+
+### 설정 파일 직접 편집 시
+
+> 🔴 **QGC 를 끄고 편집하라.** 켜진 채로 `.ini` 를 고치면 종료할 때 QGC 가 메모리 내용으로
+> 덮어써서 작업이 사라진다.
+
+```ini
+[LinkConfigurations]
+Link0\auto=true
+Link0\high_latency=false
+Link0\hostCount=0
+Link0\name=1. Pi 브리지 (raspb1 / LTE·WiFi)
+Link0\port=14550
+Link0\type=1
+Link1\auto=false
+Link1\high_latency=false
+Link1\host0=10.0.0.1
+Link1\hostCount=1
+Link1\name=2. ELRS 백팩 (조종기 WiFi)
+Link1\port=14555
+Link1\port0=14550
+Link1\type=1
+Link2\auto=false
+Link2\baud=921600
+Link2\dataBits=8
+Link2\flowControl=0
+Link2\name=3. FC USB 직결
+Link2\parity=0
+Link2\portName=/dev/ttyACM0
+Link2\stopBits=1
+Link2\type=0
+count=3
+```
+
+`type=1` 이 UDP, `type=0` 이 Serial 이다. **편집 전 `.ini` 를 백업**해 둘 것.
+
+> ⚠️ **소문자 `[linkConfigurations]` 절이 따로 있을 수 있다.** rim3 에서 실제로 나왔다 —
+> 옛 QGC 가 만든 것으로, 대문자 절만 고치면 **두 절이 공존해 링크가 중복**된다.
+> `grep -n '^\[' QGroundControl.ini` 로 절 목록을 먼저 확인하고, 소문자 절은 지운다.
+
+배포용 스크립트는 이 문서 아래 [세 PC 일괄 적용](#세-pc-일괄-적용) 참조.
+
+### 세 PC 일괄 적용
+
+`ku` · `rim` · `rim3` 세 대가 같은 구성을 쓴다. 각 PC 에서:
+
+```bash
+# 1. QGC 를 끈다 (켜져 있으면 종료 시 덮어쓴다)
+pgrep -x QGroundControl && echo "먼저 QGC 를 종료하라"
+
+# 2. 백업
+cp ~/.config/QGroundControl/QGroundControl.ini{,.bak.$(date +%Y%m%d-%H%M%S)}
+
+# 3. 위 [LinkConfigurations] 블록으로 교체 + autoConnectUDP=false
+# 4. 소문자 [linkConfigurations] 절이 있으면 제거
+grep -n '^\[' ~/.config/QGroundControl/QGroundControl.ini
+```
+
+확인:
+
+```bash
+grep -E 'Link[012]\\name=|^count|autoConnectUDP' ~/.config/QGroundControl/QGroundControl.ini
+# count=3, autoConnectUDP=false, 링크 이름 3개가 나와야 한다
+```
+
+⚠️ **1번과 3번은 동시에 못 쓴다** — FC USB 포트가 하나뿐이라 raspb1 이 잡고 있으면 노트북에
+꽂을 수 없다.
+
 ## 결론부터 — 무엇에 접속하는가
 
 **QGC는 FC에 직접 접속하지 않는다.** 무선 경로에서 QGC가 실제로 붙는 상대는 기체에 탑재된 [Raspberry Pi 5 `raspb1`](../../components/companion/raspberry-pi-5/README.md)가 띄운 **UDP 14550 MAVLink 브리지**다.
