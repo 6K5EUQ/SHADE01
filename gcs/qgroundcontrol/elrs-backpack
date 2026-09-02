@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# 조종기(ELRS TX 백팩) WiFi 로 붙어 QGC 를 띄운다. 종료하면 원래 WiFi 로 되돌린다.
+#
+# 평시 경로가 아니다 — raspb1 이 죽었을 때 쓰는 폴백이다.
+# 링크 구성: ../../README.md#링크-구성--raspb1-단독
+#
+#   ./gcs/qgroundcontrol/elrs-backpack            복귀망 = iptimE (기본)
+#   ./gcs/qgroundcontrol/elrs-backpack eduroam    복귀망 지정
+#
+# ⚠️ 노트북 WiFi 는 하나뿐이다. 백팩에 붙어 있는 동안은 인터넷·Tailscale 이 끊긴다.
+#    즉 Pi 브리지 경로와 동시에 쓸 수 없다.
+
+set -u
+
+AP="${ELRS_AP:-ExpressLRS TX Backpack 17B49E}"
+BACK="${1:-iptimE}"
+DEV="${ELRS_DEV:-wlo1}"
+BIN="${QGC_BIN:-$HOME/qgc-5.1.4/bin/QGroundControl}"
+
+if [[ ! -x "$BIN" ]]; then
+  echo "빌드된 QGC 가 없다: $BIN" >&2
+  echo "빌드 절차: $(dirname "$0")/BUILD.md" >&2
+  exit 1
+fi
+
+restore() {
+  echo
+  echo "==> 원래 WiFi($BACK) 복귀 중..."
+  if nmcli con up "$BACK" >/dev/null 2>&1; then
+    echo "    복귀 완료."
+  else
+    echo "    복귀 실패 - 수동 전환이 필요하다: nmcli con up \"$BACK\"" >&2
+  fi
+}
+trap restore EXIT INT TERM
+
+echo "==> 백팩 AP 접속: $AP"
+nmcli con up "$AP" || { echo "접속 실패" >&2; exit 1; }
+
+echo "==> IP 대기 중 (최대 60초)..."
+IP=""
+for _ in $(seq 1 60); do
+  # 붙자마자 다른 AP 로 끌려가지 않았는지 매번 확인한다.
+  # 백팩은 인터넷이 없어서, 프로파일 우선순위가 낮으면 NM 이 되돌려 버린다.
+  CUR=$(nmcli -t -f NAME,DEVICE con show --active | grep ":${DEV}\$" | cut -d: -f1)
+  if [[ "$CUR" != "$AP" ]]; then
+    echo "접속이 '${CUR:-없음}' 으로 되돌아갔다 - 백팩 프로파일이 밀렸다." >&2
+    echo "  고치기: nmcli con modify \"$AP\" connection.autoconnect-priority 100 ipv4.never-default yes" >&2
+    exit 1
+  fi
+  IP=$(ip -4 -br addr show "$DEV" | grep -o '10\.0\.0\.[0-9]*' | head -1)
+  [[ -n "$IP" ]] && break
+  sleep 1
+done
+
+if [[ -z "$IP" ]]; then
+  echo "IP 획득 실패 (백팩 DHCP 응답 없음)" >&2
+  exit 1
+fi
+echo "==> IP 획득: $IP  (백팩=10.0.0.1)"
+
+echo "==> 백팩 응답 확인"
+if ping -c 2 -W 2 10.0.0.1 >/dev/null 2>&1; then
+  echo "    백팩 응답 OK"
+else
+  echo "    경고: 백팩 ping 무응답 - QGC 는 띄우되 링크가 안 붙을 수 있다"
+fi
+
+echo "==> QGC 실행 — Comm Links 에서 '2. ELRS 백팩' 을 Connect 한다"
+echo "    (창을 닫으면 $BACK 으로 복귀한다)"
+# exec 를 쓰면 안 된다 — 셸이 교체돼 trap 이 안 돌고 WiFi 가 백팩에 남는다.
+"$BIN"

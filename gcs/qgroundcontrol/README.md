@@ -136,10 +136,77 @@ autoConnectUDP=false         ← 반드시 끈다
 증상 확인: `ss -ulpn | grep QGroundControl` 이 **14550 소켓을 2개** 보이면 익명 링크가
 살아 있는 것이다. 정상이면 1개다.
 
+> ⚠️ **이 값은 QGC 가 되돌려 놓는다.** 2026-09-02 rim3 에서 `autoConnectUDP=true`,
+> `autoConnectPixhawk=false` 로 뒤집혀 있는 것을 발견했다 (QGC 버전 교체 중 발생한 것으로
+> 보인다). **QGC 를 끄고** 고친 뒤, 켜서 다시 끄고 값이 유지되는지 확인할 것 —
+> 켜진 채로 고치면 종료할 때 덮어쓴다.
+
 ### ⚠️ 리슨 포트를 겹치지 마라
 
 1번과 2번을 **둘 다 14550 으로 두면 안 된다.** ELRS 백팩은 조종기 AP 에 붙었을 때만 쓰는
 경로라 리슨 포트를 겹칠 이유가 없다 — **14555** 로 분리해 둔다.
+
+### 🔴 백팩 AP 는 붙어도 30초~2분 뒤 원래 WiFi 로 끌려간다 (2026-09-02 원인 규명)
+
+**증상**: `nmcli con up "ExpressLRS TX Backpack 17B49E"` 가 **성공을 보고하는데**
+잠시 뒤 보면 `iptimE` 로 돌아와 있다. `10.0.0.1` 은 100% packet loss 로 안 잡히고
+QGC 의 2번 링크도 당연히 안 붙는다. 재시도해도 같다.
+
+**원인**: **백팩 AP 에는 인터넷이 없다.** NetworkManager 의 연결성 검사가 이 AP 를
+"인터넷 없음" 으로 판정하고, `autoconnect=yes` 인 다른 프로파일(`iptimE` 등)이
+같은 우선순위(0)에 있으면 라디오를 도로 가져간다. 로그에 그대로 찍힌다:
+
+```
+17:35:33  Connected to wireless network "ExpressLRS TX Backpack 17B49E"
+17:37:31  state change: activated -> deactivating (reason 'new-activation')   ← 2분 뒤 뺏김
+17:37:32  Activation: starting connection 'iptimE'
+```
+
+확인:
+
+```bash
+journalctl -u NetworkManager --since "5 minutes ago" | grep -E "Backpack|new-activation"
+```
+
+**해결** — 백팩 프로파일에 우선순위를 주고, 기본 경로를 주장하지 않게 한다:
+
+```bash
+nmcli con modify "ExpressLRS TX Backpack 17B49E" \
+  connection.autoconnect-priority 100 \
+  ipv4.never-default yes \
+  ipv6.never-default yes \
+  ipv4.dns-priority 200
+```
+
+`never-default yes` 가 핵심이다 — 인터넷 없는 AP 가 기본 라우트·DNS 를 가져가지 않으니
+NM 이 "끊긴 링크" 로 보고 되돌리지 않는다. `autoconnect` 는 **`no` 로 둔다**: 평시에
+라디오를 멋대로 뺏지 않고, 쓸 때만 명시적으로 붙이기 위해서다.
+
+확인:
+
+```bash
+nmcli -f connection.autoconnect,connection.autoconnect-priority,ipv4.never-default \
+  con show "ExpressLRS TX Backpack 17B49E"
+# autoconnect:no / priority:100 / never-default:yes
+```
+
+### ⚠️ 백팩에 붙어 있는 동안은 Pi 브리지 경로를 못 쓴다
+
+노트북 WiFi 는 **하나뿐**이다. 백팩 AP 에 붙으면 인터넷과 Tailscale 이 끊기므로
+1번(Pi 브리지) 링크는 그동안 죽는다. **둘은 배타적인 폴백 관계**지 병행 경로가 아니다.
+SSH 로 raspb1 을 만지는 작업도 그동안 안 된다.
+
+### 실행 — `elrs-backpack`
+
+AP 전환·확인·QGC 실행·원복을 한 번에 한다. 창을 닫으면 원래 WiFi 로 되돌아간다.
+
+```bash
+./gcs/qgroundcontrol/elrs-backpack            # 복귀망 기본값 iptimE
+./gcs/qgroundcontrol/elrs-backpack eduroam    # 복귀망 지정
+```
+
+QGC 가 뜨면 **Comm Links → `2. ELRS 백팩` 을 Connect** 한다 (이 링크는 `auto=false` 다).
+위의 "끌려감" 이 재발하면 스크립트가 그것을 감지하고 **조용히 진행하지 않고 멈춘다.**
 
 ### 설정 파일 직접 편집 시
 
