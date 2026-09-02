@@ -386,7 +386,8 @@ def transitions(t, values, mapping=None):
 
 def analyse(path):
     ulog, repaired = _load(path)
-    rep = {"path": path, "findings": [], "good": [], "todo": [], "repaired": repaired}
+    rep = {"path": path, "findings": [], "good": [], "todo": [], "repaired": repaired,
+           "corrupt": bool(getattr(ulog, "file_corrupt", False))}
 
     # ── 비행 구간 ────────────────────────────────────────────────
     armed = get(ulog, "actuator_armed")
@@ -655,6 +656,13 @@ def print_report(rep):
     print("=" * W)
     when = rep["utc"].strftime("%Y-%m-%d %H:%M:%S KST") if rep.get("utc") else "시각 불명"
     print("  일시      %s" % when)
+    # 원본이 온전하지 않았다면 숫자를 믿기 전에 먼저 알린다.
+    if rep.get("repaired"):
+        print("  ⚠️ 출처    구독 섹션이 유실돼 **다른 로그의 정의를 이식해** 읽었다.")
+        print("            토픽 이름·필드 해석이 어긋났을 수 있다. 수치를 정본으로 쓰지 마라.")
+    if rep.get("corrupt"):
+        print("  ⚠️ 원본    중간에 깨진 구간이 있다 (pyulog file_corrupt).")
+        print("            그 구간 샘플은 빠졌다 — 비행시간·최대값이 실제보다 작을 수 있다.")
     print("  기체      %s / PX4 %s" % (rep["hw"], rep["sw"]))
     print("  비행시간  %.0f초 (%.1f분)" % (rep["duration"], rep["duration"] / 60))
     if "alt_max" in rep:

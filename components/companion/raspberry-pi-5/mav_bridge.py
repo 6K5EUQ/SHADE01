@@ -126,8 +126,16 @@ def main():
     bind_addr, why = pick_bind_addr(fixed)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind((bind_addr, UDP_PORT))
+    # SO_REUSEADDR 을 켜지 않는다. 켜면 두 번째 브리지나 QGC 가 같은 포트에
+    # 조용히 붙어, 커널이 패킷을 둘 중 하나에만 주면서 원격 GCS 명령이
+    # 사라진다. 여기서 시끄럽게 죽는 편이 낫다.
+    try:
+        sock.bind((bind_addr, UDP_PORT))
+    except OSError as e:
+        log("mav_bridge: %s:%d 를 열 수 없다 (%s)" % (bind_addr, UDP_PORT, e))
+        log("mav_bridge: 이미 브리지나 QGC 가 이 포트를 쓰고 있다. 확인:")
+        log("mav_bridge:   ss -ulnp | grep %d" % UDP_PORT)
+        sys.exit(1)
     sock.setblocking(False)
 
     # 받은 UDP 를 FC 로 흘려보낼 IP. 여기 없는 곳에서 온 것은 버린다.
@@ -156,6 +164,9 @@ def main():
     # 이미 거절을 알린 송신자. 로그가 넘치지 않게 IP 당 한 번만 찍는다.
     refused = set()
 
+    # 시리얼이 끊긴 동안 명령을 버렸다고 이미 알렸는지.
+    dropped_while_down = False
+
     # 최근에 패킷을 보내온 GCS. {(ip, port): 마지막 수신 시각}
     peers = {}
 
@@ -180,6 +191,18 @@ def main():
                     warned_open = True
                 continue
             log("mav_bridge: serial opened: %s @ %d" % (SERIAL_PORT, BAUD))
+            # 시리얼이 없는 동안 소켓 버퍼에 쌓인 것을 버리고 시작한다.
+            # 안 버리면 복구 직후 옛 명령이 FC 로 들어간다.
+            flushed = 0
+            while True:
+                try:
+                    sock.recvfrom(READ_CHUNK)
+                    flushed += 1
+                except (BlockingIOError, OSError):
+                    break
+            if flushed:
+                log("mav_bridge: 밀려 있던 GCS 패킷 %d 개 버림" % flushed)
+            dropped_while_down = False
             warned_open = False
 
         try:
@@ -245,7 +268,15 @@ def main():
                 if addr not in peers:
                     log("GCS connected: %s" % (addr,))
                 peers[addr] = now
-                if ser is not None:
+                if ser is None:
+                    # 시리얼이 끊긴 동안 들어온 명령은 버린다. 소켓 버퍼에
+                    # 쌓아 두면 복구 순간 밀린 명령이 한꺼번에 FC 로 쏟아진다
+                    # — 조종자가 이미 지나갔다고 생각한 모드 변경까지 포함해서.
+                    if not dropped_while_down:
+                        log("mav_bridge: 시리얼이 없다 - 그동안 들어온 GCS 명령은 버린다")
+                        dropped_while_down = True
+                    continue
+                if True:
                     try:
                         ser.write(data)
                     except (serial.SerialException, OSError) as e:

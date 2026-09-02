@@ -139,9 +139,12 @@ def main():
                         if v > peak[i]: peak[i] = v
                 elif mid == 1:
                     q = pl.ljust(31, b"\0")
+                    # SYS_STATUS 필드 순서: present, enabled, health (u32 x3),
+                    # load, voltage_battery (u16 x2), current_battery (i16).
+                    # load 를 전압으로 읽으면 ~0.2V, 전압을 전류로 읽으면 ~250A 가 된다.
                     v = struct.unpack("<IIIHHhb", q[:19])
-                    volt = v[3] / 1000.0
-                    curr = v[4] / 100.0
+                    volt = v[4] / 1000.0
+                    curr = v[5] / 100.0
                 elif mid == 0 and len(pl) >= 9:
                     bm = struct.unpack("<IBBBBB", pl[:9])[3]
                     armed = bool(bm & 128)
