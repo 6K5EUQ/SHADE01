@@ -98,6 +98,27 @@ update-desktop-database ~/.local/share/applications 2>/dev/null
 - `Exec` 은 **절대경로**여야 한다. `~` 는 `.desktop` 에서 확장되지 않는다.
 - 계정명이 PC 마다 다르므로(`ku`/`dsa`/`raspb1`) 경로를 그대로 복사하지 말 것.
 - 바탕화면 아이콘이 회색 물음표로 뜨면 `gio set ... trusted` 를 안 한 것이다.
+- ⚠️ **QGC 버전을 바꾸면 `Exec` 도 같이 고쳐라.** 2026-09-02 v5.1.4 로 올린 뒤에도
+  바탕화면 아이콘만 옛 AppImage 를 가리키고 있었다. 앱 목록과 바탕화면 **두 곳 다** 본다:
+  `grep -h Exec ~/.local/share/applications/qgroundcontrol.desktop ~/Desktop/qgroundcontrol.desktop`
+
+#### 조종기 ELRS 링크 아이콘
+
+백팩 AP 로 전환해서 QGC 를 띄우는 항목을 따로 둔다. 저장소에 사본이 있다
+([`qgc-elrs-backpack.desktop`](qgc-elrs-backpack.desktop)) — **`Exec` 경로의 계정명만
+자기 PC 에 맞게 고쳐서** 쓴다:
+
+```bash
+sed "s|/home/rim3|$HOME|g" gcs/qgroundcontrol/qgc-elrs-backpack.desktop \
+  > ~/.local/share/applications/qgc-elrs-backpack.desktop
+cp ~/.local/share/applications/qgc-elrs-backpack.desktop ~/Desktop/
+chmod +x ~/Desktop/qgc-elrs-backpack.desktop
+gio set ~/Desktop/qgc-elrs-backpack.desktop metadata::trusted true
+update-desktop-database ~/.local/share/applications 2>/dev/null
+```
+
+`Terminal=true` 는 의도된 것이다 — AP 전환 진행을 보여주고, 창을 닫을 때 원래 WiFi 로
+되돌리는 `trap` 이 돌아야 한다.
 
 ### 5. 연결
 
@@ -207,6 +228,27 @@ AP 전환·확인·QGC 실행·원복을 한 번에 한다. 창을 닫으면 원
 
 QGC 가 뜨면 **Comm Links → `2. ELRS 백팩` 을 Connect** 한다 (이 링크는 `auto=false` 다).
 위의 "끌려감" 이 재발하면 스크립트가 그것을 감지하고 **조용히 진행하지 않고 멈춘다.**
+
+바탕화면·앱 목록의 **"QGC — 조종기 ELRS 링크"** 아이콘이 같은 스크립트를 띄운다
+(`~/.local/share/applications/qgc-elrs-backpack.desktop`). AP 전환 과정을 보여줘야 하고
+창을 닫을 때 WiFi 를 되돌려야 하므로 `Terminal=true` 다 — 터미널 창이 뜨는 게 정상이다.
+
+> 그냥 **"QGroundControl"** 아이콘은 AP 전환 없이 QGC 만 띄운다. Pi 브리지(1번)·USB(3번)
+> 경로용이다.
+
+### FC 쪽은 건드릴 게 없다
+
+ELRS 링크는 **TELEM1** 로 들어온다. 이미 켜져 있다:
+
+| 파라미터 | 값 | 뜻 |
+|---|---|---|
+| `MAV_0_CONFIG` | `101` | TELEM1 에 MAVLink 인스턴스 |
+| `SER_TEL1_BAUD` | `460800` | ELRS 수신기 보레이트 |
+| `MAV_0_MODE` | `0` | Normal — 텔레메트리 전량 |
+
+> ⚠️ **`MAV_1_CONFIG=0` 을 되돌리지 마라.** 그건 **TELEM2**(사망한 포트)다.
+> 2026-09-02 에 `102` → `0` 으로 내린 것이 맞다 — 죽은 포트에 쏘느라 FC CPU 7.4% 를
+> 태우고 있었다. **ELRS 링크와 무관하다.**
 
 ### 설정 파일 직접 편집 시
 

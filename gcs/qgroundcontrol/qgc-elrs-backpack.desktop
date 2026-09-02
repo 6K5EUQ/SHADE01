@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=QGC — 조종기 ELRS 링크
+Comment=조종기(Boxer) 백팩 WiFi 로 붙어 QGC 실행. 창을 닫으면 원래 WiFi 로 복귀
+Exec=env QT_QPA_PLATFORM=xcb /home/rim3/SHADE01/gcs/qgroundcontrol/elrs-backpack
+Icon=qgroundcontrol
+Terminal=true
+Categories=Science;Robotics;
+StartupWMClass=QGroundControl
