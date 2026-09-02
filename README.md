@@ -7,7 +7,7 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 |---|---|
 | [`components/`](components/) | 부품별 제원·배선·설정 (FC, ESC, 모터, 전원, 수신기 …) |
 | [`airframes/`](airframes/) | 기체 조립·구성 |
-| [`gcs/`](gcs/) | [QGroundControl 설치·접속 절차](gcs/qgroundcontrol/README.md) |
+| [`gcs/`](gcs/) | [QGroundControl 설치·접속 절차](gcs/qgroundcontrol/README.md) · [분석 PC 접속(Tailscale)](gcs/ACCESS.md) |
 | [`flights/`](flights/) | 비행/세션별 분석 — **로그 원본이 사라져도 남는 정본** |
 | `logs/<날짜>/` | `.ulg` 원본 (git 제외) |
 | [`tools/`](tools/qgclog/) | 로그 수집(`fcfetch.py`)·분석(`qgclog`) |
