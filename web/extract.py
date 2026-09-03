@@ -191,6 +191,88 @@ def build_track(ulog, t0, t1):
         trk["roll"] = to_grid(ta, roll, grid)
         trk["pitch"] = to_grid(ta, pitch, grid)
 
+    # ── 자세 목표 (실측과 한 축에 겹쳐 "추종했나" 를 본다) ────────
+    # PX4 Flight Review 의 핵심 관용구다. 그 코드 주석이 설계 철학을 그대로 말한다:
+    #   colors2 = [...]  # 'what it is' and 'what it should be'
+    # 실측과 목표를 같은 축에 놓으면 차이를 따로 계산하지 않아도 눈에 보인다.
+    sp, tsp, msp = win(ulog, "vehicle_attitude_setpoint", t0, t1)
+    if sp is not None:
+        if "q_d[0]" in sp.data:
+            # 최신 PX4 는 목표 자세를 쿼터니언 q_d[] 로 낸다 (예전엔 roll_body 였다).
+            qd = [clean(sp.data["q_d[%d]" % i][msp]) for i in range(4)]
+            qn = np.sqrt(sum(x ** 2 for x in qd))
+            bad = ~np.isfinite(qn) | (np.abs(qn - 1.0) > 0.1)
+            r = np.degrees(np.arctan2(2 * (qd[0] * qd[1] + qd[2] * qd[3]),
+                                      1 - 2 * (qd[1] ** 2 + qd[2] ** 2)))
+            pch = np.degrees(np.arcsin(np.clip(2 * (qd[0] * qd[2] - qd[3] * qd[1]), -1, 1)))
+            r[bad] = np.nan
+            pch[bad] = np.nan
+            trk["roll_sp"] = to_grid(tsp, r, grid)
+            trk["pitch_sp"] = to_grid(tsp, pch, grid)
+        else:
+            for src, dst in (("roll_body", "roll_sp"), ("pitch_body", "pitch_sp")):
+                if src in sp.data:
+                    trk[dst] = to_grid(tsp, np.degrees(clean(sp.data[src][msp], 10.0)), grid)
+
+    # ── 각속도 (실측 + 목표) ────────────────────────────────────
+    av, tav, mav = win(ulog, "vehicle_angular_velocity", t0, t1)
+    if av is not None:
+        for i, ax in enumerate("xyz"):
+            k = "xyz[%d]" % i
+            if k in av.data:
+                trk["rate_" + ax] = to_grid(tav, np.degrees(clean(av.data[k][mav], 100.0)), grid)
+    rs, trs, mrs = win(ulog, "vehicle_rates_setpoint", t0, t1)
+    if rs is not None:
+        for ax in "xyz":
+            src = {"x": "roll", "y": "pitch", "z": "yaw"}[ax]
+            if src in rs.data:
+                trk["rate_%s_sp" % ax] = to_grid(
+                    trs, np.degrees(clean(rs.data[src][mrs], 100.0)), grid)
+
+    # ── 고도 여러 출처 (융합 vs 기압 vs GPS) ────────────────────
+    # 같은 물리량을 다른 센서로 겹쳐 그리면 어느 센서가 튀는지 바로 보인다.
+    ad, tad, mad = win(ulog, "vehicle_air_data", t0, t1)
+    if ad is not None and "baro_alt_meter" in ad.data:
+        b = clean(ad.data["baro_alt_meter"][mad], qgclog._SANE_ALT_M)
+        fin = b[np.isfinite(b)]
+        if fin.size:
+            trk["alt_baro"] = to_grid(tad, b - np.median(fin[:max(1, int(len(fin) * 0.02))]), grid)
+
+    # ── 진동 ────────────────────────────────────────────────────
+    im, tim, mim = win(ulog, "vehicle_imu_status", t0, t1)
+    if im is not None and "accel_vibration_metric" in im.data:
+        trk["vib"] = to_grid(tim, clean(im.data["accel_vibration_metric"][mim], 1000.0), grid)
+
+    # ── GPS 품질 ────────────────────────────────────────────────
+    gp, tgp, mgp = win(ulog, "sensor_gps", t0, t1)
+    if gp is not None:
+        if "satellites_used" in gp.data:
+            trk["sats"] = to_grid(tgp, clean(gp.data["satellites_used"][mgp], 100.0), grid)
+        if "eph" in gp.data:
+            trk["eph"] = to_grid(tgp, clean(gp.data["eph"][mgp], 1000.0), grid)
+
+    # ── EKF innovation (센서 간 불일치) ─────────────────────────
+    iv, tiv, miv = win(ulog, "estimator_innovation_test_ratios", t0, t1)
+    if iv is not None:
+        # 1.0 을 넘은 적 있는 필드만 싣는다. 전부 실으면 20개가 넘어 읽을 수 없다.
+        best = []
+        for k, v in iv.data.items():
+            if k.startswith("timestamp"):
+                continue
+            vv = clean(v[miv], 100.0)
+            fin = vv[np.isfinite(vv)]
+            if fin.size and np.nanmax(np.abs(fin)) > qgclog.INNOV_WARN:
+                best.append((float(np.nanmax(np.abs(fin))), k, vv))
+        for _, k, vv in sorted(best, reverse=True)[:4]:
+            trk["innov_" + k.replace("[", "_").replace("]", "")] = to_grid(tiv, np.abs(vv), grid)
+
+    # ── CPU ─────────────────────────────────────────────────────
+    cp, tcp, mcp = win(ulog, "cpuload", t0, t1)
+    if cp is not None:
+        for src, dst in (("load", "cpu"), ("ram_usage", "ram")):
+            if src in cp.data:
+                trk[dst] = to_grid(tcp, clean(cp.data[src][mcp], 10.0) * 100, grid)
+
     # ── 배터리 ──────────────────────────────────────────────────
     b, tb, mb = win(ulog, "battery_status", t0, t1)
     if b is not None:

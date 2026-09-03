@@ -6,34 +6,48 @@
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <style>
   /* 지도와 그래프 반반. 좁아지면 위아래로 쌓는다. */
-  /* 3열 2행. 지도는 위 가운데 한 칸이고 나머지 다섯 칸이 차트다.
-     지도가 화면 절반을 먹지 않으면서도 궤적을 보기엔 충분한 크기가 된다. */
-  .wrap { display: grid; height: calc(100vh - 96px);
-          grid-template-columns: repeat(3, 1fr); grid-template-rows: 1fr 1fr; }
-  @media (max-width: 1100px) {
-    .wrap { grid-template-columns: 1fr; grid-template-rows: none; height: auto; }
-  }
+  /* 왼쪽 지도(고정) / 오른쪽 차트(세로 스크롤).
+     업계 도구는 전부 차트를 세로 1열로 쌓는다 — 비행 플롯은 시간축이 생명이라
+     가로를 나눠 쓰면 해상도가 죽는다. PX4 는 840px 를 쓴다. 여기서는 지도를
+     왼쪽에 고정해 시간 커서와 같이 보면서도 차트에 ~900px 를 준다. */
+  .wrap { display: grid; grid-template-columns: 380px 1fr;
+          height: calc(100vh - 96px); }
+  .side { display: flex; flex-direction: column; min-height: 0;
+          border-right: 1px solid var(--border-2); }
+  .mapcell { position: relative; flex: 0 0 46%; min-height: 240px; }
+  #map { width: 100%; height: 100%; background: #0d1117; }
+  .sidefoot { flex: 1 1 auto; overflow-y: auto; padding: 10px 12px; min-height: 0; }
+  .sidefoot .fname { font-family: var(--mono); font-size: 11px; color: var(--muted);
+                     word-break: break-all; margin-bottom: 10px; }
+  /* 목차 — 단이 12개까지 늘어나므로 길을 잃지 않게 상시 표시한다 */
+  #toc { display: flex; flex-direction: column; gap: 1px; }
+  #toc a { color: var(--dim); font-size: 12px; padding: 4px 8px; border-radius: 5px;
+           text-decoration: none; border-left: 2px solid transparent; }
+  #toc a:hover { background: var(--panel); color: var(--text); }
+  #toc a.on { color: var(--accent); border-left-color: var(--accent);
+              background: var(--panel); }
 
-  #map { width: 100%; height: 100%; min-height: 200px; background: #0d1117; }
-  .mapcell { position: relative; border-right: 1px solid var(--border);
-             border-bottom: 1px solid var(--border); }
-  @media (max-width: 1100px) { .mapcell { height: 52vh; order: -1; } }
-
-  .chart { position: relative; display: flex; flex-direction: column;
-           min-height: 0; min-width: 0;
-           border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-  @media (max-width: 1100px) { .chart { height: 180px; } }
-  .chart h3 { margin: 0; padding: 5px 12px 0; font-size: 11px; font-weight: 600;
+  .col { min-width: 0; overflow-y: auto; }
+  .charts { display: flex; flex-direction: column; }
+  .chart { position: relative; border-bottom: 1px solid var(--border);
+           flex: 0 0 auto; }
+  .chart h3 { margin: 0; padding: 8px 14px 2px; font-size: 11px; font-weight: 600;
               color: var(--dim); display: flex; gap: 10px; align-items: baseline;
-              flex: 0 0 auto; }
-  .chart h3 .k { font-weight: 600; font-size: 11px; }
-  /* 헤더 줄을 없앤 대신 파일명은 첫 단 오른쪽 끝에 둔다 */
-  .chart h3 .fname { margin-left: auto; color: var(--muted); font-weight: 400;
-                     font-family: var(--mono); font-size: 11px; }
-  .chart svg { display: block; width: 100%; flex: 1 1 auto; min-height: 0;
-               cursor: crosshair; touch-action: none; }
-  /* 아래 고정 줄 — 읽기 패널 + 재생 조작 */
-  .bottom { border-top: 1px solid var(--border-2); }
+              flex-wrap: wrap; }
+  .chart h3 .ct { color: var(--text); font-size: 12px; margin-right: 4px; }
+  .chart h3 .k { font-weight: 600; font-size: 11px; cursor: pointer;
+                 user-select: none; }
+  .chart h3 .k.off { color: var(--muted) !important; text-decoration: line-through; }
+  /* PX4 는 840x400 (약 2.1:1). 여기도 같은 비율로 간다. */
+  .chart svg { display: block; width: 100%; height: 210px; cursor: crosshair;
+               touch-action: none; }
+
+  @media (max-width: 1100px) {
+    .wrap { grid-template-columns: 1fr; height: auto; }
+    .side { border-right: 0; }
+    .mapcell { flex: none; height: 44vh; }
+    .col { overflow: visible; }
+  }
 
   /* 재생 조작 */
   .player { display: flex; align-items: center; gap: 10px; padding: 8px 12px;
@@ -84,20 +98,28 @@
 
 <div id="banner"></div>
 
-<div class="wrap" id="wrap"></div>
-
-<!-- 지도 셀은 자바스크립트가 차트들 사이(위 가운데)에 끼워 넣는다 -->
-<template id="mapTpl">
-  <div class="mapcell">
-    <div id="map"></div>
-    <!-- 헤더 줄을 없앤 대신 목록으로 돌아갈 길은 여기 남긴다. -->
-    <div class="maptools">
-      <a class="btn" href="/" title="목록으로">←</a>
-      <button id="tileBtn">위성</button>
-      <button id="fitBtn">전체</button>
+<div class="wrap">
+  <!-- 왼쪽: 지도 + 목차. 스크롤을 따라오지 않고 고정된다. -->
+  <aside class="side">
+    <div class="mapcell">
+      <div id="map"></div>
+      <div class="maptools">
+        <a class="btn" href="/" title="목록으로">←</a>
+        <button id="tileBtn">위성</button>
+        <button id="fitBtn">전체</button>
+      </div>
     </div>
-  </div>
-</template>
+    <div class="sidefoot">
+      <div class="fname" id="fname"></div>
+      <nav id="toc"></nav>
+    </div>
+  </aside>
+
+  <!-- 오른쪽: 차트 세로 스크롤. 시간축 폭을 최대한 준다. -->
+  <main class="col">
+    <div class="charts" id="charts"></div>
+  </main>
+</div>
 
 <div class="bottom">
     <div class="readout" id="readout"></div>
@@ -129,6 +151,7 @@ const SHADE_UUID_PREFIX = '00060000000031323438';   // 이 기체. 다르면 배
 // 타일이 있는 것보다 더 당길 수 있게 둔다. 궤적을 가까이 볼 때 쓰인다.
 const MAX_ZOOM = 22;
 
+const HIDDEN = new Set();   // 범례 클릭으로 숨긴 계열
 let SUM = null, TRK = null, LOGNAME = '', map, track, marker, homeMk, startMk, endMk;
 let tiles = {}, tileMode = 'osm';
 
@@ -191,9 +214,11 @@ function drawTrack() {
   const SEG = 4;                                  // 4점씩 묶어 그린다 (선 수를 줄인다)
   for (let i = 0; i + 1 < valid.length; i += SEG) {
     const chunk = valid.slice(i, i + SEG + 1);
-    const a = chunk[Math.floor(chunk.length / 2)][2];
+    // 궤적을 **비행모드 색**으로 칠한다. 차트 배경 밴드와 같은 색 언어를 쓰면
+    // "지도 이 구간 = 저 차트 저 구간" 이 설명 없이 이어진다 (PX4 도 같은 방식).
+    const mid = chunk[Math.floor(chunk.length / 2)];
     L.polyline(chunk.map((p) => [p[0], p[1]]), {
-      color: altColor((a ?? 0) / altMax), weight: 3.5, opacity: .95,
+      color: modeColorAt(mid[3] / TRK.hz), weight: 3.5, opacity: .95,
     }).addTo(grp);
   }
   track = L.polyline(valid.map((p) => [p[0], p[1]]), { opacity: 0 }).addTo(map);
@@ -217,14 +242,23 @@ function drawTrack() {
     const d = L.DomUtil.create('div');
     d.style.cssText = 'background:rgba(22,27,34,.92);padding:6px 9px;border-radius:6px;' +
       'color:#e6edf3;font-size:11px;line-height:1.6';
-    const bar = [0, .25, .5, .75, 1].map((v) =>
-      `<span style="display:inline-block;width:18px;height:9px;background:${altColor(v)}"></span>`).join('');
-    d.innerHTML = `고도 (arm 기준)<br>${bar}<br>
-      <span style="color:#8b949e">0 m</span> …
-      <span style="color:#8b949e">${altMax.toFixed(0)} m</span>`;
+    // 궤적 색 = 비행모드. 이 로그에 실제로 나온 모드만 싣는다.
+    const seen = [];
+    for (const m of (TRK.modes || [])) if (!seen.includes(m.name)) seen.push(m.name);
+    d.innerHTML = '비행모드<br>' + (seen.length ? seen.map((n) =>
+      `<span style="display:inline-block;width:10px;height:9px;background:${
+        modeColor(n)};margin-right:4px"></span>${n}`).join('<br>')
+      : '<span style="color:#8b949e">모드 정보 없음</span>');
     return d;
   };
   lg.addTo(map);
+}
+
+/** 그 시각의 비행모드 색 */
+function modeColorAt(t) {
+  let name = null;
+  for (const m of (TRK.modes || [])) { if (m.t <= t) name = m.name; else break; }
+  return name ? modeColor(name) : '#58a6ff';
 }
 
 function altColor(f) {
@@ -246,32 +280,53 @@ function planeIcon(deg) {
 }
 
 // ── 차트 ─────────────────────────────────────────────────────────────
-// 차트 5개 + 지도. 배치는 3열 2행이고 지도는 위 가운데다 (아래 .wrap 참조).
-// 고르는 기준은 "사고를 설명할 때 실제로 본 것":
-//   고도·속도  — 떴는지, 어떻게 움직였는지. 모든 판독의 출발점
-//   전류·모터  — 45A 초과와 모터 불균형. 이 기체의 최대 현안
-//   조종 vs 반응 — 스로틀을 내렸는데 안 내려가는가. #184 의 핵심 증거
-//   자세       — 경사. 제어 상실 판별
-//   전압       — 셀 처짐. 전류와 짝
+// PX4 Flight Review 의 순서를 따른다: 추정 → 제어 → 구동 → 센서 → 건강.
+// 그 도구가 10년 넘게 다듬은 분류 순서라 새로 발명할 이유가 없다.
+//
+// 두 가지 관용구를 그대로 가져왔다:
+//   1) 실측과 목표를 **같은 축**에 겹친다 (`sp` 계열). PX4 주석이 설계 철학을 말한다 —
+//      "'what it is' and 'what it should be'". 차이를 계산하지 않아도 추종 실패가 보인다.
+//   2) 데이터가 없으면 그 단을 **통째로 숨긴다**. 52개를 정의해도 쿼드에선 18개만 뜬다.
+//      화면이 짧아지는 게 아니라, 남은 것이 전부 의미 있는 것이 된다.
 const CHARTS = [
-  { id: 'c1', bands: true, events: true, series: [
-      { key: 'alt', color: 'var(--c-alt)', label: '고도', axis: 'left', weight: 2 },
-      { key: 'spd', color: 'var(--c-spd)', label: '속도', axis: 'right' }] },
-  { id: 'c2', bands: true, events: false, series: [
-      { key: 'cur', color: 'var(--c-cur)', label: '전류', axis: 'left', weight: 2.2 }],
-    motorsOn: 'right',
+  { id: 'c1', title: '고도', bands: true, events: true, series: [
+      { key: 'alt', color: 'var(--c-alt)', label: '고도(융합)', axis: 'left', weight: 2 },
+      { key: 'alt_baro', color: '#8b949e', label: '기압', axis: 'left', dim: true },
+      { key: 'climb', color: 'var(--c-spd)', label: '상승률', axis: 'right' }] },
+  { id: 'c2', title: '속도', bands: true, series: [
+      { key: 'spd', color: 'var(--c-spd)', label: '수평속도', axis: 'left', weight: 2 }] },
+  { id: 'c3', title: '자세 — 실측 vs 목표', bands: true, series: [
+      { key: 'roll', color: '#d55e00', label: '롤', axis: 'left', weight: 2 },
+      { key: 'roll_sp', color: '#009e73', label: '롤 목표', axis: 'left', dash: true },
+      { key: 'pitch', color: '#e69f00', label: '피치', axis: 'left', weight: 2 },
+      { key: 'pitch_sp', color: '#55b4e9', label: '피치 목표', axis: 'left', dash: true }] },
+  { id: 'c4', title: '각속도 — 실측 vs 목표', bands: true, series: [
+      { key: 'rate_x', color: '#d55e00', label: '롤레이트', axis: 'left', weight: 2 },
+      { key: 'rate_x_sp', color: '#009e73', label: '목표', axis: 'left', dash: true }] },
+  { id: 'c5', title: '조종 입력', bands: true, events: true, series: [
+      { key: 'stick_throttle', color: 'var(--c-thr)', label: '스로틀', axis: 'left', weight: 2 },
+      { key: 'stick_roll', color: '#d55e00', label: '롤', axis: 'left', dim: true },
+      { key: 'stick_pitch', color: '#e69f00', label: '피치', axis: 'left', dim: true },
+      { key: 'stick_yaw', color: '#55b4e9', label: '요', axis: 'left', dim: true }] },
+  { id: 'c6', title: '모터 출력', bands: true, series: [], motorsOn: 'left' },
+  { id: 'c7', title: '전력', bands: true, series: [
+      { key: 'cur', color: 'var(--c-cur)', label: '전류', axis: 'left', weight: 2 },
+      { key: 'volt', color: 'var(--c-volt)', label: '전압', axis: 'right' }],
     thresholds: [{ v: 45, label: '45A', color: '#d29922' },
                  { v: 90, label: '90A', color: '#f85149' }] },
-  // 스로틀(조종 지시)과 상승률(실제 반응)을 겹쳐 둔다. 둘이 어긋나는 구간이
-  // 곧 "내 말을 안 듣는" 구간이다 — #184 는 이게 20초 넘게 이어졌다.
-  { id: 'c3', bands: true, events: true, series: [
-      { key: 'stick_throttle', color: 'var(--c-thr)', label: '스로틀', axis: 'left', weight: 2 },
-      { key: 'climb', color: 'var(--c-alt)', label: '상승률', axis: 'right' }] },
-  { id: 'c4', bands: true, events: false, series: [
-      { key: 'roll', color: 'var(--c-roll)', label: '롤', axis: 'left' },
-      { key: 'pitch', color: 'var(--c-pitch)', label: '피치', axis: 'left' }] },
-  { id: 'c5', bands: true, events: false, series: [
-      { key: 'volt', color: 'var(--c-volt)', label: '전압', axis: 'left' }] },
+  { id: 'c8', title: '진동', bands: true, series: [
+      { key: 'vib', color: '#f0883e', label: 'accel_vibration', axis: 'left', weight: 2 }],
+    thresholds: [{ v: 10, label: '경고 10', color: '#d29922' },
+                 { v: 30, label: '위험 30', color: '#f85149' }] },
+  { id: 'c9', title: 'GPS 품질', bands: true, series: [
+      { key: 'sats', color: '#3fb950', label: '위성 수', axis: 'left', weight: 2 },
+      { key: 'eph', color: '#f85149', label: 'eph (m)', axis: 'right' }] },
+  // innov_* 는 extract.py 가 1.0 을 넘은 것만 골라 싣는다. 없으면 이 단은 안 뜬다.
+  { id: 'c10', title: 'EKF innovation', bands: true, dynamic: 'innov_',
+    series: [], thresholds: [{ v: 1, label: '불일치 1.0', color: '#d29922' }] },
+  { id: 'c11', title: 'CPU · RAM', bands: true, series: [
+      { key: 'cpu', color: '#58a6ff', label: 'CPU %', axis: 'left' },
+      { key: 'ram', color: '#a371f7', label: 'RAM %', axis: 'left' }] },
 ];
 function cssVar(v) {
   return v.startsWith('var(') ?
@@ -279,42 +334,57 @@ function cssVar(v) {
 }
 
 function buildCharts() {
-  // 모터는 살아 있는 채널만 (control[0] 이 미사용인 기체가 있다)
   const mc = ['#58a6ff', '#3fb950', '#f0883e', '#db61a2', '#a371f7', '#d29922'];
   const motors = TRK.motors || {};
+
   for (const c of CHARTS) {
-    if (!c.motorsOn) continue;
-    c.series = c.series.concat(Object.keys(motors).sort().map((k, i) => {
-      TRK['m' + k] = motors[k];
-      return { key: 'm' + k, color: mc[i % mc.length], label: 'M' + k,
-               axis: c.motorsOn, weight: 1, dim: true };
-    }));
+    // 모터처럼 개수가 로그마다 다른 계열은 여기서 붙인다
+    if (c.motorsOn) {
+      c.series = Object.keys(motors).sort().map((k, i) => {
+        TRK['m' + k] = motors[k];
+        return { key: 'm' + k, color: mc[i % mc.length], label: 'M' + k, axis: c.motorsOn };
+      });
+    }
+    // innov_* 처럼 추출기가 골라 실은 계열
+    if (c.dynamic) {
+      const keys = Object.keys(TRK).filter((k) => k.startsWith(c.dynamic)).sort();
+      c.series = keys.map((k, i) => ({
+        key: k, color: mc[i % mc.length], axis: 'left',
+        label: k.slice(c.dynamic.length),
+      }));
+    }
   }
 
-  // 3열 2행에 [차트, 지도, 차트 / 차트, 차트, 차트] 로 놓는다.
-  // 지도는 위 가운데(2번째 칸)에 끼운다.
-  const live = CHARTS.filter((c) => c.series.length);
-  const wrap = $('#wrap');
-  wrap.innerHTML = '';
-  const MAP_SLOT = 1;
-  let ci = 0;
-  for (let slot = 0; slot < live.length + 1; slot++) {
-    if (slot === MAP_SLOT) {
-      wrap.appendChild(document.getElementById('mapTpl').content.cloneNode(true));
-      continue;
-    }
-    const c = live[ci++];
-    const d = document.createElement('div');
-    d.className = 'chart';
-    // 제목에는 계열 이름을 그 계열 색으로만 쓴다 — 같은 말을 회색으로 또 적지 않는다.
-    // 첫 칸 오른쪽에는 보고 있는 로그 파일명을 둔다 (헤더 줄을 없앤 자리다).
-    d.innerHTML = `<h3>${c.series.map((x) =>
-        `<span class="k" style="color:${cssVar(x.color)}">${x.label}</span>`).join('')}
-      ${ci === 1 ? `<span class="fname">${LOGNAME}</span>` : ''}</h3>
-      <svg id="${c.id}"></svg>`;
-    wrap.appendChild(d);
-  }
+  // 🔴 데이터가 없는 단은 통째로 뺀다. PX4 가 52개를 정의하고도 페이지가 읽히는 이유가
+  //    이것이다 — 남은 단은 전부 실제로 볼 것이 있는 단이 된다.
+  const live = CHARTS.filter((c) => c.series.some((sx) => {
+    const a = TRK[sx.key];
+    return a && a.some((v) => v != null);
+  }));
   CHARTS_LIVE = live;
+
+  $('#charts').innerHTML = live.map((c) => `
+    <section class="chart" id="sec-${c.id}">
+      <h3><span class="ct">${c.title}</span>
+        ${c.series.map((x) =>
+          `<span class="k" style="color:${cssVar(x.color)}"
+                 data-key="${x.key}" title="클릭하면 이 계열을 숨긴다">${x.label}</span>`).join('')}
+      </h3>
+      <svg id="${c.id}"></svg>
+    </section>`).join('');
+
+  // 좌측 목차 — 50단짜리 스크롤에서 길을 잃지 않게 한다.
+  // PX4 는 이걸 상단 드롭다운으로 두는데, 상시 보이는 편이 낫다.
+  $('#toc').innerHTML = live.map((c) =>
+    `<a href="#sec-${c.id}" data-sec="${c.id}">${c.title}</a>`).join('');
+
+  // 범례 클릭으로 계열 숨김 — 전 도구 공통 기대치다
+  document.querySelectorAll('.chart h3 .k').forEach((el) => el.onclick = () => {
+    const k = el.dataset.key;
+    HIDDEN.has(k) ? HIDDEN.delete(k) : HIDDEN.add(k);
+    el.classList.toggle('off', HIDDEN.has(k));
+    redraw();
+  });
 
   redraw();
 }
@@ -350,8 +420,10 @@ function redraw() {
     const el = document.getElementById(c.id);
     if (!el) continue;
     drawChart(el, TRK, {
-      series: c.series.map((s) => ({ ...s, color: cssVar(s.color) })),
-      bands: c.bands, events: c.events, thresholds: c.thresholds, view: VIEW,
+      series: c.series.filter((s) => !HIDDEN.has(s.key))
+                      .map((s) => ({ ...s, color: cssVar(s.color) })),
+      bands: c.bands, bandLabels: c === CHARTS_LIVE[0],
+      events: c.events, thresholds: c.thresholds, view: VIEW,
     });
     svgs.push(el);
     bindChartInput(el);
@@ -399,6 +471,16 @@ function bindChartInput(el) {
     if (drag && !drag.moved) player.seek(timeAtEvent(el, e.clientX));
     drag = null;
   });
+  // 호버로 값을 읽는다. 실제 분석은 재생보다 이걸로 하는 일이 많다 —
+  // 재생 중에는 방해하지 않는다.
+  el.addEventListener('pointermove', (e) => {
+    if (drag || player.playing) return;
+    const t = timeAtEvent(el, e.clientX);
+    if (t >= 0 && t <= TRK.dur) { moveCursors(svgs, t); showValues(t); }
+  });
+  el.addEventListener('pointerleave', () => {
+    if (!player.playing) { moveCursors(svgs, player.t); showValues(player.t); }
+  });
   el.addEventListener('pointercancel', () => { drag = null; });
   el.addEventListener('dblclick', () => setView(0, TRK.dur));
 }
@@ -442,6 +524,12 @@ const RD = [
   ['롤', 'roll', 0, '°', 4], ['피치', 'pitch', 0, '°', 4], ['기수', 'hdg', 0, '°', 4],
   ['스로틀', 'stick_throttle', 2, '', 5],
 ];
+/** 시각 t 의 값들을 읽기 패널에 쓴다 (재생·호버 공용) */
+function showValues(t) {
+  drawReadout(Math.max(0, Math.min(TRK.n - 1, Math.round(t * TRK.hz))), t);
+  $('#tlabel').textContent = `${t.toFixed(1)} / ${TRK.dur.toFixed(1)} s`;
+}
+
 function drawReadout(i, t) {
   const mode = curMode(t);
   let h = `<span>모드</span><b class="v" style="width:7.5em;color:${
@@ -558,6 +646,23 @@ async function boot() {
   drawTrack();
   initPlayer();
   drawReport();
+  // 스크롤에 따라 목차 항목을 표시한다
+  const col = document.querySelector('.col');
+  const marks = [...document.querySelectorAll('#toc a')];
+  const secs = marks.map((a) => document.getElementById('sec-' + a.dataset.sec));
+  const syncToc = () => {
+    const y = col.scrollTop + 60;
+    let cur = 0;
+    secs.forEach((el, i) => { if (el && el.offsetTop <= y) cur = i; });
+    marks.forEach((a, i) => a.classList.toggle('on', i === cur));
+  };
+  col.addEventListener('scroll', syncToc, { passive: true });
+  marks.forEach((a, i) => a.onclick = (e) => {
+    e.preventDefault();
+    if (secs[i]) col.scrollTo({ top: secs[i].offsetTop - 4, behavior: 'smooth' });
+  });
+  syncToc();
+
   // ?t=113.5 로 특정 순간을 바로 열 수 있다. FC 경고를 남에게 보낼 때 쓴다.
   const t0 = parseFloat(new URLSearchParams(location.search).get('t'));
   player.seek(isFinite(t0) ? t0 : 0);

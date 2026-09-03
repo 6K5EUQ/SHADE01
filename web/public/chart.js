@@ -96,11 +96,12 @@ function drawChart(el, trk, spec) {
       const a = trk.modes[i].t;
       const b = i + 1 < trk.modes.length ? trk.modes[i + 1].t : dur;
       bands += `<rect x="${x(a).toFixed(1)}" y="${PAD.t}" width="${Math.max(0, x(b) - x(a)).toFixed(1)}"
-              height="${ih}" fill="${modeColor(trk.modes[i].name)}" opacity=".18"/>`;
+              height="${ih}" fill="${modeColor(trk.modes[i].name)}" opacity=".055"/>`;
       // 라벨은 보이는 영역 안쪽에 붙인다 — 확대해서 밴드 시작이 왼쪽 밖으로
       // 나가도 이름이 보여야 한다.
       const lx = Math.max(x(a) + 4, PAD.l + 4);
-      if (Math.min(x(b), W - PAD.r) - lx > 30) {
+      // 라벨은 요청한 단에만. 12단 전부에 찍으면 화면이 모드 이름으로 뒤덮인다.
+      if (spec.bandLabels && Math.min(x(b), W - PAD.r) - lx > 30) {
         bands += `<text x="${lx.toFixed(1)}" y="${PAD.t + 11}" fill="#8b949e"
                 font-size="9">${esc(trk.modes[i].name)}</text>`;
       }
@@ -156,8 +157,10 @@ function drawChart(el, trk, spec) {
       // 덮어버리면 45A 초과 여부를 못 읽는다 — 정작 그게 보려는 값이다.
       const w = s.weight || 1.4;
       const op = s.dim ? 0.55 : 1;
+      // 목표값은 점선으로 — 실측과 같은 축에 겹치므로 선 종류로 구분한다
+      const dash = s.dash ? ' stroke-dasharray="4 3"' : '';
       plot += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${w}"
-              opacity="${op}" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+              opacity="${op}"${dash} stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
     }
   }
 
@@ -198,17 +201,23 @@ function fmtTick(v) {
   return a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2);
 }
 
+// PX4 Flight Review 의 공식 색표 (config_tables.flight_modes_table) 를 그대로 쓴다.
+// AUTO 계열을 전부 한 보라색으로 묶은 것이 핵심이다 — "조종자가 개입할 수 없는
+// 구간" 이 한 덩어리로 보인다. #184 처럼 failsafe 가 모드를 뺏은 로그에서
+// 그 구간이 통째로 보라로 물들어 바로 눈에 띈다.
 const MODE_COLORS = {
-  MANUAL: '#6e7681', STAB: '#6e7681', ACRO: '#6e7681',
-  ALTCTL: '#58a6ff', POSCTL: '#3fb950',
-  AUTO_MISSION: '#a371f7', AUTO_LOITER: '#d29922', AUTO_RTL: '#f85149',
-  AUTO_TAKEOFF: '#3fb950', AUTO_LAND: '#f0883e',
+  MANUAL: '#cc0000', ACRO: '#66cc00', STAB: '#0033cc',
+  ALTCTL: '#eecc00', POSCTL: '#00cc33', OFFBOARD: '#00cccc',
+  AUTO: '#6600cc',            // AUTO_* 전부
 };
-function modeColor(name) {
-  for (const k in MODE_COLORS) if (name === k) return MODE_COLORS[k];
-  for (const k in MODE_COLORS) if (String(name).startsWith(k)) return MODE_COLORS[k];
+function modeColorLookup(name) {
+  const n = String(name).replace(/~$/, '');       // 추정 표시 제거
+  if (MODE_COLORS[n]) return MODE_COLORS[n];
+  if (n.startsWith('AUTO')) return MODE_COLORS.AUTO;
+  for (const k in MODE_COLORS) if (n.startsWith(k)) return MODE_COLORS[k];
   return '#6e7681';
 }
+const modeColor = modeColorLookup;
 
 /** 모든 차트의 커서를 t 초 위치로 옮긴다. */
 function moveCursors(svgs, t) {
