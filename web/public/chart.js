@@ -102,7 +102,7 @@ function drawChart(el, trk, spec) {
     svg += `<line x1="${PAD.l}" y1="${gy.toFixed(1)}" x2="${W - PAD.r}" y2="${gy.toFixed(1)}"
             stroke="${th.color}" stroke-width="1" stroke-dasharray="5 4" opacity=".75"/>`;
     // 오른쪽 축 눈금과 겹치지 않게 안쪽에 붙인다
-    svg += `<text x="${W - PAD.r - 8}" y="${(gy - 3).toFixed(1)}" fill="${th.color}"
+    svg += `<text x="${W - PAD.r - 8}" y="${(gy - 4).toFixed(1)}" fill="${th.color}"
             font-size="9" text-anchor="end">${esc(th.label)}</text>`;
   }
 
@@ -119,8 +119,12 @@ function drawChart(el, trk, spec) {
       pen = true;
     }
     if (d) {
-      svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="1.4"
-              stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
+      // 주 계열(굵게)과 보조 계열(가늘고 옅게)을 나눈다. 모터 4선이 전류를
+      // 덮어버리면 45A 초과 여부를 못 읽는다 — 정작 그게 보려는 값이다.
+      const w = s.weight || 1.4;
+      const op = s.dim ? 0.55 : 1;
+      svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${w}"
+              opacity="${op}" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
     }
   }
 
