@@ -216,9 +216,29 @@ def build_track(ulog, t0, t1):
     if s is not None:
         tr = qgclog.transitions(ts, s.data["nav_state"][ms], qgclog.NAV_STATE)
         trk["modes"] = [{"t": round(float(x), 2), "name": str(v)} for x, v in tr]
-        if "failsafe" in s.data:
-            fs = qgclog.transitions(ts, s.data["failsafe"][ms].astype(int))
-            trk["failsafe"] = [{"t": round(float(x), 2), "on": bool(v)} for x, v in fs]
+    else:
+        # `vehicle_status` 가 통째로 없는 로그가 있다 (실측: log_182, 디코딩 89.2%).
+        # 그러면 모드 밴드도 읽기 패널의 '모드' 도 비어 버린다. 제어 플래그로
+        # 대신 세운다 — nav_state 만큼 세밀하진 않지만 어느 계열인지는 알려준다.
+        c, tc, mc_ = win(ulog, "vehicle_control_mode", t0, t1)
+        if c is not None:
+            def flag(k):
+                return c.data[k][mc_].astype(bool) if k in c.data else np.zeros(mc_.sum(), bool)
+            auto, pos = flag("flag_control_auto_enabled"), flag("flag_control_position_enabled")
+            alt, man = flag("flag_control_altitude_enabled"), flag("flag_control_manual_enabled")
+            code = np.where(auto, 3, np.where(pos & man, 2,
+                            np.where(alt & man, 1, np.where(man, 0, 4))))
+            NAMES = {0: "MANUAL~", 1: "ALTCTL~", 2: "POSCTL~", 3: "AUTO~", 4: "?"}
+            tr = qgclog.transitions(tc, code)
+            trk["modes"] = [{"t": round(float(x), 2), "name": NAMES.get(int(v), "?")}
+                            for x, v in tr]
+            # 물결표는 '추정' 이라는 표시다. 화면에서 그대로 보인다.
+            trk["modes_estimated"] = True
+
+    # failsafe 는 vehicle_status 가 있을 때만 읽는다 (위 else 로 들어온 로그엔 없다)
+    if s is not None and "failsafe" in s.data:
+        fs = qgclog.transitions(ts, s.data["failsafe"][ms].astype(int))
+        trk["failsafe"] = [{"t": round(float(x), 2), "on": bool(v)} for x, v in fs]
 
     # ── failsafe 플래그별 구간 ──────────────────────────────────
     f, tf, mf = win(ulog, "failsafe_flags", t0, t1)

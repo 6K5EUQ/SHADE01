@@ -7,7 +7,12 @@
 
 'use strict';
 
-const PAD = { l: 46, r: 46, t: 8, b: 16 };
+// 3열 격자라 칸이 좁다. 축 라벨을 폭에 맞춰 줄인다 — 고정 46px 이면
+// 좁은 칸에서 그림 영역이 거의 안 남는다.
+function pad(W, hasRight) {
+  const l = W < 420 ? 30 : 40;
+  return { l, r: hasRight ? l : 10, t: 8, b: 16 };
+}
 
 function niceScale(values, opts = {}) {
   let lo = Infinity, hi = -Infinity;
@@ -41,18 +46,33 @@ function drawChart(el, trk, spec) {
   el.setAttribute('viewBox', `0 0 ${W} ${H}`);
   el.setAttribute('preserveAspectRatio', 'none');
 
+  const hasRight = spec.series.some((s) => s.axis === 'right');
+  const PAD = pad(W, hasRight);
   const dur = trk.dur || (trk.n - 1) / trk.hz;
+  // 보이는 시간 구간. 휠 줌이 이걸 좁히고, 드래그가 옮긴다.
+  const v0 = spec.view ? spec.view.t0 : 0;
+  const v1 = spec.view ? spec.view.t1 : dur;
+  const span = Math.max(v1 - v0, 1e-6);
   const iw = W - PAD.l - PAD.r, ih = H - PAD.t - PAD.b;
-  const x = (t) => PAD.l + (dur ? (t / dur) * iw : 0);
+  const x = (t) => PAD.l + ((t - v0) / span) * iw;
   const xi = (i) => x(i / trk.hz);
+  // 화면 밖 좌표는 잘라낸다. 안 그러면 확대할수록 path 좌표가 거대해진다.
+  const clipId = 'clip-' + (el.id || 'c');
 
   // 좌/우 축을 각각 자기 계열들로 스케일한다
   const scales = {};
   for (const ax of ['left', 'right']) {
     const keys = spec.series.filter((s) => (s.axis || 'left') === ax).map((s) => s.key);
     if (!keys.length) continue;
+    // 확대하면 그 구간의 값 범위로 y 축도 다시 잡는다 — 안 그러면
+    // 좁은 구간의 변화가 전체 범위에 눌려 평평한 선으로 보인다.
+    const i0 = Math.max(0, Math.floor(v0 * trk.hz));
+    const i1 = Math.min(trk.n - 1, Math.ceil(v1 * trk.hz));
     const vals = [];
-    for (const k of keys) for (const v of (trk[k] || [])) vals.push(v);
+    for (const k of keys) {
+      const arr = trk[k] || [];
+      for (let i = i0; i <= i1 && i < arr.length; i++) vals.push(arr[i]);
+    }
     const extra = {};
     if (ax === 'left' && spec.thresholds) {
       for (const th of spec.thresholds) extra.max = Math.max(extra.max ?? -Infinity, th.v);
@@ -64,31 +84,42 @@ function drawChart(el, trk, spec) {
     return PAD.t + (1 - (v - s.lo) / (s.hi - s.lo)) * ih;
   };
 
-  let svg = '';
+  // clip 은 **그림만** 감싼다. 축 눈금까지 넣으면 PAD 영역에 그린 라벨이
+  // 통째로 잘려 y축 숫자가 사라진다.
+  let svg = `<defs><clipPath id="${clipId}"><rect x="${PAD.l}" y="${PAD.t}"
+             width="${iw}" height="${ih}"/></clipPath></defs>`;
+  let plot = '', bands = '';
 
   // ── 비행모드 밴드 (배경) ────────────────────────────────────────
   if (spec.bands && trk.modes && trk.modes.length) {
     for (let i = 0; i < trk.modes.length; i++) {
       const a = trk.modes[i].t;
       const b = i + 1 < trk.modes.length ? trk.modes[i + 1].t : dur;
-      svg += `<rect x="${x(a).toFixed(1)}" y="${PAD.t}" width="${Math.max(0, x(b) - x(a)).toFixed(1)}"
+      bands += `<rect x="${x(a).toFixed(1)}" y="${PAD.t}" width="${Math.max(0, x(b) - x(a)).toFixed(1)}"
               height="${ih}" fill="${modeColor(trk.modes[i].name)}" opacity=".18"/>`;
-      if (x(b) - x(a) > 44) {
-        svg += `<text x="${(x(a) + 4).toFixed(1)}" y="${PAD.t + 11}" fill="#8b949e"
+      // 라벨은 보이는 영역 안쪽에 붙인다 — 확대해서 밴드 시작이 왼쪽 밖으로
+      // 나가도 이름이 보여야 한다.
+      const lx = Math.max(x(a) + 4, PAD.l + 4);
+      if (Math.min(x(b), W - PAD.r) - lx > 30) {
+        bands += `<text x="${lx.toFixed(1)}" y="${PAD.t + 11}" fill="#8b949e"
                 font-size="9">${esc(trk.modes[i].name)}</text>`;
       }
     }
   }
 
+  // 밴드는 배경이므로 격자보다 먼저 깐다. clip 은 각각 걸어 준다.
+  svg += `<g clip-path="url(#${clipId})">${bands}</g>`;
+
   // ── 격자 + y 눈금 ───────────────────────────────────────────────
-  for (let i = 0; i <= 3; i++) {
-    const gy = PAD.t + (i / 3) * ih;
+  const NY = H < 200 ? 2 : 3;
+  for (let i = 0; i <= NY; i++) {
+    const gy = PAD.t + (i / NY) * ih;
     svg += `<line x1="${PAD.l}" y1="${gy.toFixed(1)}" x2="${W - PAD.r}" y2="${gy.toFixed(1)}"
             stroke="#21262d" stroke-dasharray="3 3"/>`;
     for (const [ax, anchor, tx] of [['left', 'end', PAD.l - 5], ['right', 'start', W - PAD.r + 5]]) {
       const s = scales[ax];
       if (!s) continue;
-      const v = s.hi - (i / 3) * (s.hi - s.lo);
+      const v = s.hi - (i / NY) * (s.hi - s.lo);
       const col = (spec.series.find((q) => (q.axis || 'left') === ax) || {}).color || '#6e7681';
       svg += `<text x="${tx}" y="${(gy + 3).toFixed(1)}" fill="${col}" font-size="9"
               text-anchor="${anchor}">${fmtTick(v)}</text>`;
@@ -99,10 +130,10 @@ function drawChart(el, trk, spec) {
   for (const th of (spec.thresholds || [])) {
     if (!scales.left || th.v > scales.left.hi || th.v < scales.left.lo) continue;
     const gy = y(th.v, 'left');
-    svg += `<line x1="${PAD.l}" y1="${gy.toFixed(1)}" x2="${W - PAD.r}" y2="${gy.toFixed(1)}"
+    plot += `<line x1="${PAD.l}" y1="${gy.toFixed(1)}" x2="${W - PAD.r}" y2="${gy.toFixed(1)}"
             stroke="${th.color}" stroke-width="1" stroke-dasharray="5 4" opacity=".75"/>`;
     // 오른쪽 축 눈금과 겹치지 않게 안쪽에 붙인다
-    svg += `<text x="${W - PAD.r - 8}" y="${(gy - 4).toFixed(1)}" fill="${th.color}"
+    plot += `<text x="${W - PAD.r - 8}" y="${(gy - 4).toFixed(1)}" fill="${th.color}"
             font-size="9" text-anchor="end">${esc(th.label)}</text>`;
   }
 
@@ -112,7 +143,9 @@ function drawChart(el, trk, spec) {
     if (!arr || !scales[s.axis || 'left']) continue;
     // null 이 섞이면 선을 끊는다. 이어 그리면 없는 데이터를 지어내는 셈이다.
     let d = '', pen = false;
-    for (let i = 0; i < arr.length; i++) {
+    const from = Math.max(0, Math.floor(v0 * trk.hz) - 1);
+    const to = Math.min(arr.length - 1, Math.ceil(v1 * trk.hz) + 1);
+    for (let i = from; i <= to; i++) {
       const v = arr[i];
       if (v == null || !isFinite(v)) { pen = false; continue; }
       d += `${pen ? 'L' : 'M'}${xi(i).toFixed(1)},${y(v, s.axis).toFixed(1)}`;
@@ -123,7 +156,7 @@ function drawChart(el, trk, spec) {
       // 덮어버리면 45A 초과 여부를 못 읽는다 — 정작 그게 보려는 값이다.
       const w = s.weight || 1.4;
       const op = s.dim ? 0.55 : 1;
-      svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${w}"
+      plot += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${w}"
               opacity="${op}" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`;
     }
   }
@@ -133,15 +166,18 @@ function drawChart(el, trk, spec) {
     for (const e of trk.events) {
       if (e.lvl > 4 || e.t < 0 || e.t > dur) continue;
       const col = e.lvl <= 3 ? '#f85149' : '#d29922';
-      svg += `<line x1="${x(e.t).toFixed(1)}" y1="${PAD.t}" x2="${x(e.t).toFixed(1)}"
+      plot += `<line x1="${x(e.t).toFixed(1)}" y1="${PAD.t}" x2="${x(e.t).toFixed(1)}"
               y2="${PAD.t + ih}" stroke="${col}" stroke-width="1" opacity=".55"/>`;
     }
   }
 
+  svg += `<g clip-path="url(#${clipId})">${plot}</g>`;
+
   // ── x 눈금 ──────────────────────────────────────────────────────
-  for (let i = 0; i <= 4; i++) {
-    const t = (i / 4) * dur;
-    const anchor = i === 0 ? 'start' : i === 4 ? 'end' : 'middle';
+  const NX = W < 420 ? 3 : 4;
+  for (let i = 0; i <= NX; i++) {
+    const t = v0 + (i / NX) * span;
+    const anchor = i === 0 ? 'start' : i === NX ? 'end' : 'middle';
     svg += `<text x="${x(t).toFixed(1)}" y="${H - 4}" fill="#6e7681" font-size="9"
             text-anchor="${anchor}">${t.toFixed(0)}s</text>`;
   }
@@ -151,7 +187,9 @@ function drawChart(el, trk, spec) {
           stroke="#e6edf3" stroke-width="1" opacity=".85" style="display:none"/>`;
 
   el.innerHTML = svg;
-  el._geom = { x, xi, W, H, dur, PAD };
+  el._geom = { x, xi, W, H, dur, PAD, v0, v1, span,
+               // 화면 x(px) → 로그 시각(s)
+               tAt: (px) => v0 + ((px - PAD.l) / iw) * span };
   return el._geom;
 }
 
@@ -178,7 +216,9 @@ function moveCursors(svgs, t) {
     const g = el._geom;
     const c = el.querySelector('.cursor');
     if (!g || !c) continue;
-    const px = g.x(Math.max(0, Math.min(t, g.dur)));
+    // 보이는 구간 밖이면 커서를 숨긴다 — 가장자리에 붙어 있으면 거짓말이 된다
+    if (t < g.v0 || t > g.v1) { c.style.display = 'none'; continue; }
+    const px = g.x(t);
     c.setAttribute('x1', px); c.setAttribute('x2', px);
     c.style.display = '';
   }
