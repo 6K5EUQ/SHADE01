@@ -90,12 +90,24 @@ def find_log_dir(explicit=None):
 
 
 def list_logs(log_dir):
-    """최신순 정렬. 인덱스 1 = 가장 최근."""
+    """최신순 정렬. 인덱스 1 = 가장 최근.
+
+    하위 디렉토리까지 훑는다. ku 는 로그를 날짜 폴더(`logs/2026-08-31/`)에 나눠
+    두는데, 예전에는 맨 위만 봐서 21개를 통째로 못 찾고 "ULog 파일이 없다" 했다.
+
+    정렬 기준은 파일명의 시각이다. mtime 은 회수한 순서일 뿐 비행 순서가 아니다 —
+    rim3 는 mtime 이 비행과 역순이라 `qgclog 1` 이 가장 오래된 비행을 열었다.
+    파일명에 시각이 없는 것만 mtime 으로 떨어뜨린다.
+    """
     out = []
-    for name in os.listdir(log_dir):
-        if name.lower().endswith(".ulg"):
-            full = os.path.join(log_dir, name)
-            out.append((os.path.getmtime(full), full))
+    for root, _dirs, names in os.walk(log_dir):
+        for name in names:
+            if not name.lower().endswith(".ulg"):
+                continue
+            full = os.path.join(root, name)
+            stamp = _time_from_name(full)
+            key = stamp.timestamp() if stamp else os.path.getmtime(full)
+            out.append((key, full))
     out.sort(reverse=True)
     return [f for _, f in out]
 
