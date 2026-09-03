@@ -113,16 +113,34 @@ def list_logs(log_dir):
 
 
 def _time_from_name(path):
-    """log_<n>_YYYY-M-D-H-M-S.ulg 또는 YYYY-MM-DD_HH_MM_SS.ulg 에서 시각을 뽑는다.
+    """파일명에서 **KST** 시각을 뽑는다. 이름 형식마다 기준 시간대가 다르다.
 
     boot_time_utc_us 는 '부팅' 시각이라 같은 세션 로그가 전부 같은 값이 된다.
     파일명이 로그마다 다르므로 이쪽이 정확하다.
+
+    두 가지 형식이 섞여 있고 **시간대가 서로 다르다**:
+
+      `log_<n>_YYYY-M-D-H-M-S.ulg`   QGC 가 내려받으며 붙인 이름 — **로컬(KST)**
+      `YYYY-MM-DD_HH_MM_SS.ulg`      FC SD 에서 그대로 가져온 이름 — **UTC**
+
+    FC 안에서는 `/fs/microsd/log/<날짜>/<HH_MM_SS>.ulg` 로 UTC 로 저장된다
+    (PROCEDURE.md "파일명은 UTC — KST = UTC+9"). 둘을 같은 시간대로 읽으면
+    같은 비행이 9시간 어긋난 두 줄로 보인다 — 실측: `2026-08-31_09_38_28.ulg` 와
+    `log_129_2026-8-31-18-46-02.ulg` 는 부팅시각이 같은 **한 비행**이다.
     """
     base = os.path.basename(path)
-    m = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})[-_](\d{1,2})[-_](\d{2})[-_](\d{2})", base)
+    # QGC 형식이 먼저다. 'log_' 로 시작하는 이름 안의 날짜는 이미 로컬시각이다.
+    m = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})-(\d{1,2})-(\d{2})-(\d{2})", base)
     if m:
         try:
             return datetime(*[int(x) for x in m.groups()])
+        except ValueError:
+            return None
+    # FC 형식 — UTC 이므로 KST 로 올린다.
+    m = re.search(r"(\d{4})-(\d{2})-(\d{2})_(\d{2})_(\d{2})_(\d{2})", base)
+    if m:
+        try:
+            return datetime(*[int(x) for x in m.groups()]) + timedelta(hours=9)
         except ValueError:
             return None
     return None

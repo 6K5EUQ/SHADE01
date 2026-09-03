@@ -248,6 +248,28 @@ def build_track(ulog, t0, t1):
     return trk
 
 
+def flight_key(ulog, t0, t1):
+    """같은 비행을 가리키는 열쇠. 파일명이 달라도 이걸로 묶인다.
+
+    FC 는 로그를 `/fs/microsd/log/<날짜>/<HH_MM_SS>.ulg` 로 저장하고, 그 경로를
+    로그 안에 남긴다. QGC 로 받으면 `log_<n>_...` 로 이름이 바뀌므로 파일명으로는
+    같은 비행인지 알 수 없다 — 실측으로 한 비행이 두 줄로 보이는 경우가 4쌍 있었다.
+    경로가 안 남은 로그(짧게 끊긴 것들)는 부팅시각+구간으로 대신한다.
+    """
+    for m in ulog.logged_messages:
+        if "/fs/microsd" in m.message:
+            return m.message.split()[-1]
+    boot = ulog.msg_info_dict.get("boot_time_utc_us")
+    if boot:
+        return "boot:%s:%.0f:%.0f" % (boot, t0, t1)
+    return None
+
+
+def decoded_points(ulog):
+    """디코딩된 샘플 수. 같은 비행의 사본 중 어느 쪽이 온전한지 고르는 데 쓴다."""
+    return sum(len(d.data["timestamp"]) for d in ulog.data_list)
+
+
 def classify(row):
     """목록 배지. 임계값은 skills/qgc-log/SKILL.md 의 휴리스틱 그대로.
 
@@ -331,12 +353,15 @@ def main():
     }
     row["badge"] = classify(row)
 
+    ulog, _ = qgclog._load(path)
+    t0, t1, armed = armed_window(ulog)
+    row["flight"] = flight_key(ulog, t0, t1)
+    row["points"] = decoded_points(ulog)
+
     if mode == "row":
         print(json.dumps({"ok": True, "row": row}, default=coerce, ensure_ascii=False))
         return
 
-    ulog, _ = qgclog._load(path)
-    t0, t1, armed = armed_window(ulog)
     out = {"ok": True, "row": row, "sum": rep, "trk": build_track(ulog, t0, t1)}
     out["sum"]["uuid"] = ulog.msg_info_dict.get("sys_uuid", "?")
     if note:

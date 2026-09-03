@@ -16,6 +16,8 @@
     <option value="ground">지상</option>
     <option value="abort">즉시 disarm</option>
   </select>
+  <label class="muted" style="font-size:12px;display:flex;align-items:center;gap:4px">
+    <input type="checkbox" id="showAll"> 사본까지</label>
   <button id="cmpBtn" disabled>비교</button>
   <button class="primary" id="upBtn">업로드</button>
 </header>
@@ -112,7 +114,8 @@ function render() {
            ${selected.has(r.id) ? 'checked' : ''}></td>
       <td><a href="/log/${r.id}">${r.name}</a>
           ${r.repaired ? '<span class="flag" title="구독 섹션이 유실돼 다른 로그의 정의를 이식해 읽었다. 수치를 정본으로 쓰지 마라">⚠복구</span>' : ''}
-          ${r.corrupt ? '<span class="flag" title="중간에 깨진 구간이 있다. 최대값이 실제보다 작을 수 있다">⚠손상</span>' : ''}</td>
+          ${r.corrupt ? '<span class="flag" title="중간에 깨진 구간이 있다. 최대값이 실제보다 작을 수 있다">⚠손상</span>' : ''}
+          ${r.copies > 1 ? `<span class="copies" title="같은 비행이 이름만 다르게 ${r.copies}개 있다 (FC 직접 회수본과 QGC 내려받기본). 가장 온전한 것만 보여준다.&#10;숨김: ${(r.copyNames || []).join(', ')}">사본 ${r.copies}</span>` : ''}</td>
       <td class="mono">${fmtTime(r.utc)}</td>
       <td><span class="badge ${b}" title="${tip}">${label}</span></td>
       <td class="num">${fmtN(r.alt_max, 1, 'm')}</td>
@@ -133,7 +136,8 @@ function render() {
 }
 
 async function load() {
-  const r = await fetch('/api/logs');
+  // 기본은 비행당 한 줄. 체크하면 같은 비행의 다른 사본까지 전부 보여준다.
+  const r = await fetch('/api/logs' + ($('#showAll').checked ? '?all=1' : ''));
   all = await r.json();
   render();
 }
@@ -145,6 +149,7 @@ document.querySelectorAll('th[data-k]').forEach((th) => th.onclick = () => {
 });
 $('#q').oninput = render;
 $('#filter').onchange = render;
+$('#showAll').onchange = load;
 $('#cmpBtn').onclick = () => {
   const [a, b] = [...selected];
   location.href = `/compare?a=${a}&b=${b}`;

@@ -159,6 +159,35 @@ async function reconcile() {
   log(`카탈로그 ${catalog.size}개 준비됨`);
 }
 
+/** 같은 비행의 사본을 하나로 접는다.
+ *
+ * 한 비행이 두 경로로 들어온다: FC SD 에서 직접(`YYYY-MM-DD_HH_MM_SS.ulg`, UTC 이름)
+ * 과 QGC 로 내려받아(`log_<n>_...`, 로컬 이름). 바이트가 달라 해시로는 안 걸리지만
+ * 로그 안에 적힌 FC 경로는 같다 — extract.py 의 `flight` 가 그 열쇠다.
+ *
+ * 남기는 쪽은 **디코딩된 샘플이 많은 사본**이다. 실측: `09_09_49` 는 원본이 62%,
+ * 손 복구본(RECOVERED3)이 99% 라 복구본이 이긴다. 진 사본도 지우지 않는다 —
+ * `_repair()` 가 형제 로그를 기증자로 쓰므로 디스크에 있는 편이 낫다.
+ * 전부 보려면 `/api/logs?all=1`.
+ */
+function dedupe(rows, all) {
+  const groups = new Map();
+  for (const r of rows) {
+    const k = r.flight || ('id:' + r.id);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(r);
+  }
+  const out = [];
+  for (const [, g] of groups) {
+    if (g.length === 1) { out.push(g[0]); continue; }
+    g.sort((a, b) => (b.points || 0) - (a.points || 0));
+    const [best, ...rest] = g;
+    if (all) { out.push({ ...best, copies: g.length }, ...rest.map((r) => ({ ...r, superseded: best.id }))); }
+    else out.push({ ...best, copies: g.length, copyNames: rest.map((r) => r.name) });
+  }
+  return out;
+}
+
 // ── HTTP 유틸 ────────────────────────────────────────────────────────
 function send(req, res, status, body, type, extra = {}) {
   const buf = Buffer.isBuffer(body) ? body : Buffer.from(body);
@@ -335,7 +364,8 @@ async function route(req, res) {
   }
 
   if (p === '/api/logs' && req.method === 'GET') {
-    const rows = [...catalog.values()]
+    const all = url.searchParams.get('all') === '1';
+    const rows = dedupe([...catalog.values()], all)
       .map(({ file, ...r }) => r)                       // 서버 경로는 내보내지 않는다
       .sort((a, b) => String(b.utc || '').localeCompare(String(a.utc || '')));
     return sendJson(req, res, 200, rows);

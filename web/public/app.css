@@ -86,6 +86,8 @@ input[type=text], input[type=password], input[type=search], select {
 .badge.err     { background: #3d1518; color: #ff7b72; border-color: #63232a; }
 
 .flag { font-size: 11px; color: var(--warn); }
+.copies { font-size: 11px; color: var(--muted); border: 1px solid var(--border-2);
+          border-radius: 4px; padding: 0 5px; margin-left: 4px; cursor: help; }
 
 table { border-collapse: collapse; width: 100%; }
 th {
