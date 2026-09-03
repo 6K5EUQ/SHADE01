@@ -874,7 +874,7 @@ def main():
     if args.target == "list":
         print("로그 디렉토리: %s" % log_dir)
         cols = ((4, "#"), (34, "파일"), (18, "시간(KST)"), (10, "최대고도"),
-                (10, "최대속도"), (9, "비행시간"), (9, "파일크기"))
+                (10, "최대속도"), (9, "비행시간"), (14, "파일크기"))
         print(" ".join(_pad(h, w) for w, h in cols))
         print("-" * (sum(w for w, _ in cols) + len(cols) - 1))
         for i, path in enumerate(logs[:args.n], 1):
@@ -891,7 +891,12 @@ def main():
             # 채우면 '고도 0m 로 날았다' 로 읽히므로 '-' 로 비워 둔다.
             alt = "%.1f m" % info["alt_max"] if "alt_max" in info else "-"
             spd = "%.1f m/s" % info["speed_max"] if "speed_max" in info else "-"
-            row = (str(i), name, when, alt, spd, flew, "%.1fM" % info["size_mb"])
+            # 이식 복구본은 목록에서도 표가 나야 한다. 표시가 없으면 수치를
+            # 정본으로 착각한다 — 다른 로그의 정의를 붙여 읽은 값이다.
+            size = "%.1fM" % info["size_mb"]
+            if info.get("repaired"):
+                size += " ⚠복구"
+            row = (str(i), name, when, alt, spd, flew, size)
             print(" ".join(_pad(v, w, right=(j >= 3))
                            for j, ((w, _), v) in enumerate(zip(cols, row))))
         print("\n분석: qgclog <번호>")
