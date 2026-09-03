@@ -143,8 +143,8 @@ xtensa-esp32-elf-nm firmware.elf | grep primary_batt
 `~/.platformio`에 패키지 캐시(`framework-arduinoespressif32`, `toolchain-xtensa-esp32`, `tool-esptoolpy`, `tool-scons`)는 있었으나 **실행 파일이 없어** 재설치가 필요했다.
 
 ```bash
-/home/ku/venv-ardupilot/bin/pip install platformio    # 6.1.19
-/home/ku/venv-ardupilot/bin/pio run -e Unified_ESP32_2400_TX_via_WIFI
+/home/ku/SHADE01/venv-ardupilot/bin/pip install platformio    # 6.1.19
+/home/ku/SHADE01/venv-ardupilot/bin/pio run -e Unified_ESP32_2400_TX_via_WIFI
 ```
 
 ## 플래시
