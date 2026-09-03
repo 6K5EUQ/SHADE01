@@ -22,9 +22,22 @@ sudo systemctl restart lab-shade01
 sleep 2
 systemctl is-active lab-shade01
 
-# 공개 URL 까지 실제로 도는지 본다. 200 이 아니면 실패로 끝난다.
-code=$(curl -s -o /dev/null -w '%{http_code}' https://shade01.bewe.co.kr/api/health)
-echo "healthcheck $code"
-[ "$code" = "200" ] || { echo "❌ 공개 URL 이 200 이 아니다"; exit 1; }
+# 🔴 곧바로 물으면 502 가 난다. 파서를 고친 배포에서는 캐시를 통째로 다시 굽느라
+#    listen 까지 시간이 걸린다 (실측: 로그 67개에 약 7초). 그동안은 터널이
+#    붙을 곳이 없어 502 다 — 실패가 아니라 아직 준비 중인 것이다.
+echo -n "healthcheck "
+for i in $(seq 1 20); do
+  code=$(curl -s -o /dev/null -w '%{http_code}' "https://shade01.bewe.co.kr/api/health" || true)
+  [ "$code" = "200" ] && break
+  echo -n "."
+  sleep 3
+done
+echo " $code"
+[ "$code" = "200" ] || {
+  echo "❌ 60초 안에 200 이 안 나왔다"
+  systemctl status lab-shade01 --no-pager -n 10 || true
+  tail -20 /home/ku/shade01-data/server.log || true
+  exit 1
+}
 curl -s https://shade01.bewe.co.kr/api/health
 echo
