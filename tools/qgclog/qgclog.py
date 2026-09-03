@@ -138,6 +138,10 @@ _GROUND_WINDOW_S = 1.0
 _SANE_ALT_M = 10000.0
 _SANE_SPEED_MS = 200.0
 
+# 정규화된 쿼터니언의 norm 은 1 이다. 이보다 더 벗어나면 EKF 출력이 아니라
+# 파일이 깨진 것으로 본다. 실측상 정상 샘플은 1에서 1e-6 도 안 벗어난다.
+_QUAT_NORM_TOL = 0.1
+
 
 # 로그 끝의 잘린 꼬리가 이보다 작으면 '전원 급단' 으로 본다. 실측상 급단 꼬리는
 # 수십 KB 를 넘지 않는다 (2026-09-02 자 로그: 5.4K / 36K / 39K).
@@ -147,7 +151,8 @@ _TRUNCATED_TAIL_MAX = 256 * 1024
 def _why_broken(path):
     """읽기 실패 원인을 구분한다. '손상' 으로 뭉뚱그리지 않는다."""
     try:
-        raw = open(path, "rb").read()
+        with open(path, "rb") as fh:
+            raw = fh.read()
     except OSError as exc:
         return "파일 읽기 실패: %s" % exc
     if len(raw) < 16 or raw[:4] != b"ULog":
@@ -198,6 +203,16 @@ def _pad(text, width, right=False):
     shown = sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
     fill = " " * max(0, width - shown)
     return fill + text if right else text + fill
+
+
+def _log_level(msg):
+    """FC 로그 메시지의 심각도를 syslog 등급(0=EMERGENCY … 7=DEBUG)으로 돌린다.
+
+    pyulog 가 주는 `log_level` 은 등급 숫자가 아니라 그 숫자의 ASCII 바이트다
+    ('0'=48 … '7'=55). 이미 등급인 값도 방어적으로 그대로 통과시킨다.
+    """
+    lv = msg.log_level
+    return lv - 48 if 48 <= lv <= 55 else lv
 
 
 def _sane(arr, limit):
@@ -441,7 +456,8 @@ def _repair(path):
 
     반환: 복구된 임시 파일 경로, 또는 복구 불가 시 None.
     """
-    raw = open(path, "rb").read()
+    with open(path, "rb") as fh:          # with 없이 열면 핸들이 샌다 —
+        raw = fh.read()                   # 서버처럼 오래 도는 프로세스에서 쌓인다
     if _subscription_block(raw):
         return None                       # 멀쩡하다
 
@@ -470,7 +486,8 @@ def _repair(path):
         if os.path.abspath(cand) == os.path.abspath(path):
             continue
         try:
-            other = open(cand, "rb").read()
+            with open(cand, "rb") as fh:
+                other = fh.read()
         except OSError:
             continue
         blk = _subscription_block(other)
@@ -720,7 +737,9 @@ def analyse(path):
     land = get(ulog, "vehicle_land_detected")
     if att is not None:
         t, mask = window(att)
-        q = [att.data["q[%d]" % i][mask] for i in range(4)]
+        # float64 로 올려 계산한다. float32 그대로면 깨진 샘플의 제곱이 오버플로해
+        # RuntimeWarning 을 내면서 inf 가 섞인다.
+        q = [att.data["q[%d]" % i][mask].astype(np.float64) for i in range(4)]
         roll = np.degrees(np.arctan2(2 * (q[0] * q[1] + q[2] * q[3]),
                                      1 - 2 * (q[1] ** 2 + q[2] ** 2)))
         pitch = np.degrees(np.arcsin(np.clip(2 * (q[0] * q[2] - q[3] * q[1]), -1, 1)))
@@ -730,14 +749,23 @@ def analyse(path):
             flying = np.interp(tw, tl, land.data["landed"].astype(float)) < 0.5
         else:
             flying = np.ones(len(tw), bool)
+        # 깨진 쿼터니언 하나가 '제어 상실' 오탐을 만든다. 정규화된 쿼터니언은
+        # norm 이 1 이므로 거기서 벗어난 샘플은 파일이 깨진 것이다 — EKF 가 낸
+        # 값이 아니라서 다른 유효 플래그로는 안 걸린다. 고도의 5.03e14 m 와 같은 계열.
+        # 실측: log_181 은 1777개 중 1개가 norm 4.25e37 이라 roll_max 가 180° 로 찍혔다.
+        qnorm = np.sqrt(sum(x ** 2 for x in q))
+        flying &= np.isfinite(qnorm) & (np.abs(qnorm - 1.0) < _QUAT_NORM_TOL)
         if flying.any():
             rep["roll_max"] = stat(np.abs(roll[flying]), np.max, 0.0)
             rep["pitch_max"] = stat(np.abs(pitch[flying]), np.max, 0.0)
             rep["tilt_t"] = float(tw[flying][np.argmax(np.abs(roll[flying]))])
             if max(rep["roll_max"], rep["pitch_max"]) > TILT_WARN:
                 rep["findings"].append(
+                    # tilt_t 는 다른 시각 키(nav·msgs)와 같이 절대 로그초로 담는다.
+                    # 표시할 때만 arm 기준으로 뺀다 — 이걸 빼먹어서 92초 비행이
+                    # "@1263.9s" 로 나왔다.
                     ("자세", "최대 경사 roll %.0f° / pitch %.0f° @ %.1fs"
-                     % (rep["roll_max"], rep["pitch_max"], rep["tilt_t"]),
+                     % (rep["roll_max"], rep["pitch_max"], rep["tilt_t"] - t0),
                      "제어 상실 의심 구간. 해당 시점 모터 출력·조종 입력 확인"))
 
     # ── 제어 배분 포화 ───────────────────────────────────────────
@@ -801,8 +829,13 @@ def analyse(path):
             rep["good"].append("CPU 여유 — 최대 %.0f%%" % rep["cpu_max"])
 
     # ── 로그 메시지 ─────────────────────────────────────────────
+    # log_level 은 syslog 등급(0~7)이 아니라 그 숫자의 **ASCII 바이트**다.
+    # 54='6'(INFO), 52='4'(WARNING), 51='3'(ERROR). 그래서 `<= 4` 는 영원히 거짓이었고
+    # [FC 경고] 절은 한 번도 출력된 적이 없다 — 36개 로그의 FC 메시지 358건 중
+    # WARNING·ERROR 103건이 전부 조용히 빠졌다. #184 지오펜스 사건을 밝힌
+    # "Geofence: approaching or outside geofence" 도 이 절에는 안 나왔다.
     rep["msgs"] = [(m.timestamp / 1e6, m.log_level_str(), m.message)
-                   for m in ulog.logged_messages if m.log_level <= 4]
+                   for m in ulog.logged_messages if _log_level(m) <= 4]
     rep["dropouts"] = (len(ulog.dropouts), sum(d.duration for d in ulog.dropouts))
     return rep
 
