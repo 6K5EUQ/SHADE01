@@ -9,8 +9,9 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 | [`airframes/`](airframes/) | 기체 조립·구성 |
 | [`gcs/`](gcs/) | [QGroundControl 설치·접속 절차](gcs/qgroundcontrol/README.md) · [분석 PC 접속(Tailscale)](gcs/ACCESS.md) |
 | [`flights/`](flights/) | 비행/세션별 분석 — **로그 원본이 사라져도 남는 정본** · [로그 소재 목록](flights/LOG-INVENTORY.md) |
-| `logs/<날짜>/` | `.ulg` 원본 (git 제외) |
+| `logs/` | `.ulg` 원본 (git 제외, **평면으로 쌓는다**) |
 | [`tools/`](tools/qgclog/) | 로그 수집(`fcfetch.py`)·분석(`qgclog`) |
+| [`web/`](web/) | [shade01.bewe.co.kr](https://shade01.bewe.co.kr) — 지도·시간축 재생 뷰어, 로그 정본 보관소 |
 | `params/` `config/` | 파라미터 스냅샷, 조종기 설정 백업 |
 | [`PROCEDURE.md`](PROCEDURE.md) | 로그 수집 → 분석 → 기록 절차 |
 
