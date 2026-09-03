@@ -120,6 +120,9 @@ def _time_from_name(path):
 # log_182 의 z 한 샘플이 5.03e14 m 로 읽혀 최고고도가 그 값으로 찍혔다.
 # z_valid 플래그로는 못 거른다 — EKF 가 낸 값이 아니라 파일이 깨진 것이라
 # 플래그는 True 로 남아 있다. 물리적으로 불가능한 크기만 버린다.
+# arm 직후 이만큼은 지상에 정지해 있다고 보고 지면 높이를 잡는다.
+_GROUND_WINDOW_S = 1.0
+
 _SANE_ALT_M = 10000.0
 _SANE_SPEED_MS = 200.0
 
@@ -153,6 +156,28 @@ def _why_broken(path):
     if not _subscription_block(raw):
         return "구독 섹션 유실 — 같은 포맷의 정상 로그가 없어 복구 불가"
     return "구조는 온전하나 pyulog 가 해석 실패"
+
+
+def _agl(z_up, t_rel=None):
+    """arm 시점을 0 으로 잡은 상대고도. z_up 은 이미 위가 양수여야 한다.
+
+    `vehicle_local_position` 의 z 는 EKF 원점 기준이라 이륙 지점과 다르다.
+    그대로 쓰면 지상에 있던 로그가 -7.0 m 로 찍혀 "떴는지" 를 눈으로 못 가른다.
+    arm 직후 기체는 지상에 정지해 있으므로 그 구간의 중앙값이 지면이다.
+    첫 샘플 하나만 쓰면 노이즈를 그대로 기준으로 삼게 되므로 중앙값을 쓴다
+    (실측: 둘 차이는 0.05 m 안쪽이지만 중앙값이 튐에 강하다).
+
+    t_rel 은 arm 기준 상대초. 없으면 앞쪽 표본 일부를 지면으로 본다.
+    """
+    if z_up is None or len(z_up) == 0:
+        return None
+    if t_rel is not None and len(t_rel) == len(z_up):
+        ground = z_up[t_rel <= _GROUND_WINDOW_S]
+    else:
+        ground = z_up[:max(1, len(z_up) // 20)]
+    if len(ground) == 0:
+        ground = z_up[:1]
+    return z_up - np.median(ground)
 
 
 def _pad(text, width, right=False):
@@ -224,7 +249,10 @@ def quick_scan(path):
             continue
         t = dataset.data["timestamp"] / 1e6
         mask = (t >= t0) & (t <= t1)
-        alt = stat(_sane(-dataset.data["z"][mask], _SANE_ALT_M), np.max)
+        # arm 시점 기준 상대고도. EKF 원점 기준을 그대로 쓰면 지상 로그가
+        # -7.0 m 로 찍혀 떴는지 아닌지를 표에서 읽을 수 없다.
+        agl = _agl(-dataset.data["z"][mask], t[mask] - t0)
+        alt = stat(_sane(agl, _SANE_ALT_M), np.max)
         spd = stat(_sane(np.hypot(dataset.data["vx"][mask],
                                   dataset.data["vy"][mask]), _SANE_SPEED_MS), np.max)
         if alt is not None:
@@ -543,7 +571,7 @@ def analyse(path):
     pos = get(ulog, "vehicle_local_position")
     if pos is not None:
         t, mask = window(pos)
-        alt = _sane(-pos.data["z"][mask], _SANE_ALT_M)
+        alt = _sane(_agl(-pos.data["z"][mask], t[mask] - t0), _SANE_ALT_M)
         vz = _sane(-pos.data["vz"][mask], _SANE_SPEED_MS)
         spd = _sane(np.hypot(pos.data["vx"][mask], pos.data["vy"][mask]),
                     _SANE_SPEED_MS)
