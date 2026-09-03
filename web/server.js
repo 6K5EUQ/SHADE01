@@ -371,20 +371,20 @@ async function route(req, res) {
     return sendJson(req, res, 200, rows);
   }
 
-  const m = /^\/api\/logs\/([^/]+)\/(sum|trk|file)$/.exec(p);
+  // 🔴 `.ulg` 원본은 내보내지 않는다. 조회가 공개라 링크를 아는 누구나 받아갈 수
+  //    있게 되고, 로그에는 비행장 좌표와 기체 전체 텔레메트리가 그대로 들어 있다.
+  //    분석에 필요한 것은 sum/trk 로 이미 나가므로 원본을 열 이유가 없다.
+  //    버튼만 없애는 것으로는 부족하다 — URL 을 직접 치면 받아지므로 여기서 막는다.
+  if (/^\/api\/logs\/[^/]+\/file$/.test(p)) {
+    return sendJson(req, res, 403, { error: '원본 다운로드는 제공하지 않는다' });
+  }
+
+  const m = /^\/api\/logs\/([^/]+)\/(sum|trk)$/.exec(p);
   if (m && req.method === 'GET') {
     const [, id, kind] = m;
     if (!ID_RE.test(id)) return sendJson(req, res, 400, { error: '잘못된 id' });
     const entry = catalog.get(id);
     if (!entry) return sendJson(req, res, 404, { error: '없는 로그' });
-    if (kind === 'file') {
-      let buf;
-      try { buf = await fsp.readFile(entry.file); }
-      catch { return sendJson(req, res, 404, { error: '원본이 사라졌다' }); }
-      return send(req, res, 200, buf, 'application/octet-stream', {
-        'Content-Disposition': "attachment; filename*=UTF-8''" + encodeURIComponent(entry.name),
-      });
-    }
     if (entry.error) return sendJson(req, res, 422, { error: entry.error });
     try { await fsp.access(cachePath(id, kind)); }
     catch {

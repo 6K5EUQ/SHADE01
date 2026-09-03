@@ -75,7 +75,6 @@
   <span class="sub" id="title">불러오는 중…</span>
   <span class="grow"></span>
   <span class="sub" id="badge"></span>
-  <a class="btn" id="dl" href="#">원본 받기</a>
 </header>
 
 <div id="banner"></div>
@@ -495,7 +494,6 @@ async function boot() {
   const row = rows.find((r) => r.id === ID) || {};
   document.title = `${row.name || ''} — SHADE01`;
   $('#title').textContent = row.name || ID;
-  $('#dl').href = `/api/logs/${ID}/file`;
 
   let banners = '';
   if (SUM.repaired) banners += `<div class="warnbox">⚠️ 구독 섹션이 유실돼 <b>다른 로그의 정의를 이식해</b> 읽었다. 토픽·필드 해석이 어긋났을 수 있으니 수치를 정본으로 쓰지 마라.</div>`;
