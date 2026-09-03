@@ -109,7 +109,7 @@ update-desktop-database ~/.local/share/applications 2>/dev/null
 자기 PC 에 맞게 고쳐서** 쓴다:
 
 ```bash
-sed "s|/home/rim3|$HOME|g" gcs/qgroundcontrol/qgc-elrs-backpack.desktop \
+sed "s|/home/[^/]*/|$HOME/|g" gcs/qgroundcontrol/qgc-elrs-backpack.desktop \
   > ~/.local/share/applications/qgc-elrs-backpack.desktop
 cp ~/.local/share/applications/qgc-elrs-backpack.desktop ~/Desktop/
 chmod +x ~/Desktop/qgc-elrs-backpack.desktop
@@ -217,14 +217,86 @@ nmcli -f connection.autoconnect,connection.autoconnect-priority,ipv4.never-defau
 1번(Pi 브리지) 링크는 그동안 죽는다. **둘은 배타적인 폴백 관계**지 병행 경로가 아니다.
 SSH 로 raspb1 을 만지는 작업도 그동안 안 된다.
 
+### 어느 PC 에서 되나 (2026-09-03 확인)
+
+백팩 링크는 **WiFi 라디오가 있는 PC 에서만** 된다. 조종기 AP 에 직접 붙는 방식이라
+유선 랜으로는 대체가 안 된다.
+
+| PC | WiFi 장치 | 백팩 링크 | QGC 바이너리 |
+|---|---|---|---|
+| `rim3` | `wlo1` | ✅ 된다 (여기서 처음 구축) | `SHADE01/qgc-5.1.4/bin/QGroundControl` |
+| `gram-labtop` | `wlp0s20f3` | ✅ 된다 (2026-09-03 반영) | `SHADE01/Applications/QGroundControl.AppImage` |
+| `ku-dgs1` | **없음** | ❌ 못 쓴다 | (WiFi 가 없어 무관) |
+
+`ku-dgs1` 은 `enp3s0` 유선 하나뿐이고 USB WiFi 동글도 안 꽂혀 있다. 확인:
+
+```bash
+nmcli -t -f DEVICE,TYPE dev status | grep ':wifi$'   # 아무것도 안 나오면 불가
+```
+
+**동글을 꽂으면 그때 된다.** 프로파일과 QGC 링크 설정은 이미 `ku` 에도 들어가 있으므로
+(아래 1·2 단계는 완료된 상태), 동글 인식만 확인하고 바로 실행하면 된다. 스크립트는 WiFi 가
+없으면 nmcli 오류 대신 그 사실을 말하고 멈춘다.
+
+### 새 PC 에 백팩 링크 붙이기
+
+스크립트 자체는 PC 를 안 가린다 — WiFi 장치·복귀망·QGC 바이너리를 **실행할 때 감지**한다
+(2026-09-03). 하드코딩된 `wlo1`/`iptimE` 는 없앴다. PC 마다 해줄 일은 셋뿐이다.
+
+**1. 백팩 AP 프로파일 만들기.** 이름·우선순위·`never-default` 가 핵심이다 —
+왜 그런지는 [바로 위 "끌려간다" 항목](#-백팩-ap-는-붙어도-30초2분-뒤-원래-wifi-로-끌려간다-2026-09-02-원인-규명)에 있다.
+
+```bash
+AP="ExpressLRS TX Backpack 17B49E"
+DEV=$(nmcli -t -f DEVICE,TYPE dev status | grep ':wifi$' | cut -d: -f1 | head -1)
+
+nmcli con add type wifi con-name "$AP" ifname "$DEV" ssid "$AP" \
+  wifi-sec.key-mgmt wpa-psk wifi-sec.psk 'expresslrs' \
+  connection.autoconnect no \
+  connection.autoconnect-priority 100 \
+  ipv4.method auto ipv4.never-default yes ipv6.never-default yes ipv4.dns-priority 200
+```
+
+확인 — 네 값이 아래와 같아야 한다:
+
+```bash
+nmcli -f connection.autoconnect,connection.autoconnect-priority,ipv4.never-default,ipv4.dns-priority \
+  con show "ExpressLRS TX Backpack 17B49E"
+# no / 100 / yes / 200
+```
+
+**2. QGC 에 2번 링크 등록.** `~/.config/QGroundControl/QGroundControl.ini` 의
+`[LinkConfigurations]` 에 아래가 있어야 한다. **QGC 를 끈 상태에서** 고친다 — 켜져 있으면
+종료할 때 자기 메모리 값으로 덮어써서 편집이 날아간다.
+
+```ini
+Link1\auto=false
+Link1\high_latency=false
+Link1\host0=10.0.0.1
+Link1\hostCount=1
+Link1\name=2. ELRS 백팩 (조종기 WiFi)
+Link1\port=14555
+Link1\port0=14550
+Link1\type=1
+```
+
+`port=14555` 는 로컬 리슨 포트다. **1번(Pi 브리지)이 쓰는 14550 과 겹치면 안 된다** —
+[위 표](#링크-3개-구성-2026-09-02-확정) 참조.
+
+**3. 아이콘 설치** — 바로 아래 [조종기 ELRS 링크 아이콘](#조종기-elrs-링크-아이콘) 절차.
+
 ### 실행 — `elrs-backpack`
 
 AP 전환·확인·QGC 실행·원복을 한 번에 한다. 창을 닫으면 원래 WiFi 로 되돌아간다.
 
 ```bash
-./gcs/qgroundcontrol/elrs-backpack            # 복귀망 기본값 iptimE
+./gcs/qgroundcontrol/elrs-backpack            # 복귀망 = 지금 붙어 있는 WiFi
 ./gcs/qgroundcontrol/elrs-backpack eduroam    # 복귀망 지정
 ```
+
+인자를 안 주면 **지금 그 WiFi 가 붙어 있는 망**으로 되돌아온다. 옛 버전은 `iptimE` 가
+기본값으로 박혀 있어 다른 PC·다른 장소에서는 엉뚱한 망으로 복귀하려 했다.
+환경변수로도 덮어쓸 수 있다: `ELRS_DEV`(WiFi 장치), `ELRS_AP`(AP 이름), `QGC_BIN`(실행파일).
 
 QGC 가 뜨면 **Comm Links → `2. ELRS 백팩` 을 Connect** 한다 (이 링크는 `auto=false` 다).
 위의 "끌려감" 이 재발하면 스크립트가 그것을 감지하고 **조용히 진행하지 않고 멈춘다.**

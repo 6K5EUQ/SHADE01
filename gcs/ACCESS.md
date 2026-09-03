@@ -17,10 +17,29 @@ ssh rim3@100.117.47.105    # rim3
 |---|---|---|---|---|
 | `gram-labtop` | 100.66.204.25 | `dsa` | `~/SHADE01` | 이 문서를 쓴 PC |
 | `ku-dgs1` | 100.99.120.110 | **`ku`** | `~/SHADE01` | RTT ~48ms |
-| `rim3` | 100.117.47.105 | **`rim3`** | `~/SHADE01` | RTT ~2.2s — **느리다.** 타임아웃 넉넉히 |
+| `rim3` | 100.117.47.105 | **`rim3`** | `~/SHADE01` | RTT ~2.2s — **느리다.** 타임아웃 넉넉히. ⚠️ **IP 로는 22 번이 안 열린다 — `ssh rim3@rim3` 로 이름을 써라** (2026-09-03) |
 | `raspb1-dgs3` | 100.126.161.1 | `raspb1` | (리포 없음) | 기체 컴패니언 — [PROCEDURE.md](../PROCEDURE.md) 참조 |
 
 `rim` (100.107.83.47) 은 소유자가 `yyrrm@` 로 다르다. 위 키로는 안 붙는다.
+
+### PC 별 하드웨어 제약
+
+| | WiFi 라디오 | [ELRS 백팩 링크](qgroundcontrol/README.md#어느-pc-에서-되나-2026-09-03-확인) | GitHub 접속 |
+|---|---|---|---|
+| `gram-labtop` | `wlp0s20f3` | ✅ | ✅ |
+| `rim3` | `wlo1` | ✅ | fetch 만 (자격증명이 `yyrrm` 계정) |
+| `ku-dgs1` | **없음** (유선 `enp3s0`) | ❌ 동글 필요 | ❌ DNS 불가 — 아래 참조 |
+
+**`ku-dgs1` 은 github.com 을 못 찾는다** (2026-09-03 확인). 학교 DNS `203.253.179.2/.3` 이
+둘 다 무응답이라 이름 해석이 안 된다. 인터넷 자체는 살아 있고 (`8.8.8.8` ping OK, PyPI 도
+`pip` 로 붙는다) `8.8.8.8`·`1.1.1.1` 로 직접 물으면 해석된다 — 시스템 DNS 만 막힌 상태다.
+그래서 `ku` 에서는 `git fetch`/`pull` 이 안 된다. gram 을 거쳐 넣는다:
+
+```bash
+# gram 에서 ku 로 직접 밀어넣기 (SSH 경유, github 불필요)
+git push ku@100.99.120.110:/home/ku/SHADE01 main:refs/remotes/6k5euq/main
+ssh ku@100.99.120.110 'cd ~/SHADE01 && git merge --ff-only 6k5euq/main'
+```
 
 ## 살아있는지 확인
 
