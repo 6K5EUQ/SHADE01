@@ -35,7 +35,7 @@ qgclog 1 --dir ~/다른/Logs
 
 1. **리포를 찾는다.** `SHADE01` 경로는 PC 마다 다르다. 하드코딩하지 마라.
    ```bash
-   for d in ~/QGroundControl/SHADE01 ~/SHADE01 ./SHADE01; do
+   for d in ~/SHADE01 ~/QGroundControl/SHADE01 ./SHADE01; do
      [ -x "$d/tools/qgclog/qgclog" ] && { QL="$d/tools/qgclog/qgclog"; break; }
    done
    ```
@@ -99,7 +99,11 @@ qgclog 1 --dir ~/다른/Logs
 
 ## 로그 디렉토리
 
-`--dir` > `$QGC_LOG_DIR` > `~/QGroundControl/Logs` > `~/Documents/QGroundControl/Logs` > `./Logs` 순으로 찾는다.
+`--dir` > `$QGC_LOG_DIR` > **리포의 `logs/`** > `~/SHADE01/logs` >
+`~/SHADE01/QGroundControl/Logs` > `~/QGroundControl/SHADE01/logs` >
+`~/QGroundControl/Logs` > `~/Documents/QGroundControl/Logs` > `./Logs` 순으로 찾는다.
+
+뒤쪽 넷은 리포를 홈 아래로 옮기기 전 경로다 — 옛 PC 를 위해 폴백으로 남겨 뒀다.
 
 ## 🔴 파싱 — 반드시 `qgclog` 를 거쳐라
 
@@ -152,7 +156,7 @@ ulog, repaired = qgclog._load(path)
 ## 의존성
 
 `pyulog`, `numpy`. 런처가 아래 순으로 인터프리터를 찾는다:
-`$QGCLOG_PYTHON` → **리포의 `.venv/bin/python`** → `~/venv-ardupilot/bin/python` →
+`$QGCLOG_PYTHON` → **리포의 `.venv/bin/python`** → **리포의 `venv-ardupilot/bin/python`** →
 `python3` → `python`.
 
 **새 PC 설치** — Ubuntu 24.04 는 `pip` 가 없을 수 있다. 그러면 venv 를 부트스트랩한다.
