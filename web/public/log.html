@@ -116,6 +116,8 @@
 const $ = (s) => document.querySelector(s);
 const ID = location.pathname.split('/').pop();
 const SHADE_UUID_PREFIX = '00060000000031323438';   // 이 기체. 다르면 배너를 띄운다.
+// 타일이 있는 것보다 더 당길 수 있게 둔다. 궤적을 가까이 볼 때 쓰인다.
+const MAX_ZOOM = 22;
 
 let SUM = null, TRK = null, map, track, marker, homeMk, startMk, endMk;
 let tiles = {}, tileMode = 'osm';
@@ -125,18 +127,28 @@ const f2 = (v, u) => v == null ? '–' : v.toFixed(2) + (u || '');
 
 // ── 지도 ─────────────────────────────────────────────────────────────
 function initMap() {
-  map = L.map('map', { zoomControl: true, attributionControl: true });
+  map = L.map('map', { zoomControl: true, attributionControl: true, maxZoom: MAX_ZOOM });
   // 🔴 레이어를 붙이기 전에 뷰를 반드시 정한다. 뷰가 없는 지도에 Path 를 추가하면
   //    Leaflet 이 whenReady 로 미뤘다가 SVG 렌더러의 _bounds 가 없는 상태에서
   //    _clipPoints 를 돌려 터진다 (intersects → undefined.min). 아래 fitBounds 가
   //    실제 범위로 다시 맞춘다.
   map.setView([36.5, 127.8], 6);
+  // maxZoom 은 지도를 얼마나 당길 수 있는지, maxNativeZoom 은 타일이 실제로
+  // 존재하는 한계다. 둘을 같게 두면 그 너머로 당겼을 때 없는 타일을 요청하는데,
+  // Esri 는 없어도 404 가 아니라 "Map data not yet available" 안내 이미지를
+  // HTTP 200 으로 돌려줘 Leaflet 이 오류로 걸러내지 못한다 — 지도가 통째로
+  // 회색 안내판이 된다. maxNativeZoom 을 주면 마지막 타일을 확대해서 쓴다.
+  // 흐릿해질 뿐 궤적 벡터는 선명하므로 근접 확인에 지장이 없다.
+  //
+  // 실측 (비행장 35.181, 128.554): OSM 은 z19 까지, Esri 는 **z18 까지**.
+  // z19 부터 Esri 는 2,521바이트 안내 타일을 준다. 지역마다 다르므로 다른
+  // 비행장에서 회색판이 나오면 이 값을 낮춰라.
   tiles.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '© OpenStreetMap',
+    maxZoom: MAX_ZOOM, maxNativeZoom: 19, attribution: '© OpenStreetMap',
   });
   tiles.sat = L.tileLayer(
     'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    { maxZoom: 19, attribution: 'Esri World Imagery' });
+    { maxZoom: MAX_ZOOM, maxNativeZoom: 18, attribution: 'Esri World Imagery' });
   tiles.osm.addTo(map);
 
   $('#tileBtn').onclick = () => {
