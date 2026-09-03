@@ -19,6 +19,7 @@ import re
 import struct
 import sys
 import tempfile
+import unicodedata
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
@@ -115,6 +116,14 @@ def _time_from_name(path):
     return None
 
 
+# 손상된 로그에서는 float32 한 샘플의 비트가 뒤집혀 지수부가 튄다. 실측:
+# log_182 의 z 한 샘플이 5.03e14 m 로 읽혀 최고고도가 그 값으로 찍혔다.
+# z_valid 플래그로는 못 거른다 — EKF 가 낸 값이 아니라 파일이 깨진 것이라
+# 플래그는 True 로 남아 있다. 물리적으로 불가능한 크기만 버린다.
+_SANE_ALT_M = 10000.0
+_SANE_SPEED_MS = 200.0
+
+
 # 로그 끝의 잘린 꼬리가 이보다 작으면 '전원 급단' 으로 본다. 실측상 급단 꼬리는
 # 수십 KB 를 넘지 않는다 (2026-09-02 자 로그: 5.4K / 36K / 39K).
 _TRUNCATED_TAIL_MAX = 256 * 1024
@@ -146,6 +155,22 @@ def _why_broken(path):
     return "구조는 온전하나 pyulog 가 해석 실패"
 
 
+def _pad(text, width, right=False):
+    """표시폭 기준으로 채운다. %-Ns 는 한글을 1칸으로 세어 표가 어긋난다."""
+    text = str(text)
+    shown = sum(2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in text)
+    fill = " " * max(0, width - shown)
+    return fill + text if right else text + fill
+
+
+def _sane(arr, limit):
+    """물리적으로 불가능한 크기의 샘플을 버린다. 전부 버려지면 None."""
+    if arr is None or len(arr) == 0:
+        return None
+    kept = arr[np.isfinite(arr) & (np.abs(arr) <= limit)]
+    return kept if len(kept) else None
+
+
 def quick_scan(path):
     """목록 표시용 최소 정보. 전체 파싱 없이 빠르게.
 
@@ -157,9 +182,10 @@ def quick_scan(path):
     # pyulog 는 미구독 메시지 id 를 stdout 으로 경고한다. 표가 깨지므로 삼킨다.
     info = {"size_mb": os.path.getsize(path) / 1e6,
             "utc": _time_from_name(path)}
+    wanted = ["actuator_armed", "vehicle_local_position"]
     try:
         with contextlib.redirect_stdout(io.StringIO()):
-            ulog = ULog(path, message_name_filter_list=["actuator_armed"])
+            ulog = ULog(path, message_name_filter_list=wanted)
         datasets = ulog.data_list
     except Exception:
         datasets = []
@@ -180,14 +206,31 @@ def quick_scan(path):
         info["error"] = _why_broken(path)
         return info
     armed_s = 0.0
+    t0 = t1 = None
     for dataset in datasets:
         if dataset.name != "actuator_armed":
             continue
         t = dataset.data["timestamp"] / 1e6
         armed = dataset.data["armed"].astype(bool)
         if armed.any():
-            armed_s = t[armed][-1] - t[armed][0]
+            t0, t1 = t[armed][0], t[armed][-1]
+            armed_s = t1 - t0
     info["armed_s"] = armed_s
+
+    # 고도·속도. analyse() 와 같게 arm 구간으로 자르고 같은 부호 규약을 쓴다
+    # (z 는 아래가 양수라 뒤집는다). 목록과 상세 리포트가 다른 값을 내면 안 된다.
+    for dataset in datasets:
+        if dataset.name != "vehicle_local_position" or t0 is None:
+            continue
+        t = dataset.data["timestamp"] / 1e6
+        mask = (t >= t0) & (t <= t1)
+        alt = stat(_sane(-dataset.data["z"][mask], _SANE_ALT_M), np.max)
+        spd = stat(_sane(np.hypot(dataset.data["vx"][mask],
+                                  dataset.data["vy"][mask]), _SANE_SPEED_MS), np.max)
+        if alt is not None:
+            info["alt_max"] = alt
+        if spd is not None:
+            info["speed_max"] = spd
     if info.get("utc") is None:
         boot = ulog.msg_info_dict.get("boot_time_utc_us")
         if boot:
@@ -500,9 +543,10 @@ def analyse(path):
     pos = get(ulog, "vehicle_local_position")
     if pos is not None:
         t, mask = window(pos)
-        alt = -pos.data["z"][mask]
-        vz = -pos.data["vz"][mask]
-        spd = np.hypot(pos.data["vx"][mask], pos.data["vy"][mask])
+        alt = _sane(-pos.data["z"][mask], _SANE_ALT_M)
+        vz = _sane(-pos.data["vz"][mask], _SANE_SPEED_MS)
+        spd = _sane(np.hypot(pos.data["vx"][mask], pos.data["vy"][mask]),
+                    _SANE_SPEED_MS)
         alt_max = stat(alt, np.max)
         speed_max = stat(spd, np.max)
         # print_report 가 alt_max 로 게이트를 열고 speed_max 를 무조건 읽는다.
@@ -829,18 +873,27 @@ def main():
 
     if args.target == "list":
         print("로그 디렉토리: %s" % log_dir)
-        print("%-4s %-34s %-20s %8s %8s" % ("#", "파일", "일시(KST)", "비행", "크기"))
-        print("-" * 78)
+        cols = ((4, "#"), (34, "파일"), (18, "시간(KST)"), (10, "최대고도"),
+                (10, "최대속도"), (9, "비행시간"), (9, "파일크기"))
+        print(" ".join(_pad(h, w) for w, h in cols))
+        print("-" * (sum(w for w, _ in cols) + len(cols) - 1))
         for i, path in enumerate(logs[:args.n], 1):
             info = quick_scan(path)
+            name = os.path.basename(path)[:34]
             if "error" in info:
-                print("%-4d %-34s  파싱 실패: %s" % (i, os.path.basename(path)[:34], info["error"][:24]))
+                print("%s %s  파싱 실패: %s"
+                      % (_pad(i, 4), _pad(name, 34), info["error"][:40]))
                 continue
             when = info["utc"].strftime("%Y-%m-%d %H:%M") if info.get("utc") else "-"
             armed = info.get("armed_s", 0)
             flew = "%.0f초" % armed if armed else "지상"
-            print("%-4d %-34s %-20s %8s %7.1fM"
-                  % (i, os.path.basename(path)[:34], when, flew, info["size_mb"]))
+            # 고도·속도는 vehicle_local_position 이 없으면 안 나온다. 0 으로
+            # 채우면 '고도 0m 로 날았다' 로 읽히므로 '-' 로 비워 둔다.
+            alt = "%.1f m" % info["alt_max"] if "alt_max" in info else "-"
+            spd = "%.1f m/s" % info["speed_max"] if "speed_max" in info else "-"
+            row = (str(i), name, when, alt, spd, flew, "%.1fM" % info["size_mb"])
+            print(" ".join(_pad(v, w, right=(j >= 3))
+                           for j, ((w, _), v) in enumerate(zip(cols, row))))
         print("\n분석: qgclog <번호>")
         return
 
