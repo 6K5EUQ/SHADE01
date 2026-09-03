@@ -53,7 +53,7 @@ ssh rim3@100.117.47.105 'cd ~/SHADE01 && git pull && ./qgc log list'
 ### git — Tailscale 로 직접 밀어넣기
 
 ```bash
-git push ssh://ku@100.99.120.110/home/ku/QGroundControl/SHADE01 main:refs/heads/from-gram
+git push ssh://ku@100.99.120.110/home/ku/SHADE01 main:refs/heads/from-gram
 ssh ku@100.99.120.110 'cd ~/SHADE01 && git merge --ff-only from-gram && git branch -d from-gram'
 ```
 

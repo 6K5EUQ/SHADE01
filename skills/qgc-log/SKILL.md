@@ -101,7 +101,7 @@ qgclog 1 --dir ~/다른/Logs
 
 `--dir` > `$QGC_LOG_DIR` > **리포의 `logs/`** > `~/SHADE01/logs` >
 `~/SHADE01/QGroundControl/Logs` > `~/QGroundControl/SHADE01/logs` >
-`~/QGroundControl/Logs` > `~/Documents/QGroundControl/Logs` > `./Logs` 순으로 찾는다.
+`~/SHADE01/QGroundControl/Logs` > `~/Documents/QGroundControl/Logs` > `./Logs` 순으로 찾는다.
 
 뒤쪽 넷은 리포를 홈 아래로 옮기기 전 경로다 — 옛 PC 를 위해 폴백으로 남겨 뒀다.
 

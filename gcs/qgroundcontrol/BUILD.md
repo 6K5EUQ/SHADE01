@@ -88,7 +88,7 @@ sudo apt-get install -y build-essential ninja-build cmake \
 요구한다 (`.github/build-config.json` 의 `qt.version`). `aqtinstall` 로 받는다:
 
 ```bash
-~/SHADE01/venv-ardupilot/bin/pip install aqtinstall
+~/SHADE01/venv-ardupilot/bin/python -m pip install aqtinstall
 ~/SHADE01/venv-ardupilot/bin/python -m aqt install-qt linux desktop 6.11.1 linux_gcc_64 \
   -O ~/Qt \
   -m qtgraphs qtlocation qtpositioning qtspeech qtmultimedia qtserialport \
@@ -103,8 +103,8 @@ sudo apt-get install -y build-essential ninja-build cmake \
 
 ```bash
 git clone --recursive --depth 1 --branch v5.1.4 \
-  https://github.com/mavlink/qgroundcontrol.git ~/qgc-build
-cd ~/qgc-build
+  https://github.com/mavlink/qgroundcontrol.git ~/SHADE01/qgc-build
+cd ~/SHADE01/qgc-build
 git checkout -b shade01-vtol-fixes
 git apply /path/to/SHADE01/gcs/qgroundcontrol/shade01-vtol-fixes.patch
 ```
@@ -112,7 +112,7 @@ git apply /path/to/SHADE01/gcs/qgroundcontrol/shade01-vtol-fixes.patch
 ### 빌드
 
 ```bash
-cd ~/qgc-build
+cd ~/SHADE01/qgc-build
 ~/Qt/6.11.1/gcc_64/bin/qt-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 ninja -C build -j 14
 ```
@@ -157,7 +157,7 @@ CPack 이 `missing required plugins in lib/gstreamer-1.0: videoparsersbad` 로 �
 
 ```bash
 cp ~/.local/share/applications/qgroundcontrol.desktop{,.bak.5.0.8}
-sed -i "s|^Exec=.*|Exec=env QT_QPA_PLATFORM=xcb $HOME/qgc-5.1.4/bin/QGroundControl|" \
+sed -i "s|^Exec=.*|Exec=env QT_QPA_PLATFORM=xcb $HOME/SHADE01/qgc-5.1.4/bin/QGroundControl|" \
   ~/.local/share/applications/qgroundcontrol.desktop
 sed -i "s|^Icon=.*|Icon=QGroundControl|" ~/.local/share/applications/qgroundcontrol.desktop
 

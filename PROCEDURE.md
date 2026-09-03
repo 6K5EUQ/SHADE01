@@ -55,11 +55,11 @@ ssh raspb1@100.126.161.1 'sudo systemctl start mavlink-bridge.service'
 scp 'raspb1@100.126.161.1:/tmp/fclogs/*.ulg' logs/
 ```
 
-`~/QGroundControl/Logs` 는 **QGC 자신이 쓰는 폴더일 뿐이다.** 거기 쌓인 로그도 옮겨 온다 —
+`~/SHADE01/QGroundControl/Logs` 는 **QGC 자신이 쓰는 폴더일 뿐이다.** 거기 쌓인 로그도 옮겨 온다 —
 분석·비교·리포트는 전부 리포 안에서 한다.
 
 ```bash
-mv ~/QGroundControl/Logs/*.ulg logs/
+mv ~/SHADE01/QGroundControl/Logs/*.ulg logs/
 ```
 
 `qgclog` 는 `logs/` 를 **1순위 기본 디렉토리**로 찾는다. `*.ulg` 는 `.gitignore` 되어
@@ -85,7 +85,7 @@ rm -f /tmp/get-pip.py
 .venv/bin/pip install pyulog numpy pymavlink pyserial
 ```
 
-> 홈에 `~/venv-ardupilot` 이 이미 있는 PC(`ku`, `rim3`)는 그대로 둬도 된다 —
+> 리포에 `venv-ardupilot/` 이 이미 있는 PC(`ku`, `rim3`)는 그대로 둬도 된다 —
 > 런처가 `.venv` 다음 후보로 계속 찾는다. 이름만 남은 잔재이고 ArduPilot 과는 무관하다.
 
 확인: `./qgc log list` 가 표를 뿌리면 된다.

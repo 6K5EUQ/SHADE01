@@ -15,7 +15,7 @@ set -u
 AP="${ELRS_AP:-ExpressLRS TX Backpack 17B49E}"
 BACK="${1:-iptimE}"
 DEV="${ELRS_DEV:-wlo1}"
-BIN="${QGC_BIN:-$HOME/qgc-5.1.4/bin/QGroundControl}"
+BIN="${QGC_BIN:-$HOME/SHADE01/qgc-5.1.4/bin/QGroundControl}"
 
 if [[ ! -x "$BIN" ]]; then
   echo "빌드된 QGC 가 없다: $BIN" >&2

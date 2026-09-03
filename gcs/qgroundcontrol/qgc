@@ -4,7 +4,7 @@
 # ⚠️ UDP 14550 을 QGC 가 잡는다. mav_bridge 나 분석 스크립트와 동시에 못 쓴다.
 
 set -u
-BIN="${QGC_BIN:-$HOME/qgc-5.1.4/bin/QGroundControl}"
+BIN="${QGC_BIN:-$HOME/SHADE01/qgc-5.1.4/bin/QGroundControl}"
 
 if [[ ! -x "$BIN" ]]; then
   echo "빌드된 QGC 가 없다: $BIN" >&2

@@ -4,7 +4,7 @@ After=network-online.target
 
 [Service]
 Type=simple
-ExecStart=%h/shade-bridge/pc_bridge.sh
+ExecStart=%h/SHADE01/shade-bridge/pc_bridge.sh
 Restart=always
 RestartSec=3
 
