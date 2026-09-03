@@ -5,8 +5,8 @@
 | 항목 | 값 |
 |---|---|
 | 버전 | **QGroundControl v5.1.4** — 직접 빌드 + VTOL 패치 ([BUILD.md](BUILD.md), 2026-09-02) |
-| 이전 | v5.0.8 AppImage — `~/Applications/QGroundControl.AppImage` 에 남겨 뒀다 (되돌아갈 때) |
-| 배포 형태 | AppImage — `~/Applications/QGroundControl.AppImage` (약 172 MB) |
+| 이전 | v5.0.8 AppImage — `~/SHADE01/Applications/QGroundControl.AppImage` 에 남겨 뒀다 (되돌아갈 때) |
+| 배포 형태 | AppImage — `~/SHADE01/Applications/QGroundControl.AppImage` (약 172 MB) |
 | 대상 FC 펌웨어 | **PX4** v1.17.0 커스텀 |
 | 프로토콜 | MAVLink v2 |
 | 공식 문서 | https://docs.qgroundcontrol.com |
@@ -34,8 +34,8 @@ sudo apt remove -y modemmanager        # FC USB 포트를 가로채므로 제거
 ### 2. AppImage 내려받기
 
 ```bash
-mkdir -p ~/Applications
-cd ~/Applications
+mkdir -p ~/SHADE01/Applications
+cd ~/SHADE01/Applications
 # https://github.com/mavlink/qgroundcontrol/releases 에서 x86_64 AppImage 를 받는다
 chmod +x QGroundControl.AppImage
 ```
@@ -51,14 +51,14 @@ chmod +x QGroundControl.AppImage
 ### 3. 실행
 
 ```bash
-~/Applications/QGroundControl.AppImage
+~/SHADE01/Applications/QGroundControl.AppImage
 ```
 
 ⚠️ 터미널에서 백그라운드로 띄울 때는 **`setsid` 로 세션에서 분리**할 것 —
 그냥 `&` 로 띄우면 셸이 종료될 때 QGC 도 같이 죽는다.
 
 ```bash
-setsid ~/Applications/QGroundControl.AppImage >/dev/null 2>&1 &
+setsid ~/SHADE01/Applications/QGroundControl.AppImage >/dev/null 2>&1 &
 ```
 
 ### 4. 바탕화면 아이콘 등록
@@ -644,7 +644,7 @@ FC까지의 CAN 센싱 문제일 가능성이 높다. [PM08-CAN 배선](../../co
 - **수동 시리얼 링크 1초 끊김 근본 원인 미해결** — AppImage 번들 Qt의 포트 열거 문제로 추정되나 확정하지 못했다. QGC를 소스 빌드하면 해소될 가능성이 있다. 현재는 autoconnect로 우회 중이라 실사용에 지장 없음.
 - **FC측 MAVLink 파라미터 실측값 미확정** — `MAV_*_MODE`가 `Onboard`인지 `Normal`인지 미확인. 수신 스트림에 HIGHRES_IMU·ATTITUDE_QUATERNION이 고레이트로 포함된 것으로 보아 `Onboard` 가능성이 높다. QGC Parameters에서 확정할 것. ([RPi 5 문서](../../components/companion/raspberry-pi-5/README.md#-확인-필요))
 - **QGC 버전 미기록** — `rim` PC의 `QGroundControl-x86_64.AppImage` 버전 미확인. Actuators 화면 구성이 버전에 따라 다르므로 기록 필요.
-  `ku-dgs1` 설치 형태는 확인됨 (2026-08-31): **AppImage** `~/Applications/QGroundControl.AppImage` (2026-07-24 내려받음, 180MB), 셸 런처 `~/.local/bin/qgroundcontrol`, 앱 메뉴 항목 `~/.local/share/applications/qgroundcontrol.desktop`, 바탕화면 아이콘 `~/Desktop/qgroundcontrol.desktop` (아이콘은 AppImage 에서 꺼내 `~/.local/share/icons/hicolor/128x128/apps/qgroundcontrol.png` 에 설치). AppImage 는 `--version` 을 지원하지 않아 버전 문자열은 QGC 실행 후 화면에서 확인해야 한다.
+  `ku-dgs1` 설치 형태는 확인됨 (2026-08-31): **AppImage** `~/SHADE01/Applications/QGroundControl.AppImage` (2026-07-24 내려받음, 180MB), 셸 런처 `~/.local/bin/qgroundcontrol`, 앱 메뉴 항목 `~/.local/share/applications/qgroundcontrol.desktop`, 바탕화면 아이콘 `~/Desktop/qgroundcontrol.desktop` (아이콘은 AppImage 에서 꺼내 `~/.local/share/icons/hicolor/128x128/apps/qgroundcontrol.png` 에 설치). AppImage 는 `--version` 을 지원하지 않아 버전 문자열은 QGC 실행 후 화면에서 확인해야 한다.
 - ⚠️ **커스텀 펌웨어로 인한 QGC 경고** — FC에 PX4 v1.17.0 커스텀 빌드(플래시 98.30%)가 올라가 있어, QGC가 표준 릴리스 기준으로 검사하며 **"파라미터 누락" 경고**를 띄울 수 있다. 경고 자체보다 실제 기능 오작동 여부로 판단할 것. ([상세](../../components/fc/holybro-pixhawk-6c-mini/README.md#-플래시-용량-9830의-부작용))
 - 🔴 **실비행 텔레메트리 경로 미확보** — 경로 A는 지상 전용. T900 Pro 등 [미구매 항목](../../airframes/striver-mini-vtol/README.md#보유-사양-메모-shade-기체--pnp).
 - **비행 중 링크 신뢰성 미검증** — 지상 테스트만 완료.

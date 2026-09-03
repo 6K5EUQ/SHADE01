@@ -114,7 +114,7 @@ BATTERY_STATUS  24.125V / 0.54A / 249mAh 소모 / 94%
 ## 빌드
 
 ```bash
-cd ~/ExpressLRS/src
+cd ~/SHADE01/ExpressLRS/src
 pio run -e Unified_ESP32_2400_TX_via_WIFI
 # 산출물: .pio/build/Unified_ESP32_2400_TX_via_WIFI/firmware.bin
 ```

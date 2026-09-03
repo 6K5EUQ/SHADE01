@@ -16,7 +16,7 @@ ssh rim3@100.117.47.105    # rim3
 | 호스트 | Tailscale | 사용자 | 리포 경로 | 비고 |
 |---|---|---|---|---|
 | `gram-labtop` | 100.66.204.25 | `dsa` | `~/SHADE01` | 이 문서를 쓴 PC |
-| `ku-dgs1` | 100.99.120.110 | **`ku`** | `~/QGroundControl/SHADE01` | RTT ~48ms |
+| `ku-dgs1` | 100.99.120.110 | **`ku`** | `~/SHADE01` | RTT ~48ms |
 | `rim3` | 100.117.47.105 | **`rim3`** | `~/SHADE01` | RTT ~2.2s — **느리다.** 타임아웃 넉넉히 |
 | `raspb1-dgs3` | 100.126.161.1 | `raspb1` | (리포 없음) | 기체 컴패니언 — [PROCEDURE.md](../PROCEDURE.md) 참조 |
 
@@ -37,7 +37,7 @@ Tailscale 은 껐다 켜도 주소가 안 바뀌므로 주소를 의심할 필�
 각 PC 에서 리포 안 `.venv` 를 만든다 — 절차는 [PROCEDURE.md](../PROCEDURE.md#2-0-분석-pc-준비-새-pc-최초-1회).
 
 ```bash
-ssh ku@100.99.120.110 'cd ~/QGroundControl/SHADE01 && git pull && ./qgc log list'
+ssh ku@100.99.120.110 'cd ~/SHADE01 && git pull && ./qgc log list'
 ssh rim3@100.117.47.105 'cd ~/SHADE01 && git pull && ./qgc log list'
 ```
 
@@ -54,7 +54,7 @@ ssh rim3@100.117.47.105 'cd ~/SHADE01 && git pull && ./qgc log list'
 
 ```bash
 git push ssh://ku@100.99.120.110/home/ku/QGroundControl/SHADE01 main:refs/heads/from-gram
-ssh ku@100.99.120.110 'cd ~/QGroundControl/SHADE01 && git merge --ff-only from-gram && git branch -d from-gram'
+ssh ku@100.99.120.110 'cd ~/SHADE01 && git merge --ff-only from-gram && git branch -d from-gram'
 ```
 
 ⚠️ 체크아웃된 브랜치(`main`)로 직접 push 하면 거부된다. 임시 브랜치로 받아 병합한다.
@@ -69,9 +69,9 @@ ssh ku@100.99.120.110 'cd ~/QGroundControl/SHADE01 && git merge --ff-only from-g
 scp /tmp/wheels/*.whl ku@100.99.120.110:/tmp/shade-wheels/
 
 # ku 에서 — 새 venv 는 pip 이 없으므로 기존 venv 의 pip 을 빌려 쓴다
-cd ~/QGroundControl/SHADE01
+cd ~/SHADE01
 python3 -m venv --without-pip .venv
-~/venv-ardupilot/bin/python -m pip --python .venv/bin/python install \
+~/SHADE01/venv-ardupilot/bin/python -m pip --python .venv/bin/python install \
   --no-index --find-links /tmp/shade-wheels pyulog numpy pymavlink pyserial
 ```
 
@@ -81,7 +81,7 @@ python3 -m venv --without-pip .venv
 ## 파일 주고받기
 
 ```bash
-scp ku@100.99.120.110:'~/QGroundControl/SHADE01/logs/*.ulg' logs/
+scp ku@100.99.120.110:'~/SHADE01/logs/*.ulg' logs/
 ```
 
 ⚠️ `.ulg` 는 git 에 안 들어간다 (`.gitignore`). 분석 **수치를 문서로** 남기는 것이

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# ku 와 동일한 QGC v5.1.4 (VTOL 패치 포함). deb 를 SHADE01/qgc-5.1.4 에 푼 것이다.
+# ⚠️ UDP 14550 은 하나만 잡는다. mav_bridge 와 동시에 못 쓴다.
+set -u
+BIN="${QGC_BIN:-$HOME/SHADE01/qgc-5.1.4/bin/QGroundControl}"
+[[ -x "$BIN" ]] || { echo "QGC 가 없다: $BIN" >&2; exit 1; }
+exec "$BIN" "$@"

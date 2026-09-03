@@ -7,9 +7,9 @@
 
 | PC | 보유 | 경로 |
 |---|---|---|
-| `gram-labtop` | 38 | `~/QGroundControl/Logs/` |
-| `ku-dgs1` | 26 | `~/QGroundControl/Logs/` |
-| `rim3` | 22 | `~/QGroundControl/Logs/` |
+| `gram-labtop` | 38 | `~/SHADE01/QGroundControl/Logs/` |
+| `ku-dgs1` | 26 | `~/SHADE01/QGroundControl/Logs/` |
+| `rim3` | 22 | `~/SHADE01/QGroundControl/Logs/` |
 
 접속: [gcs/ACCESS.md](../gcs/ACCESS.md)
 

@@ -19,11 +19,11 @@ FC 내장 SD 에서 **QGC 없이 USB 만으로** 로그를 받는다. 2026-08-25
 **회수한 `.ulg` 는 전부 리포의 `logs/` 로 가져온다.** 어느 PC 에서 받든, FC SD 에서
 직접 받든 마찬가지다.
 
-`~/QGroundControl/Logs` 는 **QGC 가 자기 용도로 쓰는 폴더일 뿐이다.** 분석·리포트·
+`~/SHADE01/QGroundControl/Logs` 는 **QGC 가 자기 용도로 쓰는 폴더일 뿐이다.** 분석·리포트·
 비교는 리포 안에서 넓게 한다. QGC 폴더에 있는 로그는 `logs/` 로 옮겨서 본다.
 
 ```bash
-mv ~/QGroundControl/Logs/*.ulg <SHADE01>/logs/
+mv ~/SHADE01/QGroundControl/Logs/*.ulg <SHADE01>/logs/
 ```
 
 `qgclog` 는 `logs/` 를 **1순위 기본 디렉토리**로 찾는다 (`DEFAULT_DIRS`).

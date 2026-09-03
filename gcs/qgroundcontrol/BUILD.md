@@ -88,8 +88,8 @@ sudo apt-get install -y build-essential ninja-build cmake \
 요구한다 (`.github/build-config.json` 의 `qt.version`). `aqtinstall` 로 받는다:
 
 ```bash
-~/venv-ardupilot/bin/pip install aqtinstall
-~/venv-ardupilot/bin/python -m aqt install-qt linux desktop 6.11.1 linux_gcc_64 \
+~/SHADE01/venv-ardupilot/bin/pip install aqtinstall
+~/SHADE01/venv-ardupilot/bin/python -m aqt install-qt linux desktop 6.11.1 linux_gcc_64 \
   -O ~/Qt \
   -m qtgraphs qtlocation qtpositioning qtspeech qtmultimedia qtserialport \
      qtimageformats qtshadertools qtconnectivity qtquick3d qtsensors qtscxml \
@@ -140,9 +140,9 @@ sudo 가 필요 없고, 기존 AppImage 를 남겨둔 채 되돌아갈 수 있�
 
 ```bash
 dpkg-deb -x build/QGroundControl_5.1.4-*_amd64.deb /tmp/qgcpkg
-rm -rf ~/qgc-5.1.4 && mkdir -p ~/qgc-5.1.4
-cp -a /tmp/qgcpkg/usr/. ~/qgc-5.1.4/
-~/qgc-5.1.4/bin/QGroundControl --version    # v5.1.4 가 나와야 한다
+rm -rf ~/SHADE01/qgc-5.1.4 && mkdir -p ~/SHADE01/qgc-5.1.4
+cp -a /tmp/qgcpkg/usr/. ~/SHADE01/qgc-5.1.4/
+~/SHADE01/qgc-5.1.4/bin/QGroundControl --version    # v5.1.4 가 나와야 한다
 ```
 
 ⚠️ **`.deb` 를 만들려면 `gstreamer1.0-plugins-bad` 가 깔려 있어야 한다.** 없으면
@@ -162,9 +162,9 @@ sed -i "s|^Exec=.*|Exec=env QT_QPA_PLATFORM=xcb $HOME/qgc-5.1.4/bin/QGroundContr
 sed -i "s|^Icon=.*|Icon=QGroundControl|" ~/.local/share/applications/qgroundcontrol.desktop
 
 mkdir -p ~/.local/share/icons/hicolor/{256x256,scalable}/apps
-cp ~/qgc-5.1.4/share/icons/hicolor/256x256/apps/QGroundControl.png \
+cp ~/SHADE01/qgc-5.1.4/share/icons/hicolor/256x256/apps/QGroundControl.png \
    ~/.local/share/icons/hicolor/256x256/apps/
-cp ~/qgc-5.1.4/share/icons/hicolor/scalable/apps/QGroundControl.svg \
+cp ~/SHADE01/qgc-5.1.4/share/icons/hicolor/scalable/apps/QGroundControl.svg \
    ~/.local/share/icons/hicolor/scalable/apps/
 gtk-update-icon-cache -f -t ~/.local/share/icons/hicolor
 update-desktop-database ~/.local/share/applications
@@ -190,7 +190,7 @@ scp build/QGroundControl_5.1.4-*_amd64.deb rim3@100.117.47.105:/tmp/
 
 ### 기존 AppImage 를 먼저 지우지 마라
 
-새 빌드가 실기로 검증될 때까지 `~/Applications/QGroundControl.AppImage` 를 남겨둔다.
+새 빌드가 실기로 검증될 때까지 `~/SHADE01/Applications/QGroundControl.AppImage` 를 남겨둔다.
 문제가 생기면 그대로 되돌아갈 수 있어야 한다.
 
 ### v5.0.8 → v5.1.4 는 1 년치 변경이다

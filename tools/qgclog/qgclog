@@ -6,8 +6,8 @@ ROOT="$(cd "$HERE/../.." && pwd)"
 
 pick_python() {
   for cand in "${QGCLOG_PYTHON:-}" "$ROOT/.venv/bin/python" \
-              "$HOME/venv-ardupilot/bin/python" \
-              "$HOME/venv-ardupilot/bin/python3" python3 python; do
+              "$ROOT/venv-ardupilot/bin/python" \
+              "$ROOT/venv-ardupilot/bin/python3" python3 python; do
     [ -n "$cand" ] || continue
     if command -v "$cand" >/dev/null 2>&1 && \
        "$cand" -c "import pyulog, numpy" >/dev/null 2>&1; then
