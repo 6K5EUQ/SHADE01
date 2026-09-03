@@ -1,0 +1,24 @@
+# /etc/systemd/system/lab-shade01.service 로 복사한다.
+# 실제로 도는 것은 /etc/systemd/system 쪽이므로, 손대기 전에
+# `systemctl cat lab-shade01` 로 현물을 확인할 것.
+[Unit]
+Description=SHADE01 flight-log viewer (shade01.bewe.co.kr)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ku
+WorkingDirectory=/home/ku/SHADE01/web
+EnvironmentFile=/home/ku/SHADE01/web/.env
+# node 는 PATH 에 없다. 절대경로를 쓴다.
+ExecStart=/home/ku/.local/bin/node20 server.js
+# venv 가 없으면 서버가 스스로 exit 1 한다. 여기서도 한 번 막는다.
+ExecStartPre=/usr/bin/test -x /home/ku/shade01-venv/bin/python
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/home/ku/shade01-data/server.log
+StandardError=append:/home/ku/shade01-data/server.log
+
+[Install]
+WantedBy=multi-user.target

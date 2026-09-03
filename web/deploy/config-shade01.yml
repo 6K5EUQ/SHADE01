@@ -1,0 +1,12 @@
+# cloudflared ingress — ~/.cloudflared/config-shade01.yml 로 복사해 쓴다.
+# tunnel/credentials-file 의 UUID 는 `cloudflared tunnel create` 가 만들어 준다.
+# 🔴 리포가 public 이므로 실제 UUID 는 여기 적지 않는다. 설치할 때 채운다.
+tunnel: REPLACE_WITH_TUNNEL_UUID
+credentials-file: /home/ku/.cloudflared/REPLACE_WITH_TUNNEL_UUID.json
+
+ingress:
+  # 앱이 127.0.0.1 에 바인딩하므로 localhost 로 충분하다.
+  # (lab-calendar 만 예외적으로 tailnet IP 가 필요했다 — 그건 다른 기계가 접속해서다.)
+  - hostname: shade01.bewe.co.kr
+    service: http://localhost:4300
+  - service: http_status:404

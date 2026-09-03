@@ -21,3 +21,10 @@ ExpressLRS/
 mavlink/
 LINK_SHADE/
 Qt/
+
+# 웹 서비스 런타임 — 업로드 원본·캐시·서버로그·비밀은 커밋하지 않는다.
+# (.ulg 는 위의 *.ulg 가 이미 덮는다. 벤더링한 Leaflet 은 커밋한다 — 그게 요점이다.)
+web/data/
+web/.env
+web/*.log
+web/tools/hosts.conf

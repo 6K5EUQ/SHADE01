@@ -1,0 +1,15 @@
+# cp hosts.conf.example hosts.conf 후 채운다. hosts.conf 는 커밋하지 않는다
+# (리포가 public 이라 인프라 주소를 넣지 않는다).
+#
+# Tailscale 이름을 쓰면 IP 를 안 적어도 된다.
+
+# 로그를 가진 개발 PC 들
+SOURCES=(
+  "ku@ku-dgs1"
+  "rim3@rim3"
+)
+
+# 정본 보관소 (웹 서버)
+SERVER="ku@ku-labserver"
+SERVER_LOGS="/home/ku/shade01-data/logs"
+PUBLIC_URL="https://shade01.bewe.co.kr"
