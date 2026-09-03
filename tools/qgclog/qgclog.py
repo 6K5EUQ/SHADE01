@@ -31,6 +31,7 @@ REPO_LOGS = os.path.join(os.path.dirname(os.path.dirname(
 DEFAULT_DIRS = [
     REPO_LOGS,
     "~/SHADE01/logs",
+    "~/SHADE01/QGroundControl/Logs",
     "~/QGroundControl/SHADE01/logs",
     "~/QGroundControl/Logs",
     "~/Documents/QGroundControl/Logs",
@@ -114,6 +115,11 @@ def _time_from_name(path):
     return None
 
 
+# 로그 끝의 잘린 꼬리가 이보다 작으면 '전원 급단' 으로 본다. 실측상 급단 꼬리는
+# 수십 KB 를 넘지 않는다 (2026-09-02 자 로그: 5.4K / 36K / 39K).
+_TRUNCATED_TAIL_MAX = 256 * 1024
+
+
 def _why_broken(path):
     """읽기 실패 원인을 구분한다. '손상' 으로 뭉뚱그리지 않는다."""
     try:
@@ -127,6 +133,12 @@ def _why_broken(path):
     while o + 3 <= n:
         ln, _ty = struct.unpack_from("<HB", raw, o)
         if o + 3 + ln > n:
+            # 마지막 메시지 하나가 잘린 것과 로그 중간이 깨진 것은 전혀 다르다.
+            # 전원이 갑자기 끊기면 항상 꼬리가 잘린다 — 앞의 데이터는 멀쩡하다.
+            # 예전에는 이걸 '99% 지점에서 붕괴' 로 찍어 손상으로 오해하게 했다.
+            tail = n - o
+            if tail <= _TRUNCATED_TAIL_MAX:
+                return "꼬리 %d바이트 잘림 (전원 급단) — 앞 구간은 정상" % tail
             return "데이터 깨짐 — %.0f%% 지점에서 메시지 구조 붕괴" % (o / n * 100)
         o += 3 + ln
     if not _subscription_block(raw):
@@ -135,8 +147,13 @@ def _why_broken(path):
 
 
 def quick_scan(path):
-    """목록 표시용 최소 정보. 전체 파싱 없이 빠르게."""
+    """목록 표시용 최소 정보. 전체 파싱 없이 빠르게.
+
+    analyse() 와 같은 패치를 반드시 먼저 건다. 예전에는 여기서만 순정 pyulog 를
+    써서, analyse() 로는 멀쩡히 읽히는 로그가 목록에서는 '파싱 실패' 로 찍혔다.
+    """
     from pyulog import ULog
+    _patch_pyulog()
     # pyulog 는 미구독 메시지 id 를 stdout 으로 경고한다. 표가 깨지므로 삼킨다.
     info = {"size_mb": os.path.getsize(path) / 1e6,
             "utc": _time_from_name(path)}
@@ -267,6 +284,39 @@ def _patch_pyulog():
             setattr(mc, meth, wrap(fn))
         mc._shade_patched = True
 
+    # 세 번째 구멍 — 깨진 바이트가 두 번째 FLAGS_BITS 로 오독되면 로그 전체를 버린다.
+    #
+    # 정의 구간이 손상되면 pyulog 는 바이트를 하나씩 밀며 재동기화를 시도하는데,
+    # 그 과정에서 쓰레기가 'B'(FLAGS_BITS) 로 읽히는 일이 있다. pyulog 는 이걸
+    # 스스로 알아채고 'FLAGS_BITS message must be first message' 를 찍으면서도,
+    # 그 난수 바이트를 incompat_flags 로 믿고 ValueError 를 던져 파일을 통째로
+    # 포기한다 (core.py `_read_file_definitions`). 이 예외는 그 함수의
+    # `except IndexError` 에 안 걸리고 밖으로 나간다.
+    #
+    # 실측(2026-09-02, `log_180_2026-9-2-17-40-46.ulg` 1.0MB): offset 164234 에서
+    # incompat [225, 43, 70, 65, 49, 187, 56, 50] 로 읽혀 1MB 전체가 버려졌다.
+    # 진짜 첫 FLAGS_BITS(offset 16)는 incompat 이 전부 0 인 정상값이었다.
+    #
+    # 첫 메시지가 아닌 FLAGS_BITS 는 정의상 가짜다. IndexError 로 바꿔 pyulog 가
+    # 이미 가진 손상 처리 경로(그 메시지만 버리고 계속)에 태운다.
+    fb = ULog._MessageFlagBits
+    if not getattr(fb, "_shade_flagbits_patched", False):
+        fb_original = fb.__init__
+
+        def flagbits_guarded(self, data, header, *args, **kwargs):
+            if header.msg_size != len(data) or len(data) < 16:
+                raise IndexError("bogus FLAGS_BITS: size %s" % header.msg_size)
+            compat = list(struct.unpack("<" + "B" * 8, data[0:8]))
+            incompat = list(struct.unpack("<" + "B" * 8, data[8:16]))
+            # 정상 로그의 incompat 은 bit0(DEFAULT_PARAMETERS) 외에는 전부 0 이다.
+            if incompat[0] & ~1 or any(incompat[1:]):
+                raise IndexError("bogus FLAGS_BITS: incompat %s" % incompat)
+            del compat
+            return fb_original(self, data, header, *args, **kwargs)
+
+        fb.__init__ = flagbits_guarded
+        fb._shade_flagbits_patched = True
+
     cls._shade_patched = True
 
 
@@ -313,11 +363,22 @@ def _repair(path):
         return None                       # 멀쩡하다
 
     def formats(buf):
+        """F(포맷) 정의를 이름 -> 정의문 으로. 쓰레기로 읽힌 것은 버린다.
+
+        손상된 로그에서는 데이터 구간의 임의 바이트가 'F' 로 오독돼 가짜 포맷이
+        섞인다. 그대로 두면 기증자 로그와 정의가 '다르다' 고 판정돼 복구를
+        포기하게 된다 (실측: log_180 은 가짜 2개 때문에 기증자를 못 찾았다).
+        토픽 이름은 ASCII 식별자이므로 그 조건으로 걸러낸다.
+        """
         out = {}
         for kind, off, ln in _scan_sections(buf):
-            if kind == "F":
-                txt = buf[off + 3:off + 3 + ln].decode("utf-8", "replace")
-                out[txt.split(":")[0]] = txt
+            if kind != "F":
+                continue
+            txt = buf[off + 3:off + 3 + ln].decode("utf-8", "replace")
+            name = txt.split(":")[0]
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+                continue
+            out[name] = txt
         return out
 
     mine = formats(raw)
@@ -330,8 +391,12 @@ def _repair(path):
         except OSError:
             continue
         blk = _subscription_block(other)
-        # 포맷 정의가 완전히 같아야 msg_id 매핑을 믿을 수 있다
-        if blk and formats(other) == mine:
+        # 기증자가 내 포맷을 전부 같은 내용으로 갖고 있어야 msg_id 매핑을 믿을 수
+        # 있다. 기증자에만 있는 토픽은 무해하다 — 내 D 메시지가 참조하지 않는다.
+        if not blk:
+            continue
+        other_fmt = formats(other)
+        if all(other_fmt.get(k) == v for k, v in mine.items()):
             donor_blk = blk
             break
     if not donor_blk:
