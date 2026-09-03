@@ -2,3 +2,9 @@ __pycache__/
 *.pyc
 *.ulg
 .venv/
+
+# QGC app data and build trees (large, machine-local)
+QGroundControl/
+qgc-build/
+qgc-src/
+qgc-5.1.4/
