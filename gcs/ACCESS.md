@@ -14,6 +14,13 @@ ssh rim@100.107.83.47      # rim
 ⚠️ **사용자명이 호스트마다 다르다.** `dsa` 로는 안 붙는다 (`Permission denied`).
 공개키 인증이고 비밀번호는 안 받는다.
 
+⚠️ **`gram-labtop` 에는 다른 PC 에서 SSH 로 못 들어간다** (2026-09-04 `ku` 에서 실측).
+22 번은 열려 있고 Tailscale 로 ping 도 되지만 `dsa`·`ku`·`gram`·`6k5euq` 전부
+`Permission denied (publickey)` 다 — gram 의 `authorized_keys` 에 다른 PC 의 키가
+없다. gram 은 **나가는 쪽**으로만 쓴다 (이 문서를 쓴 PC 가 gram 이다).
+gram 에 무언가를 설치하려면 **gram 앞에 앉아서** 하거나, gram 에서 이쪽으로
+`ssh` 를 열어야 한다.
+
 | 호스트 | Tailscale | 사용자 | 리포 경로 | 비고 |
 |---|---|---|---|---|
 | `gram-labtop` | 100.66.204.25 | `dsa` | `~/SHADE01` | 이 문서를 쓴 PC |

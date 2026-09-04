@@ -139,6 +139,34 @@ function drawChart(el, trk, spec) {
   }
 
   // 밴드는 배경이므로 격자보다 먼저 깐다. clip 은 각각 걸어 준다.
+  // ── 착륙(접지) 구간 ──────────────────────────────────────────────
+  // 접지 뒤에도 EKF 는 값을 낸다. 지면효과로 고도가 몇 십 cm 올라가고 상승률이
+  // +로 뒤집히는데, 표시가 없으면 "착륙 직전에 다시 떴다" 로 읽힌다.
+  for (const [a, b] of trk.landed_spans || []) {
+    if (b < v0 || a > v1) continue;
+    bands += `<rect x="${x(a).toFixed(1)}" y="${PAD.t}"
+            width="${Math.max(0, x(b) - x(a)).toFixed(1)}" height="${ih}"
+            fill="#8b949e" opacity=".18"/>`;
+    bands += `<line x1="${x(a).toFixed(1)}" y1="${PAD.t}" x2="${x(a).toFixed(1)}"
+            y2="${PAD.t + ih}" stroke="#8b949e" stroke-width="1"
+            stroke-dasharray="3 2" opacity=".7"/>`;
+    if (x(b) - x(a) > 34) {
+      bands += `<text x="${(x(a) + 4).toFixed(1)}" y="${PAD.t + ih - 4}"
+              fill="#8b949e" font-size="9">착륙</text>`;
+    }
+  }
+
+  // ── 0 기준선 ────────────────────────────────────────────────────
+  // 부호가 뜻을 갖는 축(상승률·자세·각속도)에서 0 이 어디인지 안 보이면
+  // 오르는 중인지 내리는 중인지 선 모양만으로는 못 읽는다.
+  for (const ax of ['left', 'right']) {
+    const sc = scales[ax];
+    if (!sc || sc.lo >= 0 || sc.hi <= 0) continue;   // 0 이 범위 안에 있을 때만
+    const zy = y(0, ax).toFixed(1);
+    bands += `<line x1="${PAD.l}" y1="${zy}" x2="${(W - PAD.r).toFixed(1)}" y2="${zy}"
+            stroke="#8b949e" stroke-width="1" stroke-dasharray="2 3" opacity=".35"/>`;
+  }
+
   svg += `<g clip-path="url(#${clipId})">${bands}</g>`;
 
   // ── 격자 + y 눈금 ───────────────────────────────────────────────

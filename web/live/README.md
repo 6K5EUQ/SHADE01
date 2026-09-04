@@ -39,6 +39,33 @@
 [VTOL 상태가 `MC` 가 아니면](../../README.md#-고정익-사용-금지--쿼드-전용-2026-09-04)
 빨간 배너가 뜬다.
 
+## PC 별 구축 상태 (2026-09-04)
+
+| PC | 상태 | UDP 포트 | 왜 |
+|---|---|---|---|
+| `ku` | ✅ 가동 | **14550** | 비어 있다 |
+| `rim3` | ✅ 가동 | **14551** | `shade-bridge` 가 14550 을 쥔다 (Tailscale 주소에 바인딩) |
+| `rim` | ✅ 가동 | **14551** | QGC 가 14550 을 쥔다 |
+| `gram-labtop` | ⬜ 미설치 | — | 이 PC 들의 SSH 키가 gram 에 없다. **아래를 gram 에서 직접 한 번 돌린다** |
+
+`gram` 에서 (한 번만):
+
+```bash
+cd ~/SHADE01
+git pull
+python3 -m venv .venv 2>/dev/null            # 이미 있으면 건너뛴다
+.venv/bin/pip install -r web/requirements.txt
+loginctl enable-linger $(whoami)             # 로그아웃해도 살아 있게
+./qgc live on                                # 14550 이 막혀 있으면: ./qgc live on 14551
+./qgc live status
+```
+
+⚠️ `.venv` 를 `--without-pip` 로 만든 PC (`ku` 가 그렇다) 는 `pip` 이 없다.
+그때는 [ACCESS.md 의 휠 옮기기](../../gcs/ACCESS.md#pip--휠을-미리-받아-옮기기)를 쓴다.
+
+⚠️ **`linger` 를 켜야 로그아웃 후에도 산다.** 안 켜면 SSH 를 끊는 순간 유닛이
+죽는다 — `rim3`·`rim` 은 처음에 `Linger=no` 였고 켜 줬다.
+
 ## 어디서 데이터를 받나
 
 **UDP 14550 하나로 두 경로를 다 받는다.** 어느 쪽이든 그냥 켜면 된다.

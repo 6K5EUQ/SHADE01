@@ -317,6 +317,30 @@ def build_track(ulog, t0, t1):
             # 물결표는 '추정' 이라는 표시다. 화면에서 그대로 보인다.
             trk["modes_estimated"] = True
 
+    # ── 착륙(접지) 구간 ────────────────────────────────────────
+    # 접지 뒤에도 EKF 는 값을 계속 낸다. 지면효과로 기압이 흔들려 고도가
+    # 몇 십 cm 올라가고 상승률이 +로 뒤집히는데, 표시가 없으면 "착륙 직전에
+    # 다시 떴다" 로 읽힌다 (실측 log_184: 198.7s 접지 후 AGL 1.24→1.43 m).
+    # 그 구간을 밴드로 덮어 "여기부터는 비행이 아니다" 를 눈에 보이게 한다.
+    ld, tld, mld = win(ulog, "vehicle_land_detected", t0, t1)
+    if ld is not None and "landed" in ld.data:
+        lv = ld.data["landed"][mld].astype(bool)
+        spans, st = [], None
+        for tt, v in zip(tld, lv):
+            if v and st is None:
+                st = float(tt)
+            elif not v and st is not None:
+                spans.append([round(st, 2), round(float(tt), 2)]); st = None
+        if st is not None:
+            # 접지한 채로 로그가 끝나면 마지막 샘플이 아니라 **구간 끝까지** 덮는다.
+            # 실측(log_184): landed=1 샘플이 198.8s 하나뿐인데 창은 199.75s 까지다.
+            # 마지막 샘플로 닫으면 폭 0 이 되어 정작 볼 구간이 사라진다.
+            spans.append([round(st, 2), round(dur, 2)])
+        # 이륙 직전까지의 '아직 땅' 구간은 덮지 않는다 — 가릴 것이 없다.
+        # 스치듯 뜨는 한두 샘플짜리 판정도 버린다.
+        trk["landed_spans"] = [a for a in spans
+                               if a[1] - a[0] >= 0.5 and a[1] > dur * 0.5]
+
     # failsafe 는 vehicle_status 가 있을 때만 읽는다 (위 else 로 들어온 로그엔 없다)
     if s is not None and "failsafe" in s.data:
         fs = qgclog.transitions(ts, s.data["failsafe"][ms].astype(int))
