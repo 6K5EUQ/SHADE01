@@ -18,13 +18,41 @@ function pad(W) {
 }
 
 function niceScale(values, opts = {}) {
-  let lo = Infinity, hi = -Infinity;
+  const fin = [];
   for (const v of values) {
     if (v == null || !isFinite(v)) continue;
-    if (v < lo) lo = v;
-    if (v > hi) hi = v;
+    fin.push(v);
   }
-  if (lo === Infinity) return null;                 // 유효값이 하나도 없다
+  if (!fin.length) return null;                     // 유효값이 하나도 없다
+  let lo = Math.min(...fin.length > 65536 ? fin.slice(0, 65536) : fin);
+  let hi = Math.max(...fin.length > 65536 ? fin.slice(0, 65536) : fin);
+  // 한 샘플짜리 스파이크가 축을 통째로 삼키는 것을 막는다. 자이로 한 순간의
+  // 손상값(관측: 1.4e8 °/s)이 들어오면 실제 ±20°/s 대의 움직임이 0 선에
+  // 눌려 아무것도 못 읽는다. 그래서 축은 **본문 분포**로 잡는다.
+  //   - 분포의 0.5~99.5 백분위를 기준으로 하고
+  //   - 그 폭의 여유를 둔 범위 안에 드는 실제 최소/최대까지는 그대로 담는다
+  // 스파이크는 잘라내지 않는다 — 선은 축 밖으로 나가며 clip 되고, 값이
+  // 튀었다는 사실은 툴팁과 통계에 그대로 남는다.
+  if (fin.length >= 20) {
+    const srt = Float64Array.from(fin).sort();
+    const q = (p) => srt[Math.min(srt.length - 1, Math.max(0,
+                     Math.round(p * (srt.length - 1))))];
+    const qlo = q(0.005), qhi = q(0.995);
+    const iqr = qhi - qlo;
+    if (iqr > 1e-9) {
+      // 본문 범위의 3배까지는 정상 변동으로 보고 담는다. 그 밖은 이상치.
+      const flo = qlo - iqr * 3, fhi = qhi + iqr * 3;
+      if (lo < flo || hi > fhi) {
+        let nlo = Infinity, nhi = -Infinity;
+        for (const v of fin) {
+          if (v < flo || v > fhi) continue;
+          if (v < nlo) nlo = v;
+          if (v > nhi) nhi = v;
+        }
+        if (nlo !== Infinity) { lo = nlo; hi = nhi; }
+      }
+    }
+  }
   if (opts.min != null) lo = Math.min(lo, opts.min);
   if (opts.max != null) hi = Math.max(hi, opts.max);
   if (hi - lo < 1e-9) { hi = lo + 1; lo -= 1; }     // 평평한 계열도 그려야 한다
