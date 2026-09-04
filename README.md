@@ -12,7 +12,7 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 | `logs/` | `.ulg` 원본 (git 제외, **평면으로 쌓는다**) |
 | [`tools/`](tools/qgclog/) | 로그 수집(`fcfetch.py`)·분석(`qgclog`) |
 | [`web/`](web/) | [shade01.bewe.co.kr](https://shade01.bewe.co.kr) — 지도·시간축 재생 뷰어, 로그 정본 보관소 |
-| `params/` `config/` | 파라미터 스냅샷, 조종기 설정 백업 |
+| `params/` `config/` | 파라미터 스냅샷, 조종기 설정 백업 · [**세팅 스냅샷 정리**](config/SETTINGS.md) |
 | [`PROCEDURE.md`](PROCEDURE.md) | 로그 수집 → 분석 → 기록 절차 |
 
 ```bash
@@ -146,7 +146,7 @@ cd ~/SHADE01 && ./shade-bridge/pc_bridge.sh
 | 배터리 | [Fullymax 6S 16000mAh](components/batteries/fullymax-6s-16000mah/README.md) |
 | 지상국 | **QGroundControl v5.1.4** (직접 빌드, VTOL 패치) — [빌드](gcs/qgroundcontrol/BUILD.md) · [설치 절차](gcs/qgroundcontrol/README.md#설치-ubuntu--실기-기준) |
 | 저장소 | `github.com/yyrrm/SHADE01` — 클론: `ku`, `rim3` |
-| 파라미터 백업 | [`params/`](params/) 최신 스냅샷 (1354개) · 미션·펜스는 [`config/*.plan`](config/) |
+| 파라미터 백업 | [`params/`](params/) 최신 스냅샷 (1354개) · 미션·펜스는 [`config/*.plan`](config/) · 정리본 [`config/SETTINGS.md`](config/SETTINGS.md) |
 
 ### ELRS
 
@@ -204,7 +204,7 @@ cd ~/SHADE01 && ./shade-bridge/pc_bridge.sh
 | GPS | ✅ 위성 21~32, fix 4, eph 0.15~0.23m (야외 실측) |
 | 진동 | ✅ 평균 2.5 / 최대 5.0 (8/25 세션 8~10 대비 개선) |
 | 미션 | ✅ 6항목 전부 고도 5m, 착륙 0m. 경로 163.6m ([백업](config/)) |
-| 지오펜스 | ✅ `GF_MAX_HOR_DIST=150` / `GF_MAX_VER_DIST=50` / `GF_ACTION=2`(Hold) + 폴리곤 6각형. 최소 여유 11.7m (WP#3) |
+| 지오펜스 | ✅ `GF_MAX_HOR_DIST=150` / `GF_MAX_VER_DIST=50` / `GF_ACTION=2`(Hold) + 폴리곤 6각형. 최소 여유 11.7m (WP#4) |
 | failsafe | ✅ RC 상실 → RTL (`NAV_RCL_ACT=2`, `COM_RCL_EXCEPT=0`, 1s) · 저전압 → RTL |
 | RTL | ✅ `RTL_RETURN_ALT=25` / `RTL_DESCEND_ALT=10` (5m 였음 — 직선 복귀라 장애물 위험) |
 | 🔴 전류 | 최대 **66.8A**, 453초 중 270초를 45A 위에서. XT90 교체 필요 |
