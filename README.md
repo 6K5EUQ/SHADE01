@@ -93,8 +93,10 @@ cd ~/SHADE01 && ./shade-bridge/pc_bridge.sh
 - ⚠️ **`ku-dgs1` 에서 브리지를 돌릴 땐 `MAV_BIND` 를 명시한다.** 공인 IP
   (`203.253.176.74`)가 있고 `ufw` 도 꺼져 있어, Tailscale 자동탐지가 실패하면 인터넷에서
   FC 로 명령이 들어온다.
-- ⚠️ **자동 재시작이 없다.** raspb1 과 달리 systemd 서비스가 아니라 손으로 띄운
-  프로세스다. 죽으면 링크가 조용히 사라진다.
+- ✅ **자동 재시작 (2026-09-04)** — `shade-bridge.service` (`Restart=always`) 로 돌린다.
+  `kill -9` 후 3초 만에 복구되는 것을 실측했다. 그전에는 손으로 띄운 프로세스였다 —
+  그 탓에 서비스 쪽은 포트 충돌로 634 회 재시작하다 죽어 있었다
+  ([상세](shade-bridge/README.md#-손으로-띄우면-서비스가-조용히-죽는다)).
 
 ### 3. ELRS 백팩 링크 — 조종기 WiFi
 
@@ -242,6 +244,8 @@ RTL 고도 25/10, 미션 고도 통일.
 | 날짜 | 사건 |
 |---|---|
 | 2026-09-04 | 🟡 **raspb1 링크 잠정 중단** — FC USB 를 `rim3` 로 옮겼다. `rim3` 직결 브리지가 ku·rim 까지 중계되는 것을 양방향 실측 확인 (28.4 KB/s, 상행 PARAM 왕복). README 링크 구성을 **3 경로**(raspb1 / PC 직결 / ELRS 백팩)로 정정 — "raspb1 단독, 대체 경로 없다" 는 백팩 링크 구축(9/3) 이후 낡은 서술이었다 |
+| 2026-09-04 | 🔴 **"Sensor lost" 원인 규명 — ELRS 링크 대역폭 포화.** `MAV_0_RATE` 0 → **700** ([상세](components/receivers/radiomaster-rp4td-m/README.md#-링크-대역폭-포화--sensor-lost-의-원인-2026-09-04-규명)) ⚠️ **FC 재부팅 필요** |
+| 2026-09-04 | 백팩 링크 로딩 지연 규명·완화 — `noInitialDownloadWhenFlying` ([상세](gcs/qgroundcontrol/README.md#-백팩-링크는-왜-로딩이-느린가-2026-09-04-규명)) |
 | 2026-09-02 | 🔴 **CH7 천이가 실제로는 매핑돼 있음을 발견** (`RC_MAP_TRANS_SW=7`) — 문서 3곳이 "미매핑"으로 잘못 적고 있었다 |
 | 2026-09-02 | 브리지 보안 수정 — Tailscale 주소에만 바인딩 + 송신자 화이트리스트 ([상세](shade-bridge/README.md#노출-범위--반드시-읽어라)) |
 | 2026-09-02 | QGC v5.1.4 직접 빌드 — VTOL 미션시간·기종표시 버그 [패치](gcs/qgroundcontrol/BUILD.md) |
