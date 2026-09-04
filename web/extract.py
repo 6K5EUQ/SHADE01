@@ -251,6 +251,18 @@ def build_track(ulog, t0, t1):
         if "eph" in gp.data:
             trk["eph"] = to_grid(tgp, clean(gp.data["eph"][mgp], 1000.0), grid)
 
+    # ── 대기속도 (피토관) ──────────────────────────────────────
+    # 속도 단에 같이 얹는다. 지상 정지 상태에서 음수가 나오면 영점(SENS_DPRES_OFF)
+    # 이 틀어진 것이다 — 실측 log_184 는 정지 중 -5.2 m/s 로 읽혔다. 수평속도와
+    # 나란히 놓으면 그 어긋남이 바로 보인다.
+    av, tav, mav = win(ulog, "airspeed_validated", t0, t1)
+    key = "calibrated_airspeed_m_s"
+    if av is None or key not in av.data:
+        av, tav, mav = win(ulog, "airspeed", t0, t1)
+        key = "indicated_airspeed_m_s"
+    if av is not None and key in av.data:
+        trk["aspd"] = to_grid(tav, clean(av.data[key][mav], SP), grid)
+
     # ── EKF innovation (센서 간 불일치) ─────────────────────────
     iv, tiv, miv = win(ulog, "estimator_innovation_test_ratios", t0, t1)
     if iv is not None:
@@ -258,6 +270,10 @@ def build_track(ulog, t0, t1):
         best = []
         for k, v in iv.data.items():
             if k.startswith("timestamp"):
+                continue
+            # 대기속도는 속도 단에 실제 값으로 그린다. 영점(SENS_DPRES_OFF)이
+            # 틀어져 있는 동안은 여기서 늘 한계를 넘어 다른 센서를 가린다.
+            if k in ("airspeed", "beta"):
                 continue
             vv = clean(v[miv], 100.0)
             fin = vv[np.isfinite(vv)]

@@ -50,6 +50,8 @@
   .chart h3 { margin: 0; padding: 8px 14px 2px; font-size: 11px; font-weight: 600;
               color: var(--dim); display: flex; gap: 10px; align-items: baseline;
               flex-wrap: wrap; justify-content: center; }
+  .chart .note { margin: 0; padding: 0 14px 2px; font-size: 10px;
+                 color: var(--muted); text-align: center; }
   .chart h3 .k { font-weight: 600; font-size: 11px; cursor: pointer;
                  user-select: none; }
   .chart h3 .k.off { color: var(--muted) !important; text-decoration: line-through; }
@@ -315,13 +317,14 @@ const CHARTS = [
       { key: 'alt_baro', color: '#8b949e', label: '기압', axis: 'left', dim: true, unit: 'm' },
       { key: 'climb', color: 'var(--c-spd)', label: '상승률', axis: 'right', unit: 'm/s' }] },
   { id: 'c2', title: '속도', bands: true, series: [
-      { key: 'spd', color: 'var(--c-spd)', label: '수평속도', axis: 'left', weight: 2, unit: 'm/s' }] },
-  { id: 'c3', title: '자세 — 실측 vs 목표', bands: true, series: [
+      { key: 'spd', color: 'var(--c-spd)', label: '수평속도', axis: 'left', weight: 2, unit: 'm/s' },
+      { key: 'aspd', color: '#a371f7', label: '대기속도(피토관)', axis: 'left', unit: 'm/s' }] },
+  { id: 'c3', title: '자세', bands: true, series: [
       { key: 'roll', color: '#d55e00', label: '롤', axis: 'left', weight: 2, unit: '°' },
       { key: 'roll_sp', color: '#009e73', label: '롤 목표', axis: 'left', dash: true, unit: '°' },
       { key: 'pitch', color: '#e69f00', label: '피치', axis: 'left', weight: 2, unit: '°' },
       { key: 'pitch_sp', color: '#55b4e9', label: '피치 목표', axis: 'left', dash: true, unit: '°' }] },
-  { id: 'c4', title: '각속도 — 실측 vs 목표', bands: true, series: [
+  { id: 'c4', title: '각속도', bands: true, series: [
       { key: 'rate_x', color: '#d55e00', label: '롤레이트', axis: 'left', weight: 2, unit: '°/s' },
       { key: 'rate_x_sp', color: '#009e73', label: '목표', axis: 'left', dash: true, unit: '°/s' }] },
   { id: 'c5', title: '조종 입력', bands: true, events: true, series: [
@@ -336,15 +339,18 @@ const CHARTS = [
     thresholds: [{ v: 45, label: '45A', color: '#d29922' },
                  { v: 90, label: '90A', color: '#f85149' }] },
   { id: 'c8', title: '진동', bands: true, series: [
-      { key: 'vib', color: '#f0883e', label: 'accel_vibration', axis: 'left', weight: 2 }],
+      { key: 'vib', color: '#f0883e', label: '진동', axis: 'left', weight: 2 }],
     thresholds: [{ v: 10, label: '경고 10', color: '#d29922' },
                  { v: 30, label: '위험 30', color: '#f85149' }] },
   { id: 'c9', title: 'GPS 품질', bands: true, series: [
       { key: 'sats', color: '#3fb950', label: '위성 수', axis: 'left', weight: 2 },
-      { key: 'eph', color: '#f85149', label: 'eph', axis: 'right', unit: 'm' }] },
+      { key: 'eph', color: '#f85149', label: '위치 오차', axis: 'right', unit: 'm' }] },
   // innov_* 는 extract.py 가 1.0 을 넘은 것만 골라 싣는다. 없으면 이 단은 안 뜬다.
   { id: 'c10', title: '센서 불일치', bands: true, dynamic: 'innov_',
-    series: [], thresholds: [{ v: 1, label: '이 선을 넘으면 이상', color: '#d29922' }] },
+    // 값은 "센서가 예상에서 얼마나 벗어났나" 의 배수다. 1 = 허용 한계.
+    // 0.1 이면 여유롭고, 1 을 넘으면 비행제어가 그 센서를 의심하기 시작한다.
+    note: '값 = 센서가 예상에서 벗어난 정도. 1 이 한계 — 넘으면 그 센서를 믿지 못한다',
+    series: [], thresholds: [{ v: 1, label: '한계 1', color: '#d29922' }] },
   { id: 'c11', title: 'CPU · RAM', bands: true, series: [
       { key: 'cpu', color: '#58a6ff', label: 'CPU', axis: 'left', unit: '%' },
       { key: 'ram', color: '#a371f7', label: 'RAM', axis: 'left', unit: '%' }] },
@@ -467,7 +473,7 @@ function renderCharts() {
       <h3>${c.series.map((x) =>
           `<span class="k${HIDDEN.has(x.key) ? ' off' : ''}" style="color:${cssVar(x.color)}"
                  data-key="${x.key}" title="클릭하면 이 계열을 숨긴다">${x.label}</span>`).join('')}
-      </h3>
+      </h3>${c.note ? `<p class="note">${c.note}</p>` : ''}
       <svg id="${c.id}"></svg>
       <div class="tip" id="tip-${c.id}"></div>
     </section>`).join('');

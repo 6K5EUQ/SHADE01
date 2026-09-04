@@ -185,6 +185,22 @@ function drawChart(el, trk, spec) {
     }
   }
 
+  // ── 축 머리말 — 그 축에 실린 계열 이름 ─────────────────────────
+  // 좌·우 축의 눈금 숫자만으로는 어느 숫자가 어느 계열인지 알 수 없다.
+  // 축 꼭대기에 그 축의 계열 이름을 그 색으로 적어 둔다.
+  for (const [ax, anchorTx, tx] of [['left', 'start', PAD.l],
+                                    ['right', 'end', W - PAD.r]]) {
+    if (!scales[ax]) continue;
+    const own = spec.series.filter((q) => (q.axis || 'left') === ax && !q.dash);
+    if (!own.length) continue;
+    // 같은 축에 여럿이면 이어 붙인다. 길면 화면을 먹으므로 셋까지만.
+    const names = own.slice(0, 3).map((q) => q.label).join(' · ')
+                + (own.length > 3 ? ' …' : '');
+    const col = own[0].color;
+    svg += `<text x="${tx}" y="${PAD.t - 1}" fill="${col}" font-size="9"
+            text-anchor="${anchorTx}" opacity=".9">${esc(names)}</text>`;
+  }
+
   // ── 임계선 (전류 45A/90A 같은 것) ───────────────────────────────
   for (const th of (spec.thresholds || [])) {
     if (!scales.left || th.v > scales.left.hi || th.v < scales.left.lo) continue;
