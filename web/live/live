@@ -21,7 +21,15 @@ HTTP="${LIVE_HTTP:-4400}"
 
 if [[ ! -x "$PY" ]]; then
   echo "python venv 이 없다: $PY" >&2
-  echo "PROCEDURE.md '2-0 분석 PC 준비' 를 따라 만들어라." >&2
+  echo "PROCEDURE.md '2-0 분석 PC 준비' 를 따라 만들어라:" >&2
+  echo "  python3 -m venv .venv && .venv/bin/pip install -r web/requirements.txt" >&2
+  exit 1
+fi
+
+# pymavlink 가 없으면 파이썬 트레이스백만 남는다. 무엇을 깔아야 하는지 말해 준다.
+if ! "$PY" -c "import pymavlink" 2>/dev/null; then
+  echo "pymavlink 이 없다 ($PY)." >&2
+  echo "  .venv/bin/pip install -r web/requirements.txt" >&2
   exit 1
 fi
 
