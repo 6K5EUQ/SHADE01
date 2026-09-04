@@ -46,7 +46,7 @@
         "items": [
             {
                 "autoContinue": true,
-                "command": 22,
+                "command": 84,
                 "doJumpId": 1,
                 "frame": 6,
                 "params": [
@@ -126,7 +126,7 @@
             },
             {
                 "autoContinue": true,
-                "command": 21,
+                "command": 85,
                 "doJumpId": 6,
                 "frame": 6,
                 "params": [

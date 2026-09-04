@@ -156,6 +156,13 @@ cd ~/SHADE01 && ./shade-bridge/pc_bridge.sh
 | RX RP4TD-M | **3.5.6** (ee188b) ISM2G4 | Serial = **MAVLink**, Bound UID `45,5,9,157,112,199` |
 | 백팩 | **1.5.9** | Telemetry = **wifi** |
 
+**링크 설정 (2026-09-04 실측)** — `Packet Rate 250Hz` / `Telem Ratio 1:2` / **4921bps**
+
+하향 텔레메트리 상한이 **615 B/s** 다. 이 값이 "Sensor lost" 와 백팩 QGC 로딩 속도를
+동시에 좌우한다 — [대역폭 분석](components/receivers/radiomaster-rp4td-m/README.md#-링크-대역폭-포화--sensor-lost-의-원인-2026-09-04-규명).
+Telem Ratio 는 **1:2 가 이미 최대**이므로, 더 늘리려면 Packet Rate 를 500Hz 로 올려야
+한다 (⚠️ 수신 거리는 줄어든다).
+
 > **TX 는 커스텀 펌웨어다.** 공식 4.1.0 은 `BATTERY_STATUS.id != 0` 을 버려 조종기 화면에
 > 배터리가 안 뜬다. 재플래시하면 바인딩도 다시 해야 한다 —
 > [상세](components/transmitters/radiomaster-boxer/elrs-battery-telemetry-fix.md)
@@ -244,7 +251,7 @@ RTL 고도 25/10, 미션 고도 통일.
 | 날짜 | 사건 |
 |---|---|
 | 2026-09-04 | 🟡 **raspb1 링크 잠정 중단** — FC USB 를 `rim3` 로 옮겼다. `rim3` 직결 브리지가 ku·rim 까지 중계되는 것을 양방향 실측 확인 (28.4 KB/s, 상행 PARAM 왕복). README 링크 구성을 **3 경로**(raspb1 / PC 직결 / ELRS 백팩)로 정정 — "raspb1 단독, 대체 경로 없다" 는 백팩 링크 구축(9/3) 이후 낡은 서술이었다 |
-| 2026-09-04 | 🔴 **"Sensor lost" 원인 규명 — ELRS 링크 대역폭 포화.** `MAV_0_RATE` 0 → **700** ([상세](components/receivers/radiomaster-rp4td-m/README.md#-링크-대역폭-포화--sensor-lost-의-원인-2026-09-04-규명)) ⚠️ **FC 재부팅 필요** |
+| 2026-09-04 | 🔴 **"Sensor lost" 원인 규명 — ELRS 대역폭 96% 포화** (250Hz/1:2 = 615 B/s 상한, PX4 가 593 B/s 송신). `MAV_0_RATE` 0 → **490** + FC 재부팅 완료 ([상세](components/receivers/radiomaster-rp4td-m/README.md#-링크-대역폭-포화--sensor-lost-의-원인-2026-09-04-규명)) |
 | 2026-09-04 | 백팩 링크 로딩 지연 규명·완화 — `noInitialDownloadWhenFlying` ([상세](gcs/qgroundcontrol/README.md#-백팩-링크는-왜-로딩이-느린가-2026-09-04-규명)) |
 | 2026-09-02 | 🔴 **CH7 천이가 실제로는 매핑돼 있음을 발견** (`RC_MAP_TRANS_SW=7`) — 문서 3곳이 "미매핑"으로 잘못 적고 있었다 |
 | 2026-09-02 | 브리지 보안 수정 — Tailscale 주소에만 바인딩 + 송신자 화이트리스트 ([상세](shade-bridge/README.md#노출-범위--반드시-읽어라)) |
