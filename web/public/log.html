@@ -52,9 +52,9 @@
               flex-wrap: wrap; justify-content: center; }
   .chart .note { margin: 0; padding: 0 14px 2px; font-size: 10px;
                  color: var(--muted); text-align: center; }
-  .chart h3 .k { font-weight: 600; font-size: 11px; cursor: pointer;
-                 user-select: none; }
-  .chart h3 .k.off { color: var(--muted) !important; text-decoration: line-through; }
+  .chart svg tspan.k { user-select: none; }
+  .chart svg tspan.k.off { fill: var(--muted) !important;
+                           text-decoration: line-through; }
   /* PX4 는 840x400 (약 2.1:1). 여기도 같은 비율로 간다. */
   .chart svg { display: block; width: 100%; height: 210px; cursor: crosshair;
                touch-action: none; }
@@ -470,21 +470,21 @@ function renderCharts() {
   const live = CHARTS_LIVE.filter((c) => SHOWN.has(c.id));
   $('#charts').innerHTML = live.map((c) => `
     <section class="chart" id="sec-${c.id}">
-      <h3>${c.series.map((x) =>
-          `<span class="k${HIDDEN.has(x.key) ? ' off' : ''}" style="color:${cssVar(x.color)}"
-                 data-key="${x.key}" title="클릭하면 이 계열을 숨긴다">${x.label}</span>`).join('')}
-      </h3>${c.note ? `<p class="note">${c.note}</p>` : ''}
+      ${c.note ? `<p class="note">${c.note}</p>` : ''}
       <svg id="${c.id}"></svg>
       <div class="tip" id="tip-${c.id}"></div>
     </section>`).join('');
 
-  // 범례 클릭으로 계열 숨김 — 전 도구 공통 기대치다
-  document.querySelectorAll('.chart h3 .k').forEach((el) => el.onclick = () => {
+  // 범례 클릭으로 계열 숨김 — 전 도구 공통 기대치다.
+  // 축 머리말은 redraw() 마다 새로 그려지므로 개별 요소가 아니라 컨테이너에
+  // 한 번만 걸어 위임한다. 안 그러면 첫 클릭 후 핸들러가 사라진다.
+  $('#charts').onclick = (e) => {
+    const el = e.target.closest && e.target.closest('tspan.k');
+    if (!el) return;
     const k = el.dataset.key;
     HIDDEN.has(k) ? HIDDEN.delete(k) : HIDDEN.add(k);
-    el.classList.toggle('off', HIDDEN.has(k));
     redraw();
-  });
+  };
   document.querySelectorAll('#toc label').forEach((lb) =>
     lb.classList.toggle('sel', SHOWN.has(lb.dataset.sec)));
 
@@ -532,8 +532,11 @@ function redraw() {
     // 숨긴 계열을 뺀 뒤 남는 목록. 툴팁이 이걸 그대로 읽어 차트와 어긋나지 않는다.
     const shown = c.series.filter((s) => !HIDDEN.has(s.key))
                           .map((s) => ({ ...s, color: cssVar(s.color) }));
+    // 숨긴 계열도 머리말에는 남긴다 — 사라지면 되돌릴 방법이 없다.
+    const caption = c.series.map((s) => ({ ...s, color: cssVar(s.color),
+                                           hidden: HIDDEN.has(s.key) }));
     drawChart(el, TRK, {
-      series: shown,
+      series: shown, caption,
       bands: c.bands, bandLabels: c.id === firstShownId(),
       events: c.events, thresholds: c.thresholds, view: VIEW,
     });

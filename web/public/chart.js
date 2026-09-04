@@ -14,7 +14,7 @@ function pad(W) {
   // 좌우 여백을 **항상 같게** 잡는다. 우축 유무로 r 을 바꾸면 단마다 iw 가
   // 달라져 같은 t 가 다른 px 에 찍힌다 — 커서·이벤트선이 단 사이에서 어긋난다.
   // 우축이 없는 단은 그 여백이 빌 뿐이고, 시간축 정렬이 훨씬 중요하다.
-  return { l, r: l, t: 8, b: 16 };
+  return { l, r: l, t: 20, b: 16 };   // t: 축 머리말 한 줄이 들어갈 자리
 }
 
 function niceScale(values, opts = {}) {
@@ -190,15 +190,22 @@ function drawChart(el, trk, spec) {
   // 축 꼭대기에 그 축의 계열 이름을 그 색으로 적어 둔다.
   for (const [ax, anchorTx, tx] of [['left', 'start', PAD.l],
                                     ['right', 'end', W - PAD.r]]) {
-    if (!scales[ax]) continue;
-    const own = spec.series.filter((q) => (q.axis || 'left') === ax && !q.dash);
+    // scales[ax] 가 없어도 머리말은 그린다 — 그 축 계열을 전부 숨긴 상태이고,
+    // 이름이 사라지면 다시 켤 방법이 없어진다.
+    const own = (spec.caption || spec.series)
+                  .filter((q) => (q.axis || 'left') === ax && !q.dash);
     if (!own.length) continue;
     // 같은 축에 여럿이면 이어 붙인다. 길면 화면을 먹으므로 셋까지만.
-    const names = own.slice(0, 3).map((q) => q.label).join(' · ')
-                + (own.length > 3 ? ' …' : '');
-    const col = own[0].color;
-    svg += `<text x="${tx}" y="${PAD.t - 1}" fill="${col}" font-size="9"
-            text-anchor="${anchorTx}" opacity=".9">${esc(names)}</text>`;
+    // 계열마다 <tspan> 을 따로 두어 클릭으로 숨기는 기능을 그대로 살린다.
+    const show = own.slice(0, 3);
+    const parts = show.map((q, n) =>
+      `<tspan class="k${q.hidden ? ' off' : ''}" data-key="${q.key}"
+              fill="${q.hidden ? '#6e7681' : q.color}"
+              style="cursor:pointer">${esc(q.label)}</tspan>`
+      + (n < show.length - 1 ? '<tspan fill="#6e7681"> · </tspan>' : ''));
+    if (own.length > 3) parts.push('<tspan fill="#6e7681"> …</tspan>');
+    svg += `<text x="${tx}" y="${PAD.t - 7}" font-size="11" font-weight="600"
+            text-anchor="${anchorTx}">${parts.join('')}</text>`;
   }
 
   // ── 임계선 (전류 45A/90A 같은 것) ───────────────────────────────
