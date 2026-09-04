@@ -138,7 +138,6 @@
       <div class="maptools">
         <a class="btn" href="/" title="목록으로">←</a>
         <button id="tileBtn">위성</button>
-        <button id="fitBtn">전체</button>
       </div>
     </div>
     <div class="sidefoot">
@@ -225,7 +224,6 @@ function initMap() {
     tiles[tileMode].addTo(map);
     $('#tileBtn').textContent = tileMode === 'osm' ? '위성' : '지도';
   };
-  $('#fitBtn').onclick = () => { if (track) map.fitBounds(track.getBounds(), { padding: [24, 24] }); };
 }
 
 /** 궤적을 고도로 색칠한다. 한 폴리라인으로는 색을 못 바꾸므로 구간을 쪼갠다. */
@@ -272,21 +270,6 @@ function drawTrack() {
   marker = L.marker(valid[0].slice(0, 2), { icon: planeIcon(0) }).addTo(map);
 
   // 고도 범례
-  const lg = L.control({ position: 'bottomleft' });
-  lg.onAdd = () => {
-    const d = L.DomUtil.create('div');
-    d.style.cssText = 'background:rgba(22,27,34,.92);padding:6px 9px;border-radius:6px;' +
-      'color:#e6edf3;font-size:11px;line-height:1.6';
-    // 궤적 색 = 비행모드. 이 로그에 실제로 나온 모드만 싣는다.
-    const seen = [];
-    for (const m of (TRK.modes || [])) if (!seen.includes(m.name)) seen.push(m.name);
-    d.innerHTML = '비행모드<br>' + (seen.length ? seen.map((n) =>
-      `<span style="display:inline-block;width:10px;height:9px;background:${
-        modeColor(n)};margin-right:4px"></span>${n}`).join('<br>')
-      : '<span style="color:#8b949e">모드 정보 없음</span>');
-    return d;
-  };
-  lg.addTo(map);
 }
 
 /** 그 시각의 비행모드 색 */
