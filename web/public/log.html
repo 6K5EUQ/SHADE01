@@ -45,10 +45,11 @@
   .charts { display: flex; flex-direction: column; }
   .chart { position: relative; border-bottom: 1px solid var(--border);
            flex: 0 0 auto; }
+  /* 범례만 가운데 놓는다. 어느 단인지는 좌측 목차가 이미 말해 주므로
+     제목을 다시 적으면 같은 말이 두 번이다 — 그 자리를 계열 이름에 준다. */
   .chart h3 { margin: 0; padding: 8px 14px 2px; font-size: 11px; font-weight: 600;
               color: var(--dim); display: flex; gap: 10px; align-items: baseline;
-              flex-wrap: wrap; }
-  .chart h3 .ct { color: var(--text); font-size: 12px; margin-right: 4px; }
+              flex-wrap: wrap; justify-content: center; }
   .chart h3 .k { font-weight: 600; font-size: 11px; cursor: pointer;
                  user-select: none; }
   .chart h3 .k.off { color: var(--muted) !important; text-decoration: line-through; }
@@ -458,8 +459,7 @@ function renderCharts() {
   const live = CHARTS_LIVE.filter((c) => SHOWN.has(c.id));
   $('#charts').innerHTML = live.map((c) => `
     <section class="chart" id="sec-${c.id}">
-      <h3><span class="ct">${c.title}</span>
-        ${c.series.map((x) =>
+      <h3>${c.series.map((x) =>
           `<span class="k${HIDDEN.has(x.key) ? ' off' : ''}" style="color:${cssVar(x.color)}"
                  data-key="${x.key}" title="클릭하면 이 계열을 숨긴다">${x.label}</span>`).join('')}
       </h3>
