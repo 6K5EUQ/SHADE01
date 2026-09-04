@@ -70,18 +70,7 @@ git config --global user.email 6k5euq@gmail.com
 | `gram-labtop` | `wlp0s20f3` | ✅ | ✅ |
 | `rim3` | `wlo1` | ✅ | fetch 만 (`gh` 가 `yyrrm` 로그인) |
 | `rim` | **없음** (유선) | ❌ 동글 필요 | fetch 만 (`gh` 가 `yyrrm` 로그인) |
-| `ku-dgs1` | **없음** (유선 `enp3s0`) | ❌ 동글 필요 | ❌ DNS 불가 — 아래 참조 |
-
-**`ku-dgs1` 은 github.com 을 못 찾는다** (2026-09-03 확인). 학교 DNS `203.253.179.2/.3` 이
-둘 다 무응답이라 이름 해석이 안 된다. 인터넷 자체는 살아 있고 (`8.8.8.8` ping OK, PyPI 도
-`pip` 로 붙는다) `8.8.8.8`·`1.1.1.1` 로 직접 물으면 해석된다 — 시스템 DNS 만 막힌 상태다.
-그래서 `ku` 에서는 `git fetch`/`pull` 이 안 된다. gram 을 거쳐 넣는다:
-
-```bash
-# gram 에서 ku 로 직접 밀어넣기 (SSH 경유, github 불필요)
-git push ku@100.99.120.110:/home/ku/SHADE01 main:refs/remotes/6k5euq/main
-ssh ku@100.99.120.110 'cd ~/SHADE01 && git merge --ff-only 6k5euq/main'
-```
+| `ku-dgs1` | **없음** (유선 `enp3s0`) | ❌ 동글 필요 | ✅ |
 
 ## 살아있는지 확인
 
@@ -106,10 +95,10 @@ ssh rim3@100.117.47.105 'cd ~/SHADE01 && git pull && ./qgc log list'
 아니다 (`.ulg` 는 `.gitignore` 되어 git 으로 오가지 않는다). 회수는 `scp` 로 한다.
 어느 PC 에 어느 비행이 있는지는 `./qgc log list` 로 확인한다.
 
-## 🔴 ku 는 인터넷이 없다
+## 인터넷이 막힌 PC 에 설치하기
 
-`ku` 는 **Tailscale 만** 붙어 있고 DNS 부터 안 된다. `git pull` 도 `pip install` 도
-`Could not resolve host` 로 죽는다. 아래처럼 **gram 을 경유**한다.
+평소에는 어느 PC 에서나 `git`·`pip` 이 그대로 된다. 네트워크가 막힌 자리에서
+작업할 때만 아래를 쓴다.
 
 ### git — Tailscale 로 직접 밀어넣기
 
