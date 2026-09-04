@@ -55,7 +55,7 @@
 |---|---|---|---|---|---|
 | **SA** | CH5 | ARM | `RC_MAP_ARM_SW=5` | 해제 | **ARM** |
 | 🔵 **P3 (S3)** | **CH6** | MOD | `RC_MAP_FLTMODE=6` | **6단 로터리 — 아래 표 참조** ||
-| **SD** | CH7 | BP(TRA) | `RC_MAP_TRANS_SW=7` | 멀티로터 | 🔴 **고정익 전환** |
+| **SD** | CH7 | BP(TRA) | `RC_MAP_TRANS_SW=0` ✅ | 멀티로터 | **미매핑** — FC 가 무시 |
 | **SE** | CH8 | TUR(KIL) | `RC_MAP_KILL_SW=8` | 해제 | **KILL** |
 | ? | CH9 | RTL | `RC_MAP_RETURN_SW=9` | CH9 는 1500 고정 — 아래 참조 ||
 
