@@ -50,6 +50,13 @@ MAV_SERIAL=/dev/ttyACM1 ./shade-bridge/pc_bridge.sh
 
 자기 자신도 목록에 있다 — 로컬 QGC 도 같은 UDP 로 붙기 때문이다.
 
+## 🔴 FC 를 바꿨으면 기록해라
+
+이 브리지는 상행이 열려 있어 **`PARAM_SET` 한 줄로 실기 설정이 바뀐다.** 바꿨으면
+[`FC_CHANGELOG.md`](../FC_CHANGELOG.md) 에 일시(KST)·작업 PC·경로·값·이유를 적고
+커밋·푸시한다. **작업 전에도 읽어라** — 마지막 변경을 모르면 낡은 스냅샷을 정본으로
+착각한다.
+
 ## 노출 범위 — 반드시 읽어라
 
 브리지는 받은 UDP 를 **MAVLink 로 해석하지 않고 그대로 FC 에 쓴다.** 즉 이 포트에

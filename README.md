@@ -14,6 +14,7 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 | [`web/`](web/) | [shade01.bewe.co.kr](https://shade01.bewe.co.kr) — 지도·시간축 재생 뷰어, 로그 정본 보관소 |
 | `params/` `config/` | 파라미터 스냅샷, 조종기 설정 백업 · [**세팅 스냅샷 정리**](config/SETTINGS.md) |
 | [`PROCEDURE.md`](PROCEDURE.md) | 로그 수집 → 분석 → 기록 절차 |
+| 🔴 [`FC_CHANGELOG.md`](FC_CHANGELOG.md) | **FC 변경 이력 — FC 를 만지기 전에 읽고, 만졌으면 적는다** |
 
 ```bash
 ./qgc log list          # 최근 비행 나열
