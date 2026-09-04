@@ -14,7 +14,9 @@ set -eu
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PY="${QGCLOG_PYTHON:-$REPO/.venv/bin/python}"
-PORT="${1:-14550}"
+# 인자가 우선, 없으면 환경변수, 그것도 없으면 기본값.
+# systemd 유닛은 인자를 못 주므로(ExecStart 고정) 환경변수 경로가 필요하다.
+PORT="${1:-${LIVE_UDP:-14550}}"
 HTTP="${LIVE_HTTP:-4400}"
 
 if [[ ! -x "$PY" ]]; then

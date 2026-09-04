@@ -1,0 +1,26 @@
+[Unit]
+# 실시간 트래킹 페이지. `./qgc live on|off` 가 이 유닛을 켜고 끈다.
+#
+# 읽기 전용이다 — FC 로 나가는 바이트가 없다 (web/live/README.md 참조).
+# systemd --user 로 도는 이유는 터미널을 닫아도 살아 있어야 하기 때문이다.
+# 비행 중에 창을 닫았다고 화면이 죽으면 곤란하다.
+Description=SHADE01 live flight tracker (read-only, localhost)
+After=network.target
+
+# UDP 포트를 이미 누가 쥐고 있으면 시작이 실패한다. 그때 무한 재시도하지
+# 않는다 — QGC 가 켜져 있는 동안 계속 되살아나면 로그만 더럽힌다.
+# ⚠️ StartLimit* 는 [Unit] 에 있어야 한다. [Service] 에 두면 조용히 무시된다.
+StartLimitBurst=3
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+# 포트는 `./qgc live on <포트>` 가 이 파일을 건드리지 않고 넘길 수 있도록
+# 환경파일로 뺀다. 없으면 기본값(14550/4400)이 쓰인다.
+EnvironmentFile=-%h/.config/shade-live.env
+ExecStart=%h/SHADE01/web/live/live
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

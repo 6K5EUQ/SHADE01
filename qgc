@@ -3,6 +3,7 @@
 #   ./qgc log list      최근 비행 로그 나열
 #   ./qgc log 1         1번 로그 분석
 #   ./qgc log <path>    경로 직접 지정
+#   ./qgc live on|off   실시간 트래킹 페이지 (localhost:4400, 읽기 전용)
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -12,6 +13,11 @@ usage() {
   ./qgc log list        최근 비행 로그 나열 (1 = 가장 최근)
   ./qgc log <번호>      해당 로그 분석
   ./qgc log <path.ulg>  경로 직접 지정
+
+  ./qgc live on         실시간 트래킹 켜기 (http://localhost:4400)
+  ./qgc live on 14551   UDP 포트 지정 (QGC 와 14550 이 겹칠 때)
+  ./qgc live off        끄기
+  ./qgc live status     상태 + 링크 수신 여부
 
 옵션은 그대로 전달된다:
   ./qgc log list -n 30
@@ -27,6 +33,10 @@ case "$1" in
     shift
     [ $# -ge 1 ] || set -- list
     exec "$HERE/tools/qgclog/qgclog" "$@"
+    ;;
+  live)
+    shift
+    exec "$HERE/tools/live/livectl" "$@"
     ;;
   -h|--help|help) usage ;;
   *)

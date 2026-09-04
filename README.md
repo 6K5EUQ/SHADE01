@@ -20,6 +20,8 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 ```bash
 ./qgc log list          # 최근 비행 나열
 ./qgc log 1             # 1번 분석
+./qgc live on           # 실시간 트래킹 켜기 → http://localhost:4400
+./qgc live off          # 끄기
 ```
 
 ---
@@ -113,7 +115,7 @@ cd ~/SHADE01 && ./shade-bridge/pc_bridge.sh
 
 ```bash
 ./gcs/qgroundcontrol/elrs-backpack        # AP 전환 → QGC → 닫으면 원래 WiFi 복귀
-./web/live/live                           # 실시간 트래킹 페이지 (읽기 전용, localhost:4400)
+./qgc live on                             # 실시간 트래킹 페이지 (읽기 전용, localhost:4400)
 ```
 
 QGC 대신(또는 같이) **브라우저로 볼 수 있다** — 지도 한쪽, 계기 한쪽이다.

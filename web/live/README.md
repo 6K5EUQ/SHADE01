@@ -5,6 +5,18 @@
 보는 것이라면, 이쪽은 **지금 이 순간**이다.
 
 ```bash
+./qgc live on                   # 켠다 → http://localhost:4400
+./qgc live off                  # 끈다
+./qgc live status               # 상태 + 링크 수신 여부
+./qgc live on 14551             # QGC 와 14550 이 겹칠 때 비켜서 켠다
+```
+
+`systemd --user` 로 돈다 — **터미널을 닫아도 살아 있다.** 비행 중에 창이 닫혔다고
+화면이 죽으면 곤란하기 때문이다. 유닛은 처음 `on` 할 때 저절로 설치된다.
+
+직접 띄우려면 (포그라운드, Ctrl-C 로 종료):
+
+```bash
 ./web/live/live                 # http://localhost:4400
 ```
 
@@ -33,8 +45,8 @@
 
 | 경로 | 되는 PC | 방법 |
 |---|---|---|
-| **ELRS 백팩** (조종기 WiFi) | `rim3`, `gram-labtop` | `./gcs/qgroundcontrol/elrs-backpack` 로 AP 에 붙은 뒤 `./web/live/live` |
-| **shade-bridge** (FC USB 직결) | 전부 (Tailscale) | 브리지가 도는 상태에서 `./web/live/live` |
+| **ELRS 백팩** (조종기 WiFi) | `rim3`, `gram-labtop` | `./gcs/qgroundcontrol/elrs-backpack` 로 AP 에 붙은 뒤 `./qgc live on` |
+| **shade-bridge** (FC USB 직결) | 전부 (Tailscale) | 브리지가 도는 상태에서 `./qgc live on` |
 
 ⚠️ **`ku` 는 WiFi 장치가 없다** (유선 `enp3s0` 뿐). 백팩 AP 에 못 붙으므로
 `ku` 에서는 브리지 경로로만 볼 수 있다 — [링크 구성](../../README.md#링크-구성--3-경로).
@@ -52,7 +64,7 @@ QGC 와 이 페이지가 서로 프레임을 훔쳐 간다 (`mav_bridge.py` 와 
 ./shade-bridge/pc_bridge.sh ... 127.0.0.1:14551
 
 # 이 페이지: 14551 을 듣는다
-./web/live/live 14551
+./qgc live on 14551
 ```
 
 ## 상행이 없다 — 어떻게 보장하나
@@ -79,8 +91,11 @@ mav_live.py        UDP 수신 → MAVLink 디코딩 → 상태 1개 → 로컬 H
 public/index.html  지도|데이터 2단 레이아웃
 public/live.js     200ms 폴링, 지도·인공수평의·차트
 public/live.css    배치. 팔레트는 ../public/app.css 를 그대로 쓴다
-live               실행 스크립트 (venv·포트 충돌 확인)
+live               직접 실행 (포그라운드)
+shade-live.service systemd --user 유닛 — `./qgc live on` 이 설치한다
 ```
+
+`./qgc live` 의 본체는 [`tools/live/livectl`](../../tools/live/livectl) 이다.
 
 Leaflet 과 `app.css` 는 **로그 뷰어의 것을 그대로 재사용**한다 (`web/public/`).
 없으면 못 뜨므로 이 폴더만 떼어 옮기지 마라.
@@ -116,8 +131,9 @@ Leaflet 과 `app.css` 는 **로그 뷰어의 것을 그대로 재사용**한다 
 
 | 증상 | 확인 | 대응 |
 |---|---|---|
-| "서버 없음" | 터미널에 `mav_live.py` 가 떠 있나 | `./web/live/live` 다시 |
+| "서버 없음" | `./qgc live status` | `./qgc live on` |
 | "링크 없음" 이 안 바뀜 | `ss -ulnp \| grep 14550` | 다른 게 포트를 쥐고 있다. 위 「포트가 겹칠 때」 |
 | 지도만 회색 | 백팩 AP 인가 | 정상이다. 인터넷이 없어 타일을 못 받는다 |
 | 값이 멈춤 | 헤더의 `pkt` 가 느나 | 안 늘면 링크가 끊긴 것. 늘면 FC 가 그 메시지를 안 보낸다 |
+| `on` 이 실패 | `./qgc live log` | 대개 포트 충돌이다. `./qgc live on 14551` |
 | 항적이 안 그려짐 | GPS 배지 | fix 3 미만이면 좌표가 0,0 이라 안 쌓는다 |
