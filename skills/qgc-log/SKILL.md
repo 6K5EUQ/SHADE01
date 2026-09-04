@@ -19,6 +19,11 @@ PX4 ULog 를 읽어 **무엇이 문제였고, 무엇이 잘 됐고, 다음에 �
 <SHADE01>/qgc                        진입점 — ./qgc log ...
 ```
 
+**이 스킬은 `./qgc log` 만 다룬다.** `./qgc live` 는 형제 하위명령이지만 다른
+물건이다 — 지나간 로그가 아니라 **지금 날고 있는 기체**를 지도+계기로 띄운다
+(읽기 전용, `localhost:4400`). 사용자가 "실시간", "지금 상태" 를 물으면 로그
+분석이 아니라 그쪽이다: [`web/live/README.md`](../../web/live/README.md).
+
 ## 사용법
 
 ```bash
@@ -78,7 +83,14 @@ qgclog 1 --dir ~/다른/Logs
 3. **`qgclog <N>` 결과를 그대로 보여주고**, 그 위에 해석을 붙인다.
    자동 판정은 임계값 기반이라 **맥락을 모른다** — 지상 테스트인지 실비행인지,
    의도한 기동인지 사고인지는 로그만으로 구분 못 한다. 그 판단을 네가 채워라.
-4. **비행시간이 조종자 기억보다 짧으면 파싱을 의심하라.** 이건 흔한 오해의
+4. **`[FC 경고]` 절을 먼저 읽어라.** FC 가 스스로 남긴 말이라 임계값 판정보다
+   맥락이 짙다 — `Kill engaged`, `Preflight Fail: ...`, `Flight termination active`
+   처럼 **무슨 일이 있었는지 이름으로** 나온다. 자세 이상·전류 첨두가 왜 생겼는지
+   여기서 바로 갈리는 일이 많다 (예: 경사 105° 가 사고가 아니라 킬 스위치였다).
+   2026-09-03 까지는 이 절이 **한 번도 출력되지 않았다** — `log_level` 을 등급 숫자로
+   읽었는데 실제로는 그 숫자의 ASCII 바이트였다. 그전 분석 문서에는 FC 메시지가
+   통째로 빠져 있으니, 오래된 리포트를 인용하기 전에 다시 돌려라.
+5. **비행시간이 조종자 기억보다 짧으면 파싱을 의심하라.** 이건 흔한 오해의
    출발점이다 — "SD 카드가 손상됐다" 로 넘어가기 전에 [파싱 절](#-파싱--반드시-qgclog-를-거쳐라)을
    먼저 확인한다. 파일 크기 대비 비행시간이 안 맞는 것이 신호다
    (23MB 로그가 27초일 수는 없다).
@@ -166,12 +178,17 @@ ulog, repaired = qgclog._load(path)
 python3 -m venv --without-pip .venv
 curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
 .venv/bin/python /tmp/get-pip.py -q
-.venv/bin/pip install pyulog numpy
+.venv/bin/pip install -r web/requirements.txt
 rm -f /tmp/get-pip.py
 .venv/bin/python -c "import pyulog, numpy; print('ok')"
 ```
 
-`python3 -m pip install pyulog numpy` 가 되면 그걸 써도 된다.
+`python3 -m pip install -r web/requirements.txt` 가 되면 그걸 써도 된다.
+
+⚠️ **버전을 직접 고르지 마라.** [`web/requirements.txt`](../../web/requirements.txt) 가
+`pyulog==1.2.4` / `numpy==2.5.2` 로 **고정**돼 있다 — pyulog 가 올라가면 파싱 결과가
+달라져 웹 캐시 지문과 실제 동작이 어긋난다. 같은 파일이 `pymavlink` 도 담고 있어
+`./qgc live` 까지 한 번에 갖춰진다 (로그 분석만 할 거면 없어도 된다).
 
 ## 자동 검출 항목
 
