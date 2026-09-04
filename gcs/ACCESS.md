@@ -30,13 +30,46 @@ ssh rim@100.107.83.47      # rim
 > 이 오기 때문에 `rim` 이 동기화 대상에서 계속 빠져 있었다 — 9/4 에 확인했을 때
 > 6 커밋 뒤처져 있었다.
 
+### 원본 저장소는 `6K5EUQ` 하나다 (2026-09-04)
+
+`yyrrm` 리모트는 **전부 제거했다.** 원본은 `github.com/6K5EUQ/SHADE01` 이고, 각 PC 에서
+`origin` 이 그것을 가리킨다.
+
+```bash
+git remote -v      # origin  https://github.com/6K5EUQ/SHADE01.git 만 나와야 한다
+```
+
+`yyrrm` 에만 있던 `rim-legacy` 브랜치(8/22 기체 치수, 8/31 Telem 포트·LTE 모뎀)는
+**제거 전에 6K5EUQ 로 옮겨 뒀다** — 이력은 사라지지 않았다.
+
+| PC | 처리 |
+|---|---|
+| `ku-dgs1` | ✅ origin 교체 완료 |
+| `rim3` | ✅ origin 교체 + 커밋 신원 `6k5euq` 로 변경 |
+| `gram-labtop` · `rim` · `central` | ⬜ **미처리** — 그때 꺼져 있었다 |
+
+미처리 PC 는 각각 한 번씩 돌려야 한다:
+
+```bash
+cd ~/SHADE01
+git remote remove origin
+git remote rename 6k5euq origin
+git branch --set-upstream-to=origin/main main
+git config --global user.name 6k5euq
+git config --global user.email 6k5euq@gmail.com
+```
+
+⚠️ **`rim3`·`rim` 은 여전히 push 가 안 된다.** `gh` 가 `yyrrm` 계정으로 로그인돼 있어서고,
+리모트를 바꾼다고 풀리지 않는다. 풀려면 그 PC 에서 `gh auth login` 을 6K5EUQ 로 다시 해야
+한다 (대화형이라 원격으로 못 한다).
+
 ### PC 별 하드웨어 제약
 
 | | WiFi 라디오 | [ELRS 백팩 링크](qgroundcontrol/README.md#어느-pc-에서-되나-2026-09-03-확인) | GitHub 접속 |
 |---|---|---|---|
 | `gram-labtop` | `wlp0s20f3` | ✅ | ✅ |
-| `rim3` | `wlo1` | ✅ | fetch 만 (자격증명이 `yyrrm` 계정) |
-| `rim` | **없음** (유선) | ❌ 동글 필요 | fetch 만 (자격증명이 `yyrrm` 계정) |
+| `rim3` | `wlo1` | ✅ | fetch 만 (`gh` 가 `yyrrm` 로그인) |
+| `rim` | **없음** (유선) | ❌ 동글 필요 | fetch 만 (`gh` 가 `yyrrm` 로그인) |
 | `ku-dgs1` | **없음** (유선 `enp3s0`) | ❌ 동글 필요 | ❌ DNS 불가 — 아래 참조 |
 
 **`ku-dgs1` 은 github.com 을 못 찾는다** (2026-09-03 확인). 학교 DNS `203.253.179.2/.3` 이

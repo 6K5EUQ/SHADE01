@@ -40,4 +40,6 @@ ARM·모드변경·미션업로드가 실기에 들어간다 — 그래서 기�
 - **`pyulog` 를 직접 부르지 마라.** 잘린 메시지에서 조용히 멈춘다. `./qgc` 를 거쳐라.
 - **`ku` 는 GitHub 이 될 때도 안 될 때도 있다** (학교 DNS). 안 되면 Tailscale 로
   다른 PC 를 경유한다 — [gcs/ACCESS.md](gcs/ACCESS.md).
-- **`rim3` 은 push 권한이 없다** (자격증명이 `yyrrm` 계정). fetch 만 된다.
+- **`rim3` 은 push 권한이 없다.** `gh` 가 `yyrrm` 계정으로 로그인돼 있어서다
+  (2026-09-04 확인). 커밋 신원은 `6k5euq` 로 고쳤으나 **자격증명은 그대로**다 —
+  풀려면 `rim3` 에서 `gh auth login` 을 6K5EUQ 로 다시 해야 한다. fetch 는 된다.

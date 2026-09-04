@@ -146,7 +146,7 @@ cd ~/SHADE01 && ./shade-bridge/pc_bridge.sh
 | 전원 | [PM08 DroneCAN](components/power/holybro-pm08-can/README.md) — `UAVCAN_ENABLE=2`, `BAT1_SOURCE=1` |
 | 배터리 | [Fullymax 6S 16000mAh](components/batteries/fullymax-6s-16000mah/README.md) |
 | 지상국 | **QGroundControl v5.1.4** (직접 빌드, VTOL 패치) — [빌드](gcs/qgroundcontrol/BUILD.md) · [설치 절차](gcs/qgroundcontrol/README.md#설치-ubuntu--실기-기준) |
-| 저장소 | `github.com/yyrrm/SHADE01` — 클론: `ku`, `rim3` |
+| 저장소 | `github.com/6K5EUQ/SHADE01` — 클론: `ku`, `rim3` |
 | 파라미터 백업 | [`params/`](params/) 최신 스냅샷 (1354개) · 미션·펜스는 [`config/*.plan`](config/) · 정리본 [`config/SETTINGS.md`](config/SETTINGS.md) |
 
 ### ELRS
