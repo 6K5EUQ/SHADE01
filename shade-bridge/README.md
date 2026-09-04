@@ -24,14 +24,14 @@ Tailscale 로 붙게 한다. raspb1 이 하던 일을 PC 가 대신 하는 것�
 
 ```bash
 cd SHADE01
-./components/companion/pc-direct/pc_bridge.sh
+./shade-bridge/pc_bridge.sh
 ```
 
 시리얼 포트를 자동으로 찾는다 (`ttyACM0` → `ttyACM1` → `ttyUSB0`).
 다른 포트면 지정한다:
 
 ```bash
-MAV_SERIAL=/dev/ttyACM1 ./components/companion/pc-direct/pc_bridge.sh
+MAV_SERIAL=/dev/ttyACM1 ./shade-bridge/pc_bridge.sh
 ```
 
 이 PC 를 포함해 네 대 전부에 UDP 14550 으로 중계한다. 각 PC 에서 QGC 를 켜면
@@ -84,6 +84,90 @@ MAV_BIND=100.99.120.110 ./pc_bridge.sh
 ```bash
 ss -ulnp | grep 14550     # 0.0.0.0 이 아니라 100.x 로 떠야 한다
 ```
+
+## 🔴 QGC 의 autoConnect — 역할마다 값이 다르다
+
+QGC 는 기본으로 USB 에 붙은 Pixhawk 를 **직접 시리얼로 낚아챈다**. FC 가 꽂힌 PC 에서
+QGC 를 켜면 브리지가 `/dev/ttyACM0` 을 빼앗기고, **다른 PC 에서는 기체가 그냥 사라진
+것처럼 보인다.** FC USB 는 하나뿐이라 둘이 나눠 쓸 수 없다.
+
+반대로 UDP 쪽은 **등록된 링크와 익명 링크가 겹치는** 것이 문제다. 그래서 두 값은
+**PC 의 역할에 따라 다르게** 둔다 — 예전에는 이 문서와
+[QGC 접속 절차](../gcs/qgroundcontrol/README.md#-autoconnectudp-를-꺼야-한다)가
+서로 반대로 적고 있었다 (2026-09-04 정리).
+
+| PC 역할 | `autoConnectPixhawk` | `autoConnectUDP` | 왜 |
+|---|---|---|---|
+| **FC 가 꽂힌 PC** (브리지 구동) | **`false`** 🔴 필수 | `false` | QGC 가 시리얼을 뺏으면 링크 전체가 죽는다 |
+| **수신만 하는 PC** (QGC 만) | `false` | `false` | 등록된 `1. Pi 브리지` 링크(`auto=true`)가 이미 14550 을 리슨한다 |
+
+`~/.config/QGroundControl/QGroundControl.ini`:
+
+```ini
+[AutoConnect]
+autoConnectPixhawk=false   # QGC 가 시리얼을 직접 잡지 않는다 — 브리지가 잡는다
+autoConnectUDP=false       # 등록된 링크만 쓴다 — 익명 UDP 링크를 만들지 않는다
+```
+
+**`autoConnectUDP=true` 를 쓰지 마라.** 링크가 등록돼 있는데(`Link0\auto=true`) 이 값이
+켜져 있으면 QGC 가 **익명 UDP 링크를 하나 더** 만든다. 같은 기체가 두 링크로 보여
+`Comm Lost` → `Switching communication to secondary link` 팝업이 뜨고, 어느 경로로
+붙었는지 알 수 없게 된다. 확인:
+
+```bash
+ss -ulpn | grep QGroundControl    # 14550 소켓이 1개여야 한다. 2개면 익명 링크가 산 것
+```
+
+⚠️ QGC 는 **종료할 때 설정을 덮어쓴다.** 켜져 있는 동안 `.ini` 를 고치면 날아간다.
+**반드시 QGC 를 끄고 고치고**, 켜서 다시 끈 뒤 값이 유지되는지 확인한다.
+
+브리지도 `exclusive=True` 로 시리얼을 열어 뺏기지 않게 해 뒀다 (2026-09-02). 그래도
+**브리지가 재시작되는 짧은 틈에 QGC 가 선점할 수 있으므로**, 설정을 끄는 것이 근본이다.
+
+> 🔴 **2026-09-04 — `rim3` 이 `autoConnectPixhawk=true` 인 채로 브리지를 돌리고 있었다.**
+> QGC 를 안 켜 둬서 우연히 안 터진 것이다. `false` 로 고쳤다
+> (`.ini.bak-20260904-161020` 백업).
+
+## 자동 시작 — systemd user 서비스
+
+`nohup ... &` 로 띄우면 SSH 세션이 닫힐 때 같이 죽는다. 서비스로 올린다.
+유닛 파일은 [`shade-bridge.service`](shade-bridge.service) 에 있다.
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp shade-bridge/shade-bridge.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now shade-bridge      # FC 가 꽂힌 PC 에서만
+```
+
+확인:
+
+```bash
+systemctl --user is-active shade-bridge
+journalctl --user -u shade-bridge -n 20 --no-pager
+ss -ulnp | grep 14550          # 100.x 주소로 떠야 한다
+fuser -v /dev/ttyACM0          # 브리지(python3) 가 잡고 있어야 한다
+```
+
+⚠️ **FC 가 꽂힌 PC 에서만 `enable --now` 한다.** 나머지는 유닛만 두고 끈 채로 둔다.
+FC 를 옮기면 옛 PC 에서 `systemctl --user disable --now shade-bridge`, 새 PC 에서
+`enable --now` 한다.
+
+> 🟡 **2026-09-04 현재 `rim3` 의 브리지는 서비스가 아니라 손으로 띄운 프로세스다**
+> (PID 65067, 9/2 기동). 죽으면 링크가 조용히 사라진다. 위 절차로 서비스화가 필요하다.
+
+## 어느 PC 에 꽂아도 나머지가 본다
+
+```
+FC ──USB── (raspb1 | ku | rim | rim3 중 하나) ──브리지── UDP 14550
+                                                    │ Tailscale 내부로만
+                        ┌──────────┬────────────────┼──────────┐
+                        ▼          ▼                ▼          ▼
+                     ku-dgs1      rim             rim3    gram-labtop
+```
+
+브리지가 도는 PC 한 대만 시리얼을 잡고, 나머지 세 대는 UDP 로 붙는다. 브리지가 도는
+PC 의 QGC 도 자기 자신에게 UDP 로 붙는다 — `TARGETS` 에 자기 IP 가 들어 있는 이유다.
 
 ## 함정
 

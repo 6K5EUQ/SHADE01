@@ -150,12 +150,19 @@ update-desktop-database ~/.local/share/applications 2>/dev/null
 
 ```ini
 [AutoConnect]
-autoConnectPixhawk=true      ← 유지. USB 로 FC 꽂으면 자동으로 잡아준다
+autoConnectPixhawk=true      ← 지상국 전용 PC 에서만. 아래 경고를 읽어라
 autoConnectUDP=false         ← 반드시 끈다
 ```
 
 증상 확인: `ss -ulpn | grep QGroundControl` 이 **14550 소켓을 2개** 보이면 익명 링크가
 살아 있는 것이다. 정상이면 1개다.
+
+> 🔴 **`autoConnectPixhawk=true` 는 FC 가 꽂힌 PC 에서는 안 된다.** 그 PC 가
+> [PC 직결 브리지](../../shade-bridge/README.md)를 돌리고 있으면 QGC 가
+> `/dev/ttyACM0` 을 낚아채 브리지를 죽이고, **다른 PC 에서는 기체가 통째로 사라진다.**
+> 브리지를 돌리는 PC 는 `false` 로 둔다 —
+> [역할별 표](../../shade-bridge/README.md#-qgc-의-autoconnect--역할마다-값이-다르다).
+> 위 `true` 는 FC 를 꽂아도 브리지를 안 돌리는 **지상국 전용 PC** 기준이다.
 
 > ⚠️ **이 값은 QGC 가 되돌려 놓는다.** 2026-09-02 rim3 에서 `autoConnectUDP=true`,
 > `autoConnectPixhawk=false` 로 뒤집혀 있는 것을 발견했다 (QGC 버전 교체 중 발생한 것으로
@@ -574,8 +581,12 @@ sudo usermod -aG dialout $USER   # 적용에는 재로그인 필요
 
 | 설정 | 값 | 효과 |
 |---|---|---|
-| `autoConnectPixhawk` | `true` | USB 케이블을 꽂으면 **자동 연결**. Comm Links 목록에는 표시되지 않는다 |
+| `autoConnectPixhawk` | `true` ⚠️ | USB 케이블을 꽂으면 **자동 연결**. Comm Links 목록에는 표시되지 않는다. **브리지를 돌리는 PC 에서는 `false`** — 아래 경고 |
 | `autoConnectUDP` | `false` | Pi 링크가 멋대로 붙지 않음 — 필요할 때 **수동 Connect** |
+
+> 🔴 **브리지 PC 는 예외다.** FC 가 꽂힌 채 [PC 직결 브리지](../../shade-bridge/README.md)를
+> 돌리는 PC 에서 `autoConnectPixhawk=true` 면 QGC 가 시리얼을 뺏어 링크 전체가 죽는다.
+> 역할별 값은 [여기](../../shade-bridge/README.md#-qgc-의-autoconnect--역할마다-값이-다르다).
 
 이 조합이 "상황에 따라 골라 쓰기"에 가장 가깝다: **USB는 꽂으면 자동, Pi는 클릭해서 연결.**
 
