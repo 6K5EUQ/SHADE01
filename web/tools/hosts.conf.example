@@ -6,7 +6,8 @@
 # 로그를 가진 개발 PC 들
 SOURCES=(
   "ku@ku-dgs1"
-  "rim3@rim3"
+  "rim3@rim3"      # IP 로는 22 번이 안 열린다 — 이름을 쓴다
+  "rim@rim"        # 계정명이 rim 이다 (Tailscale 소유자 태그는 yyrrm@ 이지만 무관)
 )
 
 # 정본 보관소 (웹 서버)
