@@ -9,9 +9,12 @@
 
 // 3열 격자라 칸이 좁다. 축 라벨을 폭에 맞춰 줄인다 — 고정 46px 이면
 // 좁은 칸에서 그림 영역이 거의 안 남는다.
-function pad(W, hasRight) {
+function pad(W) {
   const l = W < 420 ? 30 : 40;
-  return { l, r: hasRight ? l : 10, t: 8, b: 16 };
+  // 좌우 여백을 **항상 같게** 잡는다. 우축 유무로 r 을 바꾸면 단마다 iw 가
+  // 달라져 같은 t 가 다른 px 에 찍힌다 — 커서·이벤트선이 단 사이에서 어긋난다.
+  // 우축이 없는 단은 그 여백이 빌 뿐이고, 시간축 정렬이 훨씬 중요하다.
+  return { l, r: l, t: 8, b: 16 };
 }
 
 function niceScale(values, opts = {}) {
@@ -46,8 +49,7 @@ function drawChart(el, trk, spec) {
   el.setAttribute('viewBox', `0 0 ${W} ${H}`);
   el.setAttribute('preserveAspectRatio', 'none');
 
-  const hasRight = spec.series.some((s) => s.axis === 'right');
-  const PAD = pad(W, hasRight);
+  const PAD = pad(W);
   const dur = trk.dur || (trk.n - 1) / trk.hz;
   // 보이는 시간 구간. 휠 줌이 이걸 좁히고, 드래그가 옮긴다.
   const v0 = spec.view ? spec.view.t0 : 0;
