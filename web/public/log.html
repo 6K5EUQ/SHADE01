@@ -669,11 +669,28 @@ function initPlayer() {
   $('#seek').oninput = (e) => player.seek((e.target.value / 1000) * TRK.dur);
   $('#speed').onchange = (e) => player.setRate(parseFloat(e.target.value));
   $('#zoomOut').onclick = () => setView(0, TRK.dur);
+  // ?t= 왕복. 링크를 복사하면 지금 보고 있는 순간이 그대로 담기게 한다.
+  // 클램프된 player.t 를 되읽으므로 범위를 벗어난 t 도 정규화된다.
+  // 슬라이더 드래그가 oninput 으로 연속 발화하므로 디바운스한다.
+  let urlTimer;
+  const rawSeek = player.seek.bind(player);
+  player.seek = (v) => {
+    rawSeek(v);
+    clearTimeout(urlTimer);
+    urlTimer = setTimeout(
+      () => history.replaceState(null, '', `?t=${player.t.toFixed(2)}`), 200);
+  };
+
   addEventListener('keydown', (e) => {
     if (e.target.matches('input,select,textarea')) return;
     if (e.code === 'Space') { e.preventDefault(); player.toggle(); }
-    if (e.code === 'ArrowRight') player.seek(player.t + (e.shiftKey ? 10 : 1));
-    if (e.code === 'ArrowLeft') player.seek(player.t - (e.shiftKey ? 10 : 1));
+    if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') {
+      e.preventDefault();                      // 안 막으면 페이지가 같이 스크롤된다
+      // 확대한 구간에서 1초 스텝은 뷰를 통째로 벗어난다. 보이는 폭에 맞춘다.
+      const w = VIEW ? VIEW.t1 - VIEW.t0 : TRK.dur;
+      const step = Math.min(e.shiftKey ? 10 : 1, w / 20);
+      player.seek(player.t + (e.code === 'ArrowRight' ? step : -step));
+    }
   });
 }
 
@@ -727,7 +744,7 @@ function drawReport() {
   }
   if (s.cell_min != null) h += card('셀 최저전압', f2(s.cell_min, ' V'));
   if (s.mah != null) h += card('이번 비행 소모', s.mah.toFixed(0) + ' mAh');
-  if (s.sats != null) h += card('GPS', `위성 ${s.sats.toFixed(0)}개 · eph ${f2(s.eph)}`);
+  if (s.sats != null) h += card('GPS', `위성 ${s.sats.toFixed(0)}개 · 위치 오차 ${f2(s.eph, ' m')}`);
   if (s.vib_max != null) h += card('진동 최대', f1(s.vib_max));
   h += '</div>';
 
@@ -753,10 +770,11 @@ function drawReport() {
     }
   }
   if (s.innov && s.innov.length) {
-    h += '<h2 style="margin-top:20px">EKF 이상 <span class="muted" style="font-weight:400;font-size:12px">' +
-         'test ratio > 1.0 는 센서 불일치. 기동 중 gravity 초과는 흔하다</span></h2>';
+    h += '<h2 style="margin-top:20px">센서 불일치</h2>';
     for (const [k, v] of s.innov.slice(0, 6)) {
-      h += `<div class="evt">${esc(k)} <span class="muted">최대</span> ${v.toFixed(2)}</div>`;
+      // 차트와 같은 이름을 쓴다. qgclog 는 mag_field[0] 꼴, extract 는 mag_field_0 꼴.
+      h += `<div class="evt">${esc(innovLabel(String(k).replace(/\[(\d+)\]/, '_$1')))}` +
+           ` <span class="muted">최대</span> ${v.toFixed(2)}</div>`;
     }
   }
   $('#report').innerHTML = h;

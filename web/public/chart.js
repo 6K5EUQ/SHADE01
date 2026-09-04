@@ -125,13 +125,23 @@ function drawChart(el, trk, spec) {
     for (let i = 0; i < trk.modes.length; i++) {
       const a = trk.modes[i].t;
       const b = i + 1 < trk.modes.length ? trk.modes[i + 1].t : dur;
-      bands += `<rect x="${x(a).toFixed(1)}" y="${PAD.t}" width="${Math.max(0, x(b) - x(a)).toFixed(1)}"
-              height="${ih}" fill="${modeColor(trk.modes[i].name)}" opacity=".055"/>`;
+      // .055 는 다크 배경에서 채널당 최대 11 차이라 사실상 안 보인다. 본체는
+      // 조금 올리고, 실제 구분은 위쪽 색 띠가 한다 — 어두운 모드색(AUTO·STAB)은
+      // 알파를 올릴수록 배경에 묻히므로 알파만으로는 못 살린다.
+      const bx = x(a).toFixed(1), bw = Math.max(0, x(b) - x(a)).toFixed(1);
+      const bc = modeColor(trk.modes[i].name);
+      bands += `<rect x="${bx}" y="${PAD.t}" width="${bw}"
+              height="${ih}" fill="${bc}" opacity=".10"/>`;
+      bands += `<rect x="${bx}" y="${PAD.t}" width="${bw}"
+              height="3" fill="${bc}" opacity=".85"/>`;
       // 라벨은 보이는 영역 안쪽에 붙인다 — 확대해서 밴드 시작이 왼쪽 밖으로
       // 나가도 이름이 보여야 한다.
       const lx = Math.max(x(a) + 4, PAD.l + 4);
       // 라벨은 요청한 단에만. 12단 전부에 찍으면 화면이 모드 이름으로 뒤덮인다.
-      if (spec.bandLabels && Math.min(x(b), W - PAD.r) - lx > 30) {
+      // 고정 30px 게이트는 AUTO_TAKEOFF(≈59px) 같은 긴 이름을 통과시켜 옆 밴드
+      // 라벨 위에 겹쳐 찍혔다. 대문자 ASCII 폭으로 어림잡아 안 들어가면 생략한다.
+      const lw = trk.modes[i].name.length * 9 * 0.62;
+      if (spec.bandLabels && Math.min(x(b), W - PAD.r) - lx > lw + 4) {
         bands += `<text x="${lx.toFixed(1)}" y="${PAD.t + 11}" fill="#8b949e"
                 font-size="9">${esc(trk.modes[i].name)}</text>`;
       }
@@ -192,18 +202,21 @@ function drawChart(el, trk, spec) {
                                     ['right', 'end', W - PAD.r]]) {
     // scales[ax] 가 없어도 머리말은 그린다 — 그 축 계열을 전부 숨긴 상태이고,
     // 이름이 사라지면 다시 켤 방법이 없어진다.
+    // 점선(목표) 계열도 넣는다. 빼면 그 선은 이름도 없고 끌 수도 없다.
     const own = (spec.caption || spec.series)
-                  .filter((q) => (q.axis || 'left') === ax && !q.dash);
+                  .filter((q) => (q.axis || 'left') === ax);
     if (!own.length) continue;
-    // 같은 축에 여럿이면 이어 붙인다. 길면 화면을 먹으므로 셋까지만.
     // 계열마다 <tspan> 을 따로 두어 클릭으로 숨기는 기능을 그대로 살린다.
-    const show = own.slice(0, 3);
+    // 상한은 그 축의 계열 수에 맞춘다 — 자르면 잘린 계열은 다시 켤 수 없다.
+    // 모터(5)·센서불일치(6) 처럼 많은 단만 3개로 접는다.
+    const CAP = own.length <= 4 ? 4 : 3;
+    const show = own.slice(0, CAP);
     const parts = show.map((q, n) =>
       `<tspan class="k${q.hidden ? ' off' : ''}" data-key="${q.key}"
               fill="${q.hidden ? '#6e7681' : q.color}"
               style="cursor:pointer">${esc(q.label)}</tspan>`
       + (n < show.length - 1 ? '<tspan fill="#6e7681"> · </tspan>' : ''));
-    if (own.length > 3) parts.push('<tspan fill="#6e7681"> …</tspan>');
+    if (own.length > CAP) parts.push('<tspan fill="#6e7681"> …</tspan>');
     svg += `<text x="${tx}" y="${PAD.t - 7}" font-size="11" font-weight="600"
             text-anchor="${anchorTx}">${parts.join('')}</text>`;
   }
@@ -214,8 +227,10 @@ function drawChart(el, trk, spec) {
     const gy = y(th.v, 'left');
     plot += `<line x1="${PAD.l}" y1="${gy.toFixed(1)}" x2="${W - PAD.r}" y2="${gy.toFixed(1)}"
             stroke="${th.color}" stroke-width="1" stroke-dasharray="5 4" opacity=".75"/>`;
-    // 오른쪽 축 눈금과 겹치지 않게 안쪽에 붙인다
-    plot += `<text x="${W - PAD.r - 8}" y="${(gy - 4).toFixed(1)}" fill="${th.color}"
+    // 오른쪽 축 눈금과 겹치지 않게 안쪽에 붙인다. 임계값이 축 꼭대기 근처면
+    // 모드 밴드 라벨(PAD.t+11) 줄과 부딪치므로 그때만 선 아래로 내린다.
+    const ly = (spec.bandLabels && gy - 4 < PAD.t + 15) ? gy + 11 : gy - 4;
+    plot += `<text x="${W - PAD.r - 8}" y="${ly.toFixed(1)}" fill="${th.color}"
             font-size="9" text-anchor="end">${esc(th.label)}</text>`;
   }
 
