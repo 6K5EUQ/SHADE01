@@ -343,8 +343,8 @@ const CHARTS = [
       { key: 'sats', color: '#3fb950', label: '위성 수', axis: 'left', weight: 2 },
       { key: 'eph', color: '#f85149', label: 'eph', axis: 'right', unit: 'm' }] },
   // innov_* 는 extract.py 가 1.0 을 넘은 것만 골라 싣는다. 없으면 이 단은 안 뜬다.
-  { id: 'c10', title: 'EKF innovation', bands: true, dynamic: 'innov_',
-    series: [], thresholds: [{ v: 1, label: '불일치 1.0', color: '#d29922' }] },
+  { id: 'c10', title: '센서 불일치', bands: true, dynamic: 'innov_',
+    series: [], thresholds: [{ v: 1, label: '이 선을 넘으면 이상', color: '#d29922' }] },
   { id: 'c11', title: 'CPU · RAM', bands: true, series: [
       { key: 'cpu', color: '#58a6ff', label: 'CPU', axis: 'left', unit: '%' },
       { key: 'ram', color: '#a371f7', label: 'RAM', axis: 'left', unit: '%' }] },
@@ -355,6 +355,28 @@ function cssVar(v) {
 }
 
 function buildCharts() {
+// EKF 필드 이름은 그대로 두면 아무도 못 읽는다 (gps_hvel_0, mag_field_2 …).
+// "무슨 센서가 어긋났나" 만 알면 되므로 축·번호는 버리고 센서 이름만 한글로 준다.
+const INNOV_KO = {
+  gps_hvel: 'GPS 속도(수평)', gps_vvel: 'GPS 속도(수직)',
+  gps_hpos: 'GPS 위치(수평)', gps_vpos: 'GPS 위치(수직)',
+  ev_hvel: '외부 속도(수평)', ev_vvel: '외부 속도(수직)',
+  ev_hpos: '외부 위치(수평)', ev_vpos: '외부 위치(수직)',
+  baro_vpos: '기압 고도', rng_vpos: '거리센서 고도',
+  hagl: '지면까지 높이', hagl_rate: '지면까지 높이 변화',
+  aux_hvel: '보조 속도', flow: '광류 센서',
+  heading: '기수 방향', mag_field: '지자기',
+  gravity: '중력 방향', drag: '공기 저항',
+  airspeed: '대기속도', beta: '옆미끄럼',
+};
+function innovLabel(f) {
+  const base = f.replace(/_\d+$/, '');            // gps_hvel_0 → gps_hvel
+  const ko = INNOV_KO[base];
+  if (!ko) return base;
+  const ax = f.match(/_(\d+)$/);                  // 축이 여럿이면 X/Y/Z 로
+  return ax ? `${ko} ${'XYZ'[ax[1]] || ax[1]}` : ko;
+}
+
   const mc = ['#58a6ff', '#3fb950', '#f0883e', '#db61a2', '#a371f7', '#d29922'];
   const motors = TRK.motors || {};
 
@@ -371,7 +393,7 @@ function buildCharts() {
       const keys = Object.keys(TRK).filter((k) => k.startsWith(c.dynamic)).sort();
       c.series = keys.map((k, i) => ({
         key: k, color: mc[i % mc.length], axis: 'left',
-        label: k.slice(c.dynamic.length),
+        label: c.dynamic === 'innov_' ? innovLabel(k.slice(6)) : k.slice(c.dynamic.length),
       }));
     }
   }
