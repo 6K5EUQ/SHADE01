@@ -1,0 +1,146 @@
+/* 라이브 트래킹 레이아웃. 팔레트·폰트는 /app.css (로그 뷰어와 공용) 를 쓴다.
+   여기서는 배치와 라이브 전용 부품(인공수평의·큰 숫자·배지)만 정의한다. */
+
+html, body { height: 100%; overflow: hidden; }
+
+/* 지도 | 데이터 2단. 비행 중에는 스크롤할 손이 없다 — 한 화면에 다 넣는다. */
+main {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  height: calc(100vh - 49px);
+}
+
+#mapPane { position: relative; border-right: 1px solid var(--border); }
+#map { width: 100%; height: 100%; background: var(--panel); }
+
+/* Leaflet 기본은 밝은 지도다. 어두운 UI 와 맞추려고 타일을 반전·감광한다. */
+.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
+.leaflet-container { background: #0d1117; font: inherit; }
+.leaflet-control-attribution {
+  background: rgba(13,17,23,.8) !important; color: var(--muted) !important;
+}
+.leaflet-control-attribution a { color: var(--dim) !important; }
+.leaflet-bar a {
+  background: var(--panel-2) !important; color: var(--text) !important;
+  border-color: var(--border-2) !important;
+}
+
+.overlay {
+  position: absolute; left: 12px; bottom: 12px; z-index: 400;
+  background: rgba(13,17,23,.86); border: 1px solid var(--border-2);
+  border-radius: 8px; padding: 8px 12px; font-family: var(--mono); font-size: 12px;
+  display: grid; gap: 2px; pointer-events: none;
+}
+.overlay .k { color: var(--muted); display: inline-block; width: 52px; }
+.overlay .v { color: var(--text); }
+
+/* ── 헤더 배지 ───────────────────────────────────────────── */
+.pill {
+  font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--border-2); background: var(--panel-2); color: var(--dim);
+  letter-spacing: .3px; white-space: nowrap;
+}
+.pill-off { color: var(--muted); }
+.pill-live { background: rgba(63,185,80,.15); border-color: var(--ok); color: var(--ok); }
+.pill-armed { background: rgba(248,81,73,.15); border-color: var(--bad); color: var(--bad); }
+.pill-warn { background: rgba(210,153,34,.15); border-color: var(--warn); color: var(--warn); }
+button.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+a.btn { display: inline-block; text-decoration: none; }
+
+#banner {
+  padding: 8px 20px; font-size: 13px; font-weight: 600;
+  background: rgba(210,153,34,.15); color: var(--warn);
+  border-bottom: 1px solid var(--warn);
+}
+#banner.bad { background: rgba(248,81,73,.15); color: var(--bad); border-color: var(--bad); }
+
+/* ── 데이터 단 ───────────────────────────────────────────── */
+#dataPane {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px; overflow-y: auto; background: var(--bg);
+}
+
+.big { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.big .cell {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px;
+}
+.big .lbl { font-size: 11px; color: var(--muted); letter-spacing: .3px; }
+.big .unit { color: var(--border-2); }
+/* 곁눈질로 읽는 값이라 크게. tabular-nums 로 자릿수가 바뀌어도 안 흔들린다. */
+.big .num {
+  font-family: var(--mono); font-size: 34px; font-weight: 600; line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+#b-alt { color: var(--c-alt); }
+#b-spd { color: var(--c-spd); }
+#b-volt { color: var(--c-volt); }
+#b-cur { color: var(--c-cur); }
+.big .num.warn { color: var(--warn); }
+.big .num.bad { color: var(--bad); }
+
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+
+.row2 { display: grid; grid-template-columns: 138px 1fr; gap: 8px; }
+.attitude { display: flex; align-items: center; justify-content: center; padding: 6px; }
+.attitude svg { width: 100%; height: auto; max-height: 150px; }
+
+.gauges {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+  background: var(--border); overflow: hidden;
+}
+.gauges .g {
+  background: var(--panel); padding: 7px 10px;
+  display: flex; align-items: baseline; gap: 5px;
+}
+.gauges .k { font-size: 10px; color: var(--muted); width: 42px; flex: none; letter-spacing: .3px; }
+.gauges b {
+  font-family: var(--mono); font-size: 16px; font-weight: 600;
+  font-variant-numeric: tabular-nums; margin-left: auto;
+}
+/* 단위 칸이 넓으면 값(-100.0 같은 다섯 글자)이 밀려 잘린다. */
+.gauges .u { font-size: 10px; color: var(--border-2); width: 20px; flex: none; }
+.gauges b { min-width: 0; overflow: visible; }
+
+.status { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.status .s {
+  background: var(--panel); border: 1px solid var(--border); border-left-width: 3px;
+  border-radius: 6px; padding: 5px 8px;
+}
+.status .k { display: block; font-size: 10px; color: var(--muted); letter-spacing: .3px; }
+.status b { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+.status .s.ok { border-left-color: var(--ok); }
+.status .s.warn { border-left-color: var(--warn); }
+.status .s.warn b { color: var(--warn); }
+.status .s.bad { border-left-color: var(--bad); }
+.status .s.bad b { color: var(--bad); }
+.status .s.none { border-left-color: var(--border-2); }
+.status .s.none b { color: var(--muted); }
+
+.charts { padding: 8px 10px; display: grid; gap: 8px; }
+.chartrow { display: flex; align-items: center; gap: 8px; }
+.chartrow .clbl { font-size: 10px; color: var(--muted); width: 26px; flex: none; }
+/* viewBox 300x44 를 비율 그대로 그린다. preserveAspectRatio 를 끄면(none)
+   글자까지 가로로 늘어나 라벨이 뭉갠다. */
+.chartrow svg { flex: 1; height: 46px; min-width: 0; }
+
+.msgs { padding: 6px 8px; max-height: 132px; overflow-y: auto; }
+#msgs div {
+  font-family: var(--mono); font-size: 11px; line-height: 1.5;
+  padding: 1px 0; border-bottom: 1px solid var(--border);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#msgs div:last-child { border-bottom: 0; }
+#msgs .sev { color: var(--muted); margin-right: 6px; }
+#msgs .s-EMERG, #msgs .s-ALERT, #msgs .s-CRIT, #msgs .s-ERROR { color: var(--bad); }
+#msgs .s-WARN { color: var(--warn); }
+#msgs .s-NOTICE { color: var(--accent); }
+#msgs .empty { color: var(--muted); border: 0; }
+
+/* 화면이 좁으면 지도를 위, 데이터를 아래로 */
+@media (max-width: 900px) {
+  html, body { overflow: auto; }
+  main { grid-template-columns: 1fr; height: auto; }
+  #mapPane { height: 46vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  .attitude svg { max-height: 120px; }
+}

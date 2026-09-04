@@ -12,6 +12,7 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 | `logs/` | `.ulg` 원본 (git 제외, **평면으로 쌓는다**) |
 | [`tools/`](tools/qgclog/) | 로그 수집(`fcfetch.py`)·분석(`qgclog`) |
 | [`web/`](web/) | [shade01.bewe.co.kr](https://shade01.bewe.co.kr) — 지도·시간축 재생 뷰어, 로그 정본 보관소 |
+| [`web/live/`](web/live/) | **실시간 트래킹** — 지도+계기를 localhost 로. 읽기 전용 |
 | `params/` `config/` | 파라미터 스냅샷, 조종기 설정 백업 · [**세팅 스냅샷 정리**](config/SETTINGS.md) |
 | [`PROCEDURE.md`](PROCEDURE.md) | 로그 수집 → 분석 → 기록 절차 |
 | 🔴 [`FC_CHANGELOG.md`](FC_CHANGELOG.md) | **FC 변경 이력 — FC 를 만지기 전에 읽고, 만졌으면 적는다** |
@@ -112,7 +113,11 @@ cd ~/SHADE01 && ./shade-bridge/pc_bridge.sh
 
 ```bash
 ./gcs/qgroundcontrol/elrs-backpack        # AP 전환 → QGC → 닫으면 원래 WiFi 복귀
+./web/live/live                           # 실시간 트래킹 페이지 (읽기 전용, localhost:4400)
 ```
+
+QGC 대신(또는 같이) **브라우저로 볼 수 있다** — 지도 한쪽, 계기 한쪽이다.
+백팩·브리지 어느 경로든 같은 페이지가 뜬다: [`web/live/`](web/live/).
 
 - ⚠️ **백팩 AP 에는 인터넷이 없다.** NetworkManager 가 30초~2분 뒤 원래 WiFi 로 라디오를
   뺏어간다 — 프로파일에 `autoconnect-priority 100` + `never-default yes` 가 있어야 한다.

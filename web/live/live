@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# 라이브 트래킹 페이지를 띄운다.
+#
+#   ./web/live/live              14550 에서 듣는다 (백팩·브리지 공용)
+#   ./web/live/live 14551        다른 포트로
+#
+# 읽기 전용이다 — FC 로 나가는 바이트가 없다. 조작은 QGC 로 한다.
+#
+# ELRS 백팩으로 볼 때: 먼저 ./gcs/qgroundcontrol/elrs-backpack 으로 AP 에
+# 붙어야 한다 (그 스크립트가 QGC 도 같이 띄운다). WiFi 가 없는 ku 에서는
+# shade-bridge 경로로만 볼 수 있다.
+
+set -eu
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+PY="${QGCLOG_PYTHON:-$REPO/.venv/bin/python}"
+PORT="${1:-14550}"
+HTTP="${LIVE_HTTP:-4400}"
+
+if [[ ! -x "$PY" ]]; then
+  echo "python venv 이 없다: $PY" >&2
+  echo "PROCEDURE.md '2-0 분석 PC 준비' 를 따라 만들어라." >&2
+  exit 1
+fi
+
+# 포트가 이미 쓰이고 있으면 미리 알려준다. 안 그러면 bind 실패 메시지만 뜬다.
+if ss -ulnp 2>/dev/null | grep -q ":${PORT}\b"; then
+  echo "⚠️  UDP ${PORT} 를 이미 누가 쓰고 있다:"
+  ss -ulnp 2>/dev/null | grep ":${PORT}\b" | sed 's/^/    /'
+  echo "    QGC 나 shade-bridge 다. 그쪽을 끄거나 다른 포트를 써라: $0 14551"
+  echo
+fi
+
+echo "브라우저: http://localhost:${HTTP}"
+exec "$PY" "$REPO/web/live/mav_live.py" --port "$PORT" --http "$HTTP"
