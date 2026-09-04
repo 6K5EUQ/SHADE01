@@ -22,21 +22,28 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 
 ---
 
-## 링크 구성 — **raspb1 단독**
+## 링크 구성 — **3 경로**
 
-**이 기체의 지상국 링크는 `raspb1` 하나다.** 대체 경로는 없다.
+지상국 링크는 셋이다. 지금은 **raspb1 잠정 중단**, `rim3` USB 직결이 현행 주 경로다.
+
+| # | 경로 | 상태 | 쓰는 때 |
+|---|---|---|---|
+| 1 | **raspb1 브리지** (기체 탑재 Pi) | 🟡 **잠정 중단** — FC USB 를 뽑아 뒀다 | **비행용 정규 경로.** 비행 전 원복 |
+| 2 | **PC USB 직결 브리지** (현재 `rim3`) | ✅ **가동중** | 지상 정비·파라미터·펌웨어 |
+| 3 | **ELRS 백팩** (조종기 WiFi AP) | ✅ 사용 가능 (WiFi 있는 PC 만) | 1·2 가 다 죽었을 때 폴백 |
+
+**FC USB 는 하나뿐이다.** 1 번과 2 번은 같은 포트를 두고 다투므로 **동시에 못 쓴다** —
+한쪽을 쓰려면 다른 쪽 USB 를 물리적으로 뽑아야 한다. 3 번은 TELEM1 로 들어와 독립이지만,
+노트북 WiFi 가 하나뿐이라 **백팩 AP 에 붙는 동안은 Tailscale 이 끊겨 1·2 번이 죽는다.**
+셋 다 실질적으로 배타적이다.
+
+### 1. raspb1 브리지 — 🟡 잠정 중단
 
 ```
-[Pixhawk 6C Mini] ──USB-C ⟷ USB-A── [Raspberry Pi 5 "raspb1"]
+[Pixhawk 6C Mini] ──USB-C ⟷ USB-A── [Raspberry Pi 5 "raspb1"]   ← 지금 USB 뽑힘
                                           /dev/ttyACM0
                                        mav_bridge.py (UDP :14550)
-                                              │
-                                     WiFi → 인터넷 → Tailscale
-                                              │
-        ┌──────────────┬──────────────┬───────┴──────┐
-        ▼              ▼              ▼              ▼
-     ku-dgs1          rim           rim3       gram-labtop      ← QGC 4대
-  100.99.120.110  100.107.83.47  100.117.47.105  100.66.204.25
+                                     WiFi/LTE → Tailscale → QGC 4대
 ```
 
 | 항목 | 값 |
@@ -44,16 +51,82 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 | FC ↔ Pi | **USB 직결** `/dev/ttyACM0` — Pi 시리얼 읽기 **21.0 KB/s** 실측 |
 | Pi ↔ GCS | UDP 14550 over Tailscale — GCS 수신 **21.8 KB/s** 실측 |
 | 브리지 | `mavlink-bridge.service` (`enabled`, `Restart=always`) |
-| RC | MAVLink over ELRS → FC **TELEM1** (CRSF 아님) |
 
+- 🟡 **잠정 중단 (2026-09-04)** — FC USB 를 `rim3` 로 옮겼다. raspb1 은 Tailscale 에서도
+  `offline` 이다. **기체를 다시 띄우기 전에 반드시 원복한다** — `rim3` 는 기체에 안 실린다.
 - ⛔ **TELEM2 는 죽었다** (2026-08-31). 포트 전원까지 사망 —
   [근거](components/companion/raspberry-pi-5/README.md#-telem2-포트-사망--usb-링크로-전환-2026-08-31)
-- ⚠️ **FC USB 는 하나뿐**이라 Pi 가 잡으면 노트북 직결이 안 된다. 펌웨어 작업 시 Pi USB 를 뽑는다.
 - ✅ **WiFi + LTE 이중화** (2026-08-31) — LTE 모뎀 장착으로 WiFi 범위 의존이 해소됐다.
   ⚠️ 비행 중 링크 신뢰성은 아직 장거리로 검증되지 않았다.
 
+### 2. PC USB 직결 브리지 — ✅ 현재 가동중 (`rim3`)
+
+raspb1 이 하던 일을 PC 가 대신한다. 같은 `mav_bridge.py` 이고, 중계 대상도 같은 4 대다.
+
+```
+[Pixhawk 6C Mini] ──USB── [rim3]  /dev/ttyACM0
+                          mav_bridge.py (UDP :14550, Tailscale 주소에만 바인딩)
+                                  │
+        ┌──────────────┬──────────┴───┬──────────────┐
+        ▼              ▼              ▼              ▼
+     ku-dgs1          rim           rim3       gram-labtop      ← QGC 4대
+  100.99.120.110  100.107.83.47  100.117.47.105  100.66.204.25
+```
+
+```bash
+cd ~/SHADE01 && ./shade-bridge/pc_bridge.sh
+```
+
+**2026-09-04 실측 (`rim3` 직결, `ku` 에서 수신):**
+
+| 항목 | 값 |
+|---|---|
+| 수신 대역 | **28.4 KB/s** — raspb1 의 21.8 KB/s 보다 빠르다 (유선 Tailscale) |
+| 하행 | ✅ FC sysid 1 — `ATTITUDE`·`HIGHRES_IMU`·`LOCAL_POSITION_NED` 정상 |
+| 상행 | ✅ `PARAM_REQUEST_READ` → `PARAM_VALUE` 왕복 확인 |
+| `rim` 레그 | ✅ rim3→rim tx 17.95 MB vs rim3→ku 17.99 MB — 같은 스트림이 양쪽에 나감 |
+| `gram` 레그 | 안 감 — gram 이 `offline` (정상 동작) |
+
+- 🔴 **상행이 열려 있다 = ARM·모드변경·미션업로드가 원격에서 된다.** 브리지는 Tailscale
+  주소에만 바인딩하고 송신자를 화이트리스트로 거른다 —
+  [노출 범위](shade-bridge/README.md#노출-범위--반드시-읽어라)를 반드시 읽어라.
+- ⚠️ **`ku-dgs1` 에서 브리지를 돌릴 땐 `MAV_BIND` 를 명시한다.** 공인 IP
+  (`203.253.176.74`)가 있고 `ufw` 도 꺼져 있어, Tailscale 자동탐지가 실패하면 인터넷에서
+  FC 로 명령이 들어온다.
+- ⚠️ **자동 재시작이 없다.** raspb1 과 달리 systemd 서비스가 아니라 손으로 띄운
+  프로세스다. 죽으면 링크가 조용히 사라진다.
+
+### 3. ELRS 백팩 링크 — 조종기 WiFi
+
+조종기(RadioMaster Boxer) 의 백팩이 AP 를 띄우고, PC 가 거기 붙어 `10.0.0.1:14550` 으로
+받는다. FC 쪽은 **TELEM1** 이라 1·2 번과 독립이다. QGC 링크는 로컬 리슨 **14555**.
+
+| PC | WiFi 장치 | 백팩 링크 |
+|---|---|---|
+| `rim3` | `wlo1` | ✅ |
+| `gram-labtop` | `wlp0s20f3` | ✅ |
+| `ku-dgs1` | **없음** (유선 `enp3s0`) | ❌ USB 동글 필요 |
+
+```bash
+./gcs/qgroundcontrol/elrs-backpack        # AP 전환 → QGC → 닫으면 원래 WiFi 복귀
+```
+
+- ⚠️ **백팩 AP 에는 인터넷이 없다.** NetworkManager 가 30초~2분 뒤 원래 WiFi 로 라디오를
+  뺏어간다 — 프로파일에 `autoconnect-priority 100` + `never-default yes` 가 있어야 한다.
+- 백팩 FW **1.5.9**, Telemetry = **wifi**.
+
+### RC 는 링크와 별개다
+
+| 항목 | 값 |
+|---|---|
+| RC | MAVLink over ELRS → FC **TELEM1** (CRSF 아님) |
+
+조종은 위 3 경로 중 무엇을 쓰든 **ELRS 무선으로 직접** 들어간다. 브리지가 죽어도
+조종은 살아 있다 (반대로 브리지만 살고 RC 가 죽으면 `NAV_RCL_ACT=2` 로 RTL).
+
 상세: [raspb1 브리지 구현](components/companion/raspberry-pi-5/README.md) ·
-[QGC 접속 절차](gcs/qgroundcontrol/README.md)
+[PC 직결 브리지](shade-bridge/README.md) ·
+[QGC 접속 절차 · 링크 3개 등록](gcs/qgroundcontrol/README.md#링크-3개-구성-2026-09-02-확정)
 
 ---
 
@@ -123,7 +196,7 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 
 | 항목 | 상태 |
 |---|---|
-| 링크 | ✅ FC USB ↔ raspb1 → UDP 14550, 실비행 검증 완료 |
+| 링크 | 🟡 **raspb1 잠정 중단** (2026-09-04, FC USB 를 `rim3` 로 옮김). 현행은 `rim3` USB 직결 브리지 — ku·rim 중계 양방향 실측 완료. **비행 전 raspb1 원복 필수** |
 | 비행모드 | ✅ S3 6단, 실링크로 6단 전부 검증 (2026-09-02 재측정 1000/1275/1425/1575/1725/2000) |
 | 🟡 2단 여유 | Altitude(1275us)가 슬롯 경계 1282us 에서 **7us**. 지금은 값이 고정이라 무해하나 **CH6 RC 캘리브레이션 금지** ([상세](components/transmitters/radiomaster-boxer/switch-mapping.md#px4-슬롯-경계--1500us-가-아니다)) |
 | GPS | ✅ 위성 21~32, fix 4, eph 0.15~0.23m (야외 실측) |
@@ -168,6 +241,7 @@ RTL 고도 25/10, 미션 고도 통일.
 
 | 날짜 | 사건 |
 |---|---|
+| 2026-09-04 | 🟡 **raspb1 링크 잠정 중단** — FC USB 를 `rim3` 로 옮겼다. `rim3` 직결 브리지가 ku·rim 까지 중계되는 것을 양방향 실측 확인 (28.4 KB/s, 상행 PARAM 왕복). README 링크 구성을 **3 경로**(raspb1 / PC 직결 / ELRS 백팩)로 정정 — "raspb1 단독, 대체 경로 없다" 는 백팩 링크 구축(9/3) 이후 낡은 서술이었다 |
 | 2026-09-02 | 🔴 **CH7 천이가 실제로는 매핑돼 있음을 발견** (`RC_MAP_TRANS_SW=7`) — 문서 3곳이 "미매핑"으로 잘못 적고 있었다 |
 | 2026-09-02 | 브리지 보안 수정 — Tailscale 주소에만 바인딩 + 송신자 화이트리스트 ([상세](components/companion/pc-direct/README.md#노출-범위--반드시-읽어라)) |
 | 2026-09-02 | QGC v5.1.4 직접 빌드 — VTOL 미션시간·기종표시 버그 [패치](gcs/qgroundcontrol/BUILD.md) |
