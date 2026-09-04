@@ -1,17 +1,96 @@
 /* 라이브 트래킹 레이아웃. 팔레트·폰트는 /app.css (로그 뷰어와 공용) 를 쓴다.
-   여기서는 배치와 라이브 전용 부품(인공수평의·큰 숫자·배지)만 정의한다. */
+   여기서는 배치와 라이브 전용 부품(HUD·스트립·상태밴드)만 정의한다. */
 
-html, body { height: 100%; overflow: hidden; }
+/* 🔴 헤더 높이를 숫자로 박지 않는다. 이전에는 calc(100vh - 49px) 였는데
+   실제 헤더는 버튼 높이 때문에 약 55px 이라, main 이 6px 넘쳐 숫자 스트립이
+   overflow:hidden 밑으로 스크롤바도 없이 잘려 나갔다. body 를 세로 flex 로
+   두면 헤더가 제 높이를 먹고 main 이 나머지를 정확히 가져간다. */
+html { height: 100%; }
+body { height: 100%; overflow: hidden; display: flex; flex-direction: column; }
 
-/* 지도 | 데이터 2단. 비행 중에는 스크롤할 손이 없다 — 한 화면에 다 넣는다. */
+/* 🔴 HUD 좌(크게) · 지도 우.
+   minmax 하한 560px = 좌우 테이프(각 62~92px)가 중앙 피치 사다리 라벨을 안 먹는 최소.
+   minmax 하한 380px = 홈 중심 150m 펜스 원(지름 300m)이 지도에 들어가는 최소.
+   min-width/min-height:0 이 없으면 그리드 자식의 기본 auto 최소크기 때문에
+   숫자 스트립이 화면 밖으로 밀려 조용히 사라진다. */
 main {
   display: grid;
-  grid-template-columns: 1fr 420px;
-  height: calc(100vh - 49px);
+  grid-template-columns: minmax(560px, 1.32fr) minmax(380px, 1fr);
+  flex: 1; min-height: 0;
 }
+#hudPane, #mapPane { min-width: 0; min-height: 0; }
 
-#mapPane { position: relative; border-right: 1px solid var(--border); }
-#map { width: 100%; height: 100%; background: var(--panel); }
+/* HUD 가 남는 높이를 다 먹고(1fr), 스트립은 auto 라 자기 높이를 먼저 확보한다 */
+#hudPane {
+  display: grid; grid-template-rows: 1fr auto;
+  border-right: 1px solid var(--border);
+  background: #05070a;
+}
+#hudBox { position: relative; min-height: 0; overflow: hidden; }
+/* SVG 는 CSS 로 100%/100%, viewBox 는 JS 가 실측 px 로 넣는다 → 배율 항상 1:1.
+   preserveAspectRatio 를 아예 안 쓴다: none 이면 종횡비마다 가로/세로 배율이
+   달라져 45° 뱅크가 30° 로 보이고, meet 는 레터박스, slice 는 테이프를 잘라 먹는다. */
+#hud { display: block; width: 100%; height: 100%; }
+
+/* SVG 요소에는 HTML 의 [hidden] 이 안 먹는다(UA 스타일시트가 HTML 전용).
+   반드시 클래스로 껐다 켠다. */
+#hud .off { display: none; }
+/* 모든 SVG 글자에 헤일로 — filter 가 아니라 paint-order 다.
+   filter 를 5Hz 회전 그룹에 붙이면 매 프레임 래스터를 다시 굽는다. */
+#hud text {
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  paint-order: stroke; stroke: #0d1117; stroke-width: 3px; stroke-linejoin: round;
+}
+#hud .armTxt  { font-size: 34px; font-weight: 700; }
+#hud .modeTxt { font-size: 22px; }
+#hud .vtolTxt { font-size: 20px; font-weight: 700; }
+#hud .warnTxt { font-size: 15px; }
+#hud.small .armTxt  { font-size: 24px; }
+#hud.small .modeTxt { font-size: 17px; }
+/* 점멸은 CSS 가 한다 — JS 가 프레임마다 색을 안 건드린다.
+   동시 발생 시 우선순위 상위 하나에만 붙인다. */
+@keyframes hudBlink { 50% { opacity: .25; } }
+#hud .blink { animation: hudBlink 1s step-end infinite; }
+
+/* ── 숫자 스트립 ─────────────────────────────────────────── */
+#strip {
+  display: flex; flex-wrap: wrap; gap: 1px;
+  background: var(--border); border-top: 1px solid var(--border);
+}
+#strip .sc {
+  flex: 1 1 130px; min-width: 0; background: var(--panel);
+  padding: 6px 10px; display: flex; align-items: baseline; gap: 6px;
+}
+/* ⚠️ display:flex 가 [hidden] 을 이긴다. 이 한 줄이 없으면 WP 칸이 안 숨는다. */
+#strip .sc[hidden] { display: none; }
+#strip .k { font-size: 10px; color: var(--muted); letter-spacing: .3px; flex: none; }
+#strip b {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  font-variant-numeric: tabular-nums; margin-left: auto;
+}
+#strip i { font-style: normal; font-size: 10px; color: var(--border-2); flex: none; }
+#strip .sc.warn b { color: var(--warn); }
+#strip .sc.bad  b { color: var(--bad); }
+/* 진단 칸은 색이 절대 안 붙는다 — 비행 판단값이 아니라 정비 항목이다 */
+#strip .sc.diag b { color: var(--muted) !important; }
+
+/* ── 헤더 배지 ───────────────────────────────────────────── */
+.pill {
+  font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--border-2); background: var(--panel-2); color: var(--dim);
+  letter-spacing: .3px; white-space: nowrap;
+}
+.pill-off { color: var(--muted); }
+.pill-live { background: rgba(63,185,80,.15); border-color: var(--ok); color: var(--ok); }
+.pill-warn { background: rgba(210,153,34,.15); border-color: var(--warn); color: var(--warn); }
+.pill-bad { background: rgba(248,81,73,.15); border-color: var(--bad); color: var(--bad); }
+button.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
+a.btn { display: inline-block; text-decoration: none; }
+
+/* ── 지도 단 ─────────────────────────────────────────────── */
+#mapPane { position: relative; display: grid; grid-template-rows: 1fr 124px; }
+#mapPane.msgcollapsed { grid-template-rows: 1fr 26px; }
+#map { width: 100%; height: 100%; background: var(--panel); min-height: 0; }
 
 /* Leaflet 기본은 밝은 지도다. 어두운 UI 와 맞추려고 타일을 반전·감광한다. */
 .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
@@ -25,106 +104,29 @@ main {
   border-color: var(--border-2) !important;
 }
 
+/* 우상단이다 — 좌상단은 Leaflet 줌 컨트롤, 우하단은 저작권 표시가 쓴다.
+   아래(예전 자리)는 이제 FC 메시지 서랍이 차지한다. */
 .overlay {
-  position: absolute; left: 12px; bottom: 12px; z-index: 400;
+  position: absolute; right: 12px; top: 12px; z-index: 400;
   background: rgba(13,17,23,.86); border: 1px solid var(--border-2);
   border-radius: 8px; padding: 8px 12px; font-family: var(--mono); font-size: 12px;
   display: grid; gap: 2px; pointer-events: none;
 }
-.overlay .k { color: var(--muted); display: inline-block; width: 52px; }
+.overlay .k { color: var(--muted); display: inline-block; width: 40px; }
 .overlay .v { color: var(--text); }
 
-/* ── 헤더 배지 ───────────────────────────────────────────── */
-.pill {
-  font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
-  border: 1px solid var(--border-2); background: var(--panel-2); color: var(--dim);
-  letter-spacing: .3px; white-space: nowrap;
+/* ── FC 메시지 서랍 ──────────────────────────────────────── */
+.msgs {
+  border-top: 1px solid var(--border); overflow: hidden; display: grid;
+  grid-template-rows: 26px 1fr; background: var(--panel);
 }
-.pill-off { color: var(--muted); }
-.pill-live { background: rgba(63,185,80,.15); border-color: var(--ok); color: var(--ok); }
-.pill-armed { background: rgba(248,81,73,.15); border-color: var(--bad); color: var(--bad); }
-.pill-warn { background: rgba(210,153,34,.15); border-color: var(--warn); color: var(--warn); }
-button.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
-a.btn { display: inline-block; text-decoration: none; }
-
-#banner {
-  padding: 8px 20px; font-size: 13px; font-weight: 600;
-  background: rgba(210,153,34,.15); color: var(--warn);
-  border-bottom: 1px solid var(--warn);
+.msgs .hd {
+  display: flex; align-items: center; gap: 8px; padding: 0 8px;
+  font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border);
 }
-#banner.bad { background: rgba(248,81,73,.15); color: var(--bad); border-color: var(--bad); }
-
-/* ── 데이터 단 ───────────────────────────────────────────── */
-#dataPane {
-  display: flex; flex-direction: column; gap: 8px;
-  padding: 10px; overflow-y: auto; background: var(--bg);
-}
-
-.big { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.big .cell {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: 8px; padding: 8px 12px;
-}
-.big .lbl { font-size: 11px; color: var(--muted); letter-spacing: .3px; }
-.big .unit { color: var(--border-2); }
-/* 곁눈질로 읽는 값이라 크게. tabular-nums 로 자릿수가 바뀌어도 안 흔들린다. */
-.big .num {
-  font-family: var(--mono); font-size: 34px; font-weight: 600; line-height: 1.15;
-  font-variant-numeric: tabular-nums;
-}
-#b-alt { color: var(--c-alt); }
-#b-spd { color: var(--c-spd); }
-#b-volt { color: var(--c-volt); }
-#b-cur { color: var(--c-cur); }
-.big .num.warn { color: var(--warn); }
-.big .num.bad { color: var(--bad); }
-
-.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
-
-.row2 { display: grid; grid-template-columns: 138px 1fr; gap: 8px; }
-.attitude { display: flex; align-items: center; justify-content: center; padding: 6px; }
-.attitude svg { width: 100%; height: auto; max-height: 150px; }
-
-.gauges {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
-  background: var(--border); overflow: hidden;
-}
-.gauges .g {
-  background: var(--panel); padding: 7px 10px;
-  display: flex; align-items: baseline; gap: 5px;
-}
-.gauges .k { font-size: 10px; color: var(--muted); width: 42px; flex: none; letter-spacing: .3px; }
-.gauges b {
-  font-family: var(--mono); font-size: 16px; font-weight: 600;
-  font-variant-numeric: tabular-nums; margin-left: auto;
-}
-/* 단위 칸이 넓으면 값(-100.0 같은 다섯 글자)이 밀려 잘린다. */
-.gauges .u { font-size: 10px; color: var(--border-2); width: 20px; flex: none; }
-.gauges b { min-width: 0; overflow: visible; }
-
-.status { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.status .s {
-  background: var(--panel); border: 1px solid var(--border); border-left-width: 3px;
-  border-radius: 6px; padding: 5px 8px;
-}
-.status .k { display: block; font-size: 10px; color: var(--muted); letter-spacing: .3px; }
-.status b { font-family: var(--mono); font-size: 13px; font-weight: 600; }
-.status .s.ok { border-left-color: var(--ok); }
-.status .s.warn { border-left-color: var(--warn); }
-.status .s.warn b { color: var(--warn); }
-.status .s.bad { border-left-color: var(--bad); }
-.status .s.bad b { color: var(--bad); }
-.status .s.none { border-left-color: var(--border-2); }
-.status .s.none b { color: var(--muted); }
-
-.charts { padding: 8px 10px; display: grid; gap: 8px; }
-.chartrow { display: flex; align-items: center; gap: 8px; }
-.chartrow .clbl { font-size: 10px; color: var(--muted); width: 26px; flex: none; }
-/* viewBox 300x44 를 비율 그대로 그린다. preserveAspectRatio 를 끄면(none)
-   글자까지 가로로 늘어나 라벨이 뭉갠다. */
-.chartrow svg { flex: 1; height: 46px; min-width: 0; }
-
-.msgs { padding: 6px 8px; max-height: 132px; overflow-y: auto; }
+.msgs .hd .cnt { color: var(--bad); font-weight: 700; }
+.msgs .hd button { margin-left: auto; padding: 0 6px; font-size: 11px; line-height: 1.6; }
+#msgs { overflow-y: auto; padding: 4px 8px; min-height: 0; }
 #msgs div {
   font-family: var(--mono); font-size: 11px; line-height: 1.5;
   padding: 1px 0; border-bottom: 1px solid var(--border);
@@ -137,10 +139,16 @@ a.btn { display: inline-block; text-decoration: none; }
 #msgs .s-NOTICE { color: var(--accent); }
 #msgs .empty { color: var(--muted); border: 0; }
 
-/* 화면이 좁으면 지도를 위, 데이터를 아래로 */
+/* 좁은 화면: HUD 위 · 지도 아래. DOM 순서가 이미 HUD 먼저라 order 속임수가 필요 없다. */
 @media (max-width: 900px) {
   html, body { overflow: auto; }
-  main { grid-template-columns: 1fr; height: auto; }
-  #mapPane { height: 46vh; border-right: 0; border-bottom: 1px solid var(--border); }
-  .attitude svg { max-height: 120px; }
+  body { display: block; }
+  main { grid-template-columns: 1fr; }
+  #hudPane { border-right: 0; border-bottom: 1px solid var(--border); }
+  /* 🔴 높이는 자식(#hudBox)이 아니라 **행**에 준다. 자식에 56vh 를 주면
+     `1fr` 행이 그만큼 안 자라 hudBox 가 제 부모를 넘치고, 뒤따르는 지도
+     패널이 그 위를 덮어 전류·상태 밴드와 숫자 스트립이 통째로 가려진다
+     (실측: hudPane 447px 안에 hudBox 560px). 행을 키우면 자식은 따라온다. */
+  #hudPane { grid-template-rows: minmax(360px, 56vh) auto; }
+  #mapPane { height: 46vh; grid-template-rows: 1fr 96px; }
 }

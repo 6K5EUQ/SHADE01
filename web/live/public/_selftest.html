@@ -1,0 +1,169 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>SHADE01 라이브 — 자체검사</title>
+<!--
+  HUD 자체검사. 브라우저로 http://localhost:4400/_selftest.html 를 열면 된다.
+
+  왜 있나: 이 페이지의 검증 실패 비용은 **비행 중**이다. FC 없이는 종횡비·
+  이음매·클리핑·부호를 현장에서야 발견한다. 실제로 이 검사가 만들어지면서
+  세 가지 실결함이 잡혔다 —
+    ① gs<1.5 (정지·호버) 에서 show(null) 이 TypeError 를 던져 render() 가
+       중간에 죽고 중앙 상태·스트립·상태밴드가 통째로 안 그려지던 것
+    ② 좁은 화면에서 hudBox 가 제 부모를 113px 넘쳐 지도가 전류·상태 밴드와
+       스트립 위를 덮던 것
+    ③ 전류 기본색 --c-cur 이 --bad 와 같은 #f85149 라 30A 정상 비행 내내
+       빨간 막대가 켜져 있던 것 (색 예산 위반)
+
+  ?demo=1 합성 피드를 iframe 으로 띄워 DOM 을 실측한다. FC 도 서버 데이터도
+  필요 없다. 화면을 고친 뒤에는 이걸 먼저 돌려라.
+-->
+<style>
+  body { background: #0d1117; color: #e6edf3; font: 13px ui-monospace, monospace; padding: 16px; }
+  pre { line-height: 1.7; }
+  .P { color: #3fb950; } .F { color: #f85149; font-weight: 700; }
+  h1 { font-size: 15px; } iframe { position: absolute; left: -9999px; top: 0; }
+  #sum { margin: 10px 0; font-size: 14px; font-weight: 700; }
+</style>
+<h1>SHADE01 라이브 HUD — 자체검사</h1>
+<div id="sum">검사 중…</div>
+<pre id="out"></pre>
+<script>
+const R = [];
+function ok(n, c, d) { R.push([c, n, d || '']); draw(); }
+function note(s) { R.push([null, s, '']); draw(); }
+function draw() {
+  document.getElementById('out').innerHTML = R.map(([c, n, d]) =>
+    c === null ? `<span style="color:#6e7681">   ${n}</span>`
+      : `<span class="${c ? 'P' : 'F'}">${c ? 'PASS' : 'FAIL'}</span>  ${n}` +
+        (d ? `<span style="color:#6e7681">  — ${d}</span>` : '')).join('\n');
+  const f = R.filter(r => r[0] === false).length, p = R.filter(r => r[0] === true).length;
+  const s = document.getElementById('sum');
+  s.textContent = `${p} PASS · ${f} FAIL`;
+  s.style.color = f ? '#f85149' : '#3fb950';
+}
+function load(q, w, h) {
+  return new Promise((res) => {
+    const f = document.createElement('iframe');
+    f.style.width = (w || 1100) + 'px'; f.style.height = (h || 845) + 'px'; f.style.border = '0';
+    f.src = '/?demo=1' + (q ? '&' + q : '');
+    f.onload = () => setTimeout(() => res(f), 2600);
+    document.body.appendChild(f);
+  });
+}
+const num = (e, a) => parseFloat(e.getAttribute(a));
+
+(async () => {
+  // ── 기하: viewBox 가 실측 픽셀과 1:1 ─────────────────────────────
+  note('■ 기하 — 배율 왜곡·잘림');
+  let f = await load('');
+  let D = f.contentDocument, W = f.contentWindow, svg = D.getElementById('hud');
+  let box = D.getElementById('hudBox').getBoundingClientRect(), vb = svg.viewBox.baseVal;
+  ok('viewBox 가 실측 픽셀과 1:1', Math.abs(vb.width - box.width) <= 1 && Math.abs(vb.height - box.height) <= 1,
+     `vb=${vb.width}x${vb.height} box=${box.width.toFixed(0)}x${box.height.toFixed(0)}`);
+  ok('preserveAspectRatio 미사용 (비등방 왜곡 원천차단)', !svg.hasAttribute('preserveAspectRatio'));
+
+  let strip = D.getElementById('strip').getBoundingClientRect();
+  ok('숫자 스트립이 화면 안', strip.bottom <= W.innerHeight + 1,
+     `bottom=${strip.bottom.toFixed(0)} vh=${W.innerHeight}`);
+  const TW = Math.min(Math.max(vb.width * 0.082, 62), 92);
+  const sBox = [...svg.querySelectorAll('rect')].filter(e => e.getAttribute('stroke') === 'var(--c-spd)');
+  const aBox = [...svg.querySelectorAll('rect')].filter(e => e.getAttribute('stroke') === 'var(--c-alt)');
+  ok('속도 판독박스가 테이프 폭 안', sBox.every(e => num(e, 'x') >= -.5 && num(e, 'x') + num(e, 'width') <= TW + .5),
+     sBox.map(e => `x=${e.getAttribute('x')} w=${e.getAttribute('width')}`).join(' '));
+  ok('고도 판독박스가 패널 안', aBox.every(e => num(e, 'x') + num(e, 'width') <= vb.width + .5),
+     aBox.map(e => `x=${e.getAttribute('x')} w=${e.getAttribute('width')}`).join(' '));
+
+  // ── 성능: 노드 생성 0 ────────────────────────────────────────────
+  note('■ 성능 — build-once / mutate-only');
+  const n1 = svg.querySelectorAll('*').length;
+  const rotOf = () => [...svg.querySelectorAll('g')].find(g => /rotate/.test(g.getAttribute('transform') || '')).getAttribute('transform');
+  const t1 = rotOf();
+  await new Promise(r => setTimeout(r, 4000));
+  ok('20폴 동안 SVG 노드 생성 0', n1 === svg.querySelectorAll('*').length, `${n1} → ${svg.querySelectorAll('*').length}`);
+  ok('계기가 실제로 갱신된다', t1 !== rotOf(), `${t1} → ${rotOf()}`);
+  ok('ResizeObserver 루프 경고 없음', !W.__roLoop);
+
+  // ── 부호·스케일 ─────────────────────────────────────────────────
+  note('■ 부호·스케일 — 계기가 거꾸로 돌면 조종자를 속인다');
+  f = await load('roll=0&pitch=10'); D = f.contentDocument; svg = D.getElementById('hud');
+  let dy = parseFloat([...svg.querySelectorAll('g')]
+    .find(g => /^translate\(0,/.test(g.getAttribute('transform') || ''))
+    .getAttribute('transform').match(/,(-?[\d.]+)\)/)[1]);
+  ok('pitch +10 → 수평선이 아래로 (기수 들면 아래)', dy > 0, `translate y=${dy}`);
+  ok('피치 6.0 px/도', Math.abs(dy - 60) < .6, `${dy} vs 60`);
+
+  f = await load('roll=30&pitch=0'); D = f.contentDocument; svg = D.getElementById('hud');
+  let rv = parseFloat([...svg.querySelectorAll('g')].find(g => /rotate/.test(g.getAttribute('transform') || ''))
+    .getAttribute('transform').match(/rotate\((-?[\d.]+)\)/)[1]);
+  ok('roll +30 → 배경 -30 회전', Math.abs(rv + 30) < .6, `rotate(${rv})`);
+
+  f = await load('alt=50'); D = f.contentDocument; svg = D.getElementById('hud');
+  let fence = [...svg.querySelectorAll('line')].find(l => l.getAttribute('stroke') === 'var(--bad)' && l.getAttribute('stroke-width') === '2');
+  let ty = parseFloat(fence.closest('g[transform]').getAttribute('transform').match(/,(-?[\d.]+)\)/)[1]);
+  let ab = [...svg.querySelectorAll('rect')].find(e => e.getAttribute('stroke') === 'var(--c-alt)');
+  ok('고도 50m 에서 펜스 천장선 = 판독 중심 (8px/m)',
+     Math.abs((ty + num(fence, 'y1')) - (num(ab, 'y') + num(ab, 'height') / 2)) < 1.5,
+     `fence=${(ty + num(fence, 'y1')).toFixed(1)} box=${(num(ab, 'y') + num(ab, 'height') / 2).toFixed(1)}`);
+
+  // ── 고장난 에어스피드 격리 ───────────────────────────────────────
+  note('■ 고장 센서 격리 — 대기속도는 계기가 아니라 정비 항목이다');
+  f = await load(''); D = f.contentDocument; W = f.contentWindow; svg = D.getElementById('hud');
+  const air = D.getElementById('st-air');
+  ok('대기속도가 진단 칸에만, 무채색', W.getComputedStyle(air).color === 'rgb(110, 118, 129)',
+     W.getComputedStyle(air).color + ' 값=' + air.textContent);
+  const heads = [...svg.querySelectorAll('text')].map(t => t.textContent);
+  ok('좌측 테이프가 대지속도(GS)로 못박힘', heads.includes('대지속도') && heads.includes('GS m/s'));
+
+  // ── 색 예산 ─────────────────────────────────────────────────────
+  note('■ 색 예산 — 색이 보이는 것 자체가 신호다');
+  f = await load('cur=30&volt=24&roll=0&pitch=0'); D = f.contentDocument; W = f.contentWindow;
+  svg = D.getElementById('hud');
+  const hot = [];
+  for (const e of svg.querySelectorAll('*')) {
+    if (e.closest('.off')) continue;                       // 조상이 꺼져 있으면 안 보인다
+    const t = (e.textContent || '').trim();
+    if (e.tagName === 'text' && !t) continue;              // 빈 글자는 픽셀이 없다
+    // --c-cur 은 #f85149 로 --bad 와 같은 색이다. 이름이 다르다고 봐주면 안 된다.
+    if (!/--bad|--warn|--c-cur/.test((e.getAttribute('fill') || '') + (e.getAttribute('stroke') || ''))) continue;
+    if (/펜스|66\.8|^45$/.test(t)) continue;               // 정적 기준 눈금은 경고가 아니다
+    if (e.tagName === 'line' || (e.tagName === 'rect' && num(e, 'opacity') <= .12)) continue;
+    hot.push(e.tagName + ':' + (t || e.getAttribute('fill')));
+  }
+  ok('정상 상태(30A·24V)에 경고색 0건', hot.length === 0, hot.join(', ') || 'clean');
+  let bar = [...svg.querySelectorAll('rect')].find(e => num(e, 'height') === 14 && e.getAttribute('fill') !== 'var(--panel-2)');
+  ok('전류 30A 막대가 무채색', bar && bar.getAttribute('fill') === 'var(--dim)', bar && bar.getAttribute('fill'));
+  f = await load('cur=61'); svg = f.contentDocument.getElementById('hud');
+  ok('전류 61A → --bad',
+     [...svg.querySelectorAll('rect')].some(e => e.getAttribute('fill') === 'var(--bad)' && num(e, 'height') === 14));
+
+  // ── 조건부 표시 ─────────────────────────────────────────────────
+  note('■ 조건부 표시 — 멈춘 숫자는 없는 숫자보다 나쁘다');
+  f = await load(''); D = f.contentDocument; W = f.contentWindow;
+  ok('POSCTL 에서 WP 칸 숨김', W.getComputedStyle(D.getElementById('sc-wp')).display === 'none');
+  f = await load('auto=1'); D = f.contentDocument; W = f.contentWindow;
+  ok('AUTO.MISSION 에서 WP 칸 표시', W.getComputedStyle(D.getElementById('sc-wp')).display !== 'none',
+     D.getElementById('st-wp').textContent + ' ' + D.getElementById('st-xt').textContent);
+
+  // ── 좁은 화면 ───────────────────────────────────────────────────
+  note('■ 좁은 화면 — 계기가 사라지는 건 계기가 틀린 것 다음으로 나쁘다');
+  f = await load('', 520, 1000); D = f.contentDocument; svg = D.getElementById('hud');
+  const pane = D.getElementById('hudPane').getBoundingClientRect();
+  box = D.getElementById('hudBox').getBoundingClientRect();
+  strip = D.getElementById('strip').getBoundingClientRect();
+  const mp = D.getElementById('mapPane').getBoundingClientRect();
+  vb = svg.viewBox.baseVal;
+  ok('HUD 가 제 부모 안에 담긴다', box.bottom <= pane.bottom + 1,
+     `hudBox.bottom=${box.bottom.toFixed(0)} pane.bottom=${pane.bottom.toFixed(0)}`);
+  ok('지도가 스트립을 안 덮는다', mp.top >= strip.bottom - 1,
+     `map.top=${mp.top.toFixed(0)} strip.bottom=${strip.bottom.toFixed(0)}`);
+  const curBg = [...svg.querySelectorAll('rect')].find(e => e.getAttribute('fill') === 'rgba(13,17,23,.72)');
+  ok('전류 밴드가 viewBox 안', curBg && num(curBg, 'y') + 46 <= vb.height + .5,
+     curBg ? `y=${curBg.getAttribute('y')} vbH=${vb.height}` : 'none');
+  const gps = [...svg.querySelectorAll('text')].find(e => e.textContent === 'GPS');
+  ok('상태 밴드가 viewBox 안', gps && num(gps, 'y') <= vb.height, gps && `y=${gps.getAttribute('y')}`);
+  const gv = [...svg.querySelectorAll('text')].find(e => /^(DGPS|3D|2D|RTK)/.test(e.textContent || ''));
+  ok('좁으면 GPS 칸이 옆 칸을 안 침범 (eph 생략)', gv && !/m$/.test(gv.textContent), gv && gv.textContent);
+
+  note('완료. FAIL 이 0 이어야 배포한다.');
+})().catch((e) => { ok('자체검사 자체가 죽었다', false, e.message); });
+</script>

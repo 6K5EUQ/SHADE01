@@ -6,12 +6,12 @@
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/live.css">
 
+<!-- 헤더에는 링크 상태만 남긴다. ARM·모드·VTOL 은 HUD 중앙이 훨씬 크게 말하고,
+     경고 배너(#banner)는 없앴다 — 배너가 뜨면 main 의 calc(100vh-49px) 가
+     배너 높이만큼 넘쳐 아래 스트립이 스크롤바도 없이 화면 밖으로 사라졌다. -->
 <header>
   <h1>SHADE01 <span class="muted" style="font-weight:400">라이브</span></h1>
   <span id="link" class="pill pill-off">링크 없음</span>
-  <span id="armed" class="pill pill-off">DISARMED</span>
-  <span id="mode" class="pill">—</span>
-  <span id="vtol" class="pill" hidden></span>
   <span class="grow"></span>
   <span class="muted" id="stats" style="font-size:12px"></span>
   <button id="followBtn" class="on" title="기체를 화면 가운데 유지">추적</button>
@@ -19,73 +19,42 @@
   <a class="btn" href="http://localhost:4399/" target="_blank" title="지난 비행 로그 뷰어">로그</a>
 </header>
 
-<div id="banner" hidden></div>
-
 <main>
+  <!-- 좌: HUD. DOM 순서상 먼저다 — 좁은 화면에서 그대로 위로 간다. -->
+  <section id="hudPane">
+    <div id="hudBox">
+      <!-- viewBox 는 layout() 이 실측 픽셀로 넣는다. 여기에 미리 쓰지 마라 —
+           고정 viewBox 를 두면 배율이 1:1 이 아니게 되어 45° 뱅크가 30° 로 보인다. -->
+      <svg id="hud" aria-label="HUD"></svg>
+    </div>
+
+    <!-- HUD 아래 숫자 스트립. 계기가 그림으로 말하지 못하는 값만 여기 온다. -->
+    <div id="strip">
+      <div class="sc" id="sc-volt"><span class="k">전압</span><b id="st-volt">—</b><i id="st-cell">V</i></div>
+      <div class="sc" id="sc-mah"><span class="k">소모</span><b id="st-mah">—</b><i id="st-pct">mAh</i></div>
+      <div class="sc"><span class="k">스로틀</span><b id="st-thr">—</b><i>%</i></div>
+      <div class="sc"><span class="k">상승률</span><b id="st-climb">—</b><i>m/s</i></div>
+      <div class="sc" id="sc-home"><span class="k">홈거리</span><b id="st-home">—</b><i>/ 150 m 설정값</i></div>
+      <!-- AUTO.* 가 아니면 통째로 사라진다. 멈춘 wp_dist 는 없는 숫자보다 나쁘다. -->
+      <div class="sc" id="sc-wp" hidden><span class="k">WP</span><b id="st-wp">—</b><i id="st-xt"></i></div>
+      <!-- 진단 칸은 색이 절대 안 붙는다 — 비행 판단값이 아니라 정비 항목이다. -->
+      <div class="sc diag"><span class="k">진단</span><b id="st-air">—</b><i>대기속도 영점불량</i><b id="st-load">—</b><i>CPU%</i></div>
+    </div>
+  </section>
+
+  <!-- 우: 지도 + FC 메시지 서랍 -->
   <section id="mapPane">
     <div id="map"></div>
     <div id="mapInfo" class="overlay">
       <div><span class="k">위도</span><span class="v" id="o-lat">—</span></div>
       <div><span class="k">경도</span><span class="v" id="o-lon">—</span></div>
-      <div><span class="k">홈거리</span><span class="v" id="o-home">—</span></div>
       <div><span class="k">항적</span><span class="v" id="o-trk">—</span></div>
     </div>
-  </section>
-
-  <section id="dataPane">
-    <!-- 큰 숫자 4개. 비행 중 곁눈질로 읽는 값이다. -->
-    <div class="big">
-      <div class="cell">
-        <div class="lbl">고도 <span class="unit">m AGL</span></div>
-        <div class="num" id="b-alt">—</div>
+    <div class="msgs">
+      <div class="hd">
+        <span>FC 메시지</span><span class="cnt" id="msgCnt"></span>
+        <button id="msgToggle" title="서랍 접기/펴기">접기</button>
       </div>
-      <div class="cell">
-        <div class="lbl">대지속도 <span class="unit">m/s</span></div>
-        <div class="num" id="b-spd">—</div>
-      </div>
-      <div class="cell">
-        <div class="lbl">전압 <span class="unit">V</span></div>
-        <div class="num" id="b-volt">—</div>
-      </div>
-      <div class="cell">
-        <div class="lbl">전류 <span class="unit">A</span></div>
-        <div class="num" id="b-cur">—</div>
-      </div>
-    </div>
-
-    <!-- 자세 — 인공수평의. 지도만으로는 기울기를 못 본다. -->
-    <div class="row2">
-      <div class="panel attitude">
-        <svg id="ahi" viewBox="0 0 200 200" aria-label="인공수평의"></svg>
-      </div>
-      <div class="panel gauges">
-        <div class="g"><span class="k">ROLL</span><b id="g-roll">—</b><span class="u">°</span></div>
-        <div class="g"><span class="k">PITCH</span><b id="g-pitch">—</b><span class="u">°</span></div>
-        <div class="g"><span class="k">HDG</span><b id="g-hdg">—</b><span class="u">°</span></div>
-        <div class="g"><span class="k">상승률</span><b id="g-climb">—</b><span class="u">m/s</span></div>
-        <div class="g"><span class="k">스로틀</span><b id="g-thr">—</b><span class="u">%</span></div>
-        <div class="g"><span class="k">대기속도</span><b id="g-air">—</b><span class="u">m/s</span></div>
-      </div>
-    </div>
-
-    <!-- 상태 배지 — 초록/노랑/빨강만 보면 된다 -->
-    <div class="status">
-      <div class="s" id="s-gps"><span class="k">GPS</span><b>—</b></div>
-      <div class="s" id="s-ekf"><span class="k">EKF</span><b>—</b></div>
-      <div class="s" id="s-vibe"><span class="k">진동</span><b>—</b></div>
-      <div class="s" id="s-batt"><span class="k">배터리</span><b>—</b></div>
-      <div class="s" id="s-rc"><span class="k">RC</span><b>—</b></div>
-      <div class="s" id="s-mah"><span class="k">소모</span><b>—</b></div>
-    </div>
-
-    <!-- 최근 60초 추이. 로그 뷰어의 차트와 같은 관용구(SVG 직접 그리기). -->
-    <div class="panel charts">
-      <div class="chartrow"><span class="clbl">고도</span><svg id="c-alt" viewBox="0 0 300 44"></svg></div>
-      <div class="chartrow"><span class="clbl">속도</span><svg id="c-spd" viewBox="0 0 300 44"></svg></div>
-      <div class="chartrow"><span class="clbl">전류</span><svg id="c-cur" viewBox="0 0 300 44"></svg></div>
-    </div>
-
-    <div class="panel msgs">
       <div id="msgs"></div>
     </div>
   </section>
