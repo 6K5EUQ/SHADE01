@@ -111,11 +111,16 @@ import json,sys
 try: s=json.load(sys.stdin)
 except Exception: sys.exit()
 d=s.get('d',{})
+live=s.get('live'); age=s.get('age')
 print('  링크: %s   패킷 %s   %s' % (
-    '수신 중' if s.get('live') else '없음',
+    '수신 중' if live else ('끊김 (%.0f초 전)' % age if age is not None else '없음'),
     format(s.get('packets',0),','), s.get('src') or '-'))
-if d: print('  모드 %s   %s   고도 %.1fm' % (
-    d.get('mode','?'), 'ARMED' if d.get('armed') else 'DISARMED', d.get('alt') or 0))
+# 링크가 끊기면 아래 값은 **마지막으로 받은 값**이다. 지금 상태가 아니다 —
+# 비행 중에 옛 고도를 현재값으로 읽으면 위험하다.
+if d:
+    print('  %s모드 %s   %s   고도 %.1fm' % (
+        '' if live else '(마지막) ',
+        d.get('mode','?'), 'ARMED' if d.get('armed') else 'DISARMED', d.get('alt') or 0))
 " 2>/dev/null || true
     fi
   else
