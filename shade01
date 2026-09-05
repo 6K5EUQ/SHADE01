@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # SHADE01 진입점.
 #
+#   ./shade01 test        비행 전 점검 — GO / NO-GO (읽기 전용, 3~6초)
 #   ./shade01 sync        FC → 랩서버. 비행 끝나고 이 한 줄이면 된다
 #   ./shade01 log ...     지난 비행 분석      (= ./qgc log)
 #   ./shade01 live ...    실시간 트래킹       (= ./qgc live)
@@ -12,6 +13,12 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() {
   cat >&2 <<'USAGE'
 사용법:
+  ./shade01 test              비행 전 점검 — 파라미터·미션·GPS·전원·failsafe 를
+                              한 번에 읽고 GO / NO-GO 를 낸다 (FC 에 쓰지 않는다)
+    -v                          정상·참고 항목까지 전부
+    -t <초>                     텔레메트리 수집 시간 (기본 6)
+    --conn <문자열>             연결을 직접 지정 (기본: 시리얼 → 브리지 UDP)
+
   ./shade01 sync              FC 에서 새 비행을 받아 랩서버에 올린다
     --dry                       무엇을 할지 보여주기만
     --verify[=N]                N회씩 받아 바이트 다수결로 복원 (기본 5)
@@ -23,7 +30,7 @@ usage() {
   ./shade01 log <번호>        해당 비행 분석
   ./shade01 live on|off       실시간 트래킹 (http://localhost:4400)
 
-절차 전문: FLIGHT-SYNC.md
+절차 전문: FLIGHT-SYNC.md · 비행 전 점검: skills/preflight/SKILL.md
 USAGE
   exit 1
 }
@@ -31,6 +38,17 @@ USAGE
 [ $# -ge 1 ] || usage
 
 case "$1" in
+  test)
+    shift
+    PY="${QGCLOG_PYTHON:-$HERE/.venv/bin/python}"
+    [ -x "$PY" ] || PY="$(command -v python3)"
+    if ! "$PY" -c "import pymavlink" 2>/dev/null; then
+      echo "pymavlink 이 없다 ($PY)." >&2
+      echo "  .venv/bin/pip install -r web/requirements.txt" >&2
+      exit 1
+    fi
+    exec "$PY" "$HERE/tools/preflight/preflight.py" "$@"
+    ;;
   sync) shift; exec "$HERE/tools/flightsync/flightsync" "$@" ;;
   log)  shift; [ $# -ge 1 ] || set -- list
         exec "$HERE/tools/qgclog/qgclog" "$@" ;;

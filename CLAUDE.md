@@ -28,6 +28,7 @@ ARM·모드변경·미션업로드가 실기에 들어간다 — 그래서 기�
 | [`FC_CHANGELOG.md`](FC_CHANGELOG.md) | **FC 변경 이력 — 작업 전 필독** |
 | [`FLIGHT-SYNC.md`](FLIGHT-SYNC.md) | **비행 직후 한 줄** — `./qgc sync` 로 FC → 웹 |
 | [`PROCEDURE.md`](PROCEDURE.md) | 로그 수집 → 분석 → 기록 절차 (손으로 할 때) |
+| [`skills/preflight/`](skills/preflight/SKILL.md) | **비행 전 점검** — `./shade01 test` (읽기 전용, 3~6초) |
 | [`config/SETTINGS.md`](config/SETTINGS.md) | 파라미터 스냅샷 사람이 읽는 정리본 |
 | [`gcs/ACCESS.md`](gcs/ACCESS.md) | PC 별 Tailscale 주소·계정·제약 |
 | [`flights/`](flights/) | 비행별 분석 — `.ulg` 가 사라져도 남는 정본 |

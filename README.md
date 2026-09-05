@@ -20,6 +20,7 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 
 ```bash
 ./qgc sync              # 비행 끝나고 한 줄 — FC → 웹 (실비행·호버만)
+./shade01 test          # 비행 전 점검 — GO / NO-GO (읽기 전용, 3~6초)
 ./qgc log list          # 최근 비행 나열
 ./qgc log 1             # 1번 분석
 ./qgc live on           # 실시간 트래킹 켜기 → http://localhost:4400
