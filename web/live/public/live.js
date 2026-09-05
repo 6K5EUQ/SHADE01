@@ -653,6 +653,40 @@ function render(s) {
              : '데이터 없음';
   }
 
+  // 기록 상태. 야외 판정(GPS 3D fix + 위성 6기)을 통과한 arm 구간만 적으므로
+  // **안 찍히는 것도 정상 동작**이다 — 그 사실이 화면에 있어야 조종자가
+  // 착륙한 뒤에야 파일이 없는 것을 알아채는 일이 없다.
+  // 🔴 재생 중에도 기록기는 실기를 보고 계속 돈다. 그래서 재생 여부와 무관하게
+  //    이 칸은 실제 기록 상태를 말한다 (s.rec 은 서버가 실기 기준으로 만든다).
+  const rc = $('recSt');
+  const rs = s.rec;
+  let rtx = '', rcl = '', rti = '';
+  if (rs && rs.on) {
+    if (rs.rec) {
+      // 어느 경로로 적고 있나. 둘 다면 'REC ELRS+FC'.
+      rtx = 'REC ' + (rs.kinds || []).join('+');
+      rcl = 'rec-on';
+      rti = (rs.files || []).map((f) => f.name).join('\n')
+        + (rs.dur ? '\n' + mmss(rs.dur) : '');
+    } else if (rs.waiting) {
+      rtx = '실내대기';
+      rcl = 'rec-wait';
+      rti = 'ARM 했지만 GPS 가 야외 기준(3D fix · 위성 6기)에 못 미쳐 안 적는다.\n'
+        + 'fix 가 잡히면 그 시점부터 적기 시작한다.';
+    } else if (rs.error) {
+      rtx = '기록 오류';
+      rcl = 'rec-err';
+      rti = rs.error;
+    }
+  }
+  if (rc.dataset.tx !== rtx) {
+    rc.dataset.tx = rtx;
+    setText(rc, rtx);
+    rc.className = rcl;
+    rc.hidden = !rtx;
+  }
+  if (rti && rc.title !== rti) rc.title = rti;
+
   // 하단 바는 좁다. 송신 주소는 title 로 밀고 숫자만 남긴다.
   const stEl = $('stats');
   setText(stEl, s.playback
@@ -877,11 +911,19 @@ function demoState(n) {
   const q = new URLSearchParams(location.search);
   const t = n / 5;
   const fx = (k, v) => (q.has(k) ? parseFloat(q.get(k)) : v);
+  const fx2 = (k) => q.get(k);
   const hdg = fx('hdg', wrap360(t * 24));
   const gs = fx('gs', 12 + 11 * Math.sin(t / 7));
   return {
     live: true, seq: n, age: 0, packets: n * 5, bytes: n * 300, src: 'demo',
     track_n: 0, track_from: 0, track: [], home: [37.5, 127.0],
+    // 기록 상태. ?rec=on|wait|off 로 세 갈래를 강제해 자체검사가 실측한다.
+    // 기본은 실제와 같은 모양 — arm 이면 두 경로로 적는 중.
+    rec: fx2('rec') === 'off' ? { on: true, rec: false, waiting: false }
+      : fx2('rec') === 'wait' ? { on: true, rec: false, waiting: true }
+      : { on: true, rec: true, kinds: ['ELRS', 'FC'], dur: t,
+          files: [{ kind: 'ELRS', name: 'demo_ELRS.tlog' },
+                  { kind: 'FC', name: 'demo_FC.tlog' }] },
     messages: n > 25 && n < 40 ? [{ t: 1757000000, sev: 'CRIT', text: 'demo: Preflight Fail: Attitude failure (roll)' }] : [],
     d: {
       armed: (n % 300) > 60, landed: (n % 300) > 100 ? 2 : 1,
@@ -1041,32 +1083,136 @@ function pbExit() {
   poll();                    // 멈춰 있던 실시간 폴을 다시 돈다
 }
 
+/** 통합 재생 목록.
+ *
+ * 두 종류가 한 목록에 선다:
+ *   실시간 기록  logs/live/*.tlog  — 이 PC 가 받아 적은 것. 한 비행에서
+ *                ELRS 백팩과 FC USB 로 각각 받으므로 파일이 둘 나온다.
+ *   FC 로그      labserver 의 *.ulg — 기체 SD 에서 내려받은 정본.
+ *
+ * 🔴 재생 방식은 둘이 다르다. tlog 는 서버가 State 를 과거 프레임으로 채워
+ *    흘리고, ulg 는 브라우저가 시각을 정해 긁는다. 고르는 사람에게 그 차이는
+ *    사정이지 선택지가 아니므로 **목록은 하나**로 둔다.
+ *
+ * 🔴 **줄에 이름은 하나다.** 예전에는 왼쪽에 시각, 오른쪽에 파일명, 또 크기를
+ *    따로 적어 같은 사실이 세 번 나왔다. 이름 하나(`log_129_2026-8-31-18-46-02.ulg`)가
+ *    번호·날짜·시각을 다 담으므로 그것만 쓴다.
+ */
 async function pbShowPicker() {
   $('pbPick').hidden = false;
   $('pbList').innerHTML = '<div class="msg">불러오는 중…</div>';
-  let d;
-  try {
-    d = await (await fetch('/api/logs', { cache: 'no-store' })).json();
-  } catch (e) {
-    $('pbList').innerHTML = '<div class="msg">목록을 못 받았다.</div>';
-    return;
-  }
-  if (d.error || !d.logs || !d.logs.length) {
-    $('pbList').innerHTML = '<div class="msg">' + (d.error || '로그가 없다.') + '</div>';
-    return;
-  }
+
+  // 둘을 같이 긁는다. 한쪽이 죽어도 나머지는 보여야 한다 — 실시간 기록만
+  // 있고 .ulg 를 아직 안 내려받은 상태가 정상이다.
+  const [recs, logs] = await Promise.all([
+    fetch('/api/recordings', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
+    fetch('/api/logs', { cache: 'no-store' }).then((r) => r.json()).catch(() => null),
+  ]);
+
   const box = document.createElement('div');
-  for (const e of d.logs) {
+  let n = 0;
+
+  // 배지 한 칸. **줄 맨 왼쪽**에 선다 — 목록을 훑을 때 종류가 먼저 보여야
+  // 이름을 읽을지 말지 정한다.
+  const badge = (kind, text, title, onclick) => {
+    const b = document.createElement(onclick ? 'button' : 'span');
+    b.className = 'kind k-' + kind;
+    b.textContent = text || kind;
+    if (title) b.title = title;
+    if (onclick) b.onclick = (e) => { e.stopPropagation(); onclick(); };
+    return b;
+  };
+
+  const mkrow = (badges, name, right) => {
     const row = document.createElement('div');
     row.className = 'row';
-    row.innerHTML = '<span class="nm"></span><span class="wh"></span><span class="sz"></span>';
-    row.querySelector('.nm').textContent = e.name;
-    row.querySelector('.wh').textContent = e.when || '';
-    row.querySelector('.sz').textContent = (e.size / 1e6).toFixed(1) + 'MB';
-    row.onclick = () => pbStart(e.name);
+    const kb = document.createElement('span');
+    kb.className = 'kinds';
+    for (const b of badges) kb.appendChild(b);
+    row.appendChild(kb);
+    const nm = document.createElement('span');
+    nm.className = 'nm';
+    nm.textContent = name;
+    row.appendChild(nm);
+    if (right) {
+      const r = document.createElement('span');
+      r.className = 'wh';
+      r.textContent = right;
+      row.appendChild(r);
+    }
     box.appendChild(row);
+    n++;
+    return row;
+  };
+
+  // ── 실시간 기록 (비행 단위 한 줄) ──────────────────────────────
+  // 이쪽은 머리말을 남긴다. .ulg 와 성격이 달라서 — 이 PC 가 받아 적은
+  // 것이고 텔레메트리로 나온 것만 들어 있다 — 섞이면 오해한다.
+  if (recs && recs.items && recs.items.length) {
+    const h = document.createElement('div');
+    h.className = 'gh';
+    h.textContent = '실시간 기록 (.tlog)';
+    box.appendChild(h);
+    for (const g of recs.items) {
+      // 경로 배지. 파일이 둘이면 **고를 수 있어야 한다** — 어느 링크가
+      // 무엇을 놓쳤나를 보려고 나눠 적은 것이므로 한쪽만 골라 트는 일이
+      // 그대로 목적이다.
+      const bs = g.files.map((f) => badge(
+        f.kind, f.kind, f.name + '  (' + (f.size / 1e6).toFixed(1) + 'MB)',
+        () => recStart(f.name, g.label, f.kind)));
+      const row = mkrow(bs, g.label + '  ' + (g.size / 1e6).toFixed(1) + 'MB');
+      row.onclick = () => recStart(g.files[0].name, g.label, g.files[0].kind);
+    }
+  }
+
+  // ── FC 로그 (.ulg) ────────────────────────────────────────────
+  // 🔴 머리말이 없다. 이름이 `log_<번호>_<시각>.ulg` 라 무엇인지 이름만 봐도
+  //    안다 — 설명을 한 줄 더 얹으면 목록만 밀린다 (사용자 지시 2026-09-06).
+  if (logs && logs.logs && logs.logs.length) {
+    for (const e of logs.logs) {
+      const bs = [];
+      // 번호를 추론한 것은 흐리게 — FC 가 준 번호와 같다는 보장이 없다.
+      bs.push(badge(e.exact ? 'ULG' : 'ULGX', 'ulg',
+        e.exact ? 'FC 가 준 번호다' :
+          '번호는 추론한 것이다 (원본 이름 ' + e.name + ')'));
+      // 복구본은 **같은 제목**을 쓰고 배지로만 가른다 (사용자 지시).
+      if (e.recovered) bs.push(badge('REC2', '복구', '_repair() 가 살려낸 사본'));
+      if (!e.local) bs.push(badge('REM', '원격', 'labserver 에 있다 — 재생하면 받아 온다'));
+      const row = mkrow(bs, e.disp, (e.size / 1e6).toFixed(1) + 'MB');
+      row.onclick = () => pbStart(e.name);
+    }
+  }
+
+  if (!n) {
+    const err = (recs && recs.error) || (logs && logs.error) || '재생할 것이 없다.';
+    $('pbList').innerHTML = '<div class="msg">' + err + '</div>';
+    return;
+  }
+  // 목록이 어디서 왔는지. labserver 가 죽으면 로컬 사본만 보이므로 말해야 한다.
+  if (logs && logs.source === 'local' && logs.error) {
+    const w = document.createElement('div');
+    w.className = 'msg warn';
+    w.textContent = '⚠️ ' + logs.error;
+    box.insertBefore(w, box.firstChild);
   }
   $('pbList').replaceChildren(box);
+}
+
+/** 실시간 기록(.tlog) 하나를 튼다. 통합 피커에서만 부른다. */
+async function recStart(name, label, kind) {
+  // 🔴 두 재생을 동시에 켜지 않는다. ulg 재생은 폴을 멈추고 자기 타이머로
+  //    그리므로, tlog 재생(서버가 /api/state 로 흘린다)과 겹치면 한 계기에
+  //    두 시각이 섞인다.
+  if (ulpb.on) pbExit();
+  const r = await pbApi('load?name=' + encodeURIComponent(name));
+  if (!r) {
+    $('pbList').innerHTML = '<div class="msg">열지 못했다: ' + name + '</div>';
+    return;
+  }
+  setText($('playName'), label + ' · ' + kind);
+  pb.bar.hidden = false;
+  $('pbPick').hidden = true;
+  await pbApi('play');
 }
 
 // ── 폴 루프 ─────────────────────────────────────────────────────────
@@ -1162,11 +1308,14 @@ addEventListener('keydown', (e) => {
 // 값을 그리는 것은 위의 render() 가 그대로 한다 — 재생 전용 렌더 경로를
 // 만들면 실시간 그림과 조용히 갈라진다.
 const pb = {
-  bar: $('playBar'), pick: $('playPick'), toggle: $('playToggle'),
+  bar: $('playBar'), name: $('playName'), toggle: $('playToggle'),
   seek: $('playSeek'), time: $('playTime'), speed: $('playSpeed'),
-  exit: $('playExit'), open: $('recBtn'),
+  exit: $('playExit'),
   dragging: false,
 };
+
+// 파일을 고르는 것은 통합 피커(pbShowPicker/recStart)가 한다 — 여기에는
+// 목록도 열기 버튼도 없다. 이 절은 **조작만** 맡는다.
 
 // mmss() 는 위 로그 재생 절에 함수 선언으로 하나만 둔다 — 두 재생 기능이
 // 같은 이름을 각각 선언하면 SyntaxError 로 페이지가 통째로 죽는다.
@@ -1177,45 +1326,6 @@ async function pbApi(path) {
     return r.ok ? await r.json() : null;
   } catch (e) { return null; }
 }
-
-async function pbList() {
-  try {
-    const r = await fetch('/api/recordings', { cache: 'no-store' });
-    if (!r.ok) return;
-    const j = await r.json();
-    pb.pick.innerHTML = '';
-    if (!j.items.length) {
-      const o = document.createElement('option');
-      o.textContent = '녹화 없음';  o.value = '';
-      pb.pick.appendChild(o);
-      return;
-    }
-    for (const it of j.items) {
-      const o = document.createElement('option');
-      o.value = it.name;
-      // 이름에서 날짜/시각만 뽑아 짧게. 파일명은 KST 다.
-      o.textContent = it.name.replace(/_KST\.tlog$/, '').replace(/_/g, ' ')
-        + '  (' + (it.size / 1e6).toFixed(1) + 'MB)';
-      pb.pick.appendChild(o);
-    }
-  } catch (e) { /* 서버가 없으면 조용히 둔다 */ }
-}
-
-pb.open.onclick = async () => {
-  const showing = !pb.bar.hidden;
-  if (showing) { pb.bar.hidden = true; return; }
-  // 🔴 두 재생을 동시에 켜지 않는다. ulg 재생은 폴을 멈추고 자기 타이머로
-  //    그리므로, tlog 재생(서버가 /api/state 로 흘린다)과 겹치면 한 계기에
-  //    두 시각이 섞인다. 나중에 누른 쪽이 이긴다.
-  if (ulpb.on) pbExit();
-  await pbList();
-  pb.bar.hidden = false;
-  if (pb.pick.value) await pbApi('load?name=' + encodeURIComponent(pb.pick.value));
-};
-
-pb.pick.onchange = async () => {
-  if (pb.pick.value) await pbApi('load?name=' + encodeURIComponent(pb.pick.value));
-};
 
 // 재생/일시정지를 한 버튼으로 — 서버가 알려 준 지금 상태의 반대를 부른다.
 pb.toggle.onclick = async () => {
@@ -1233,6 +1343,7 @@ pb.speed.onchange = () => pbApi('speed?v=' + pb.speed.value);
 pb.exit.onclick = async () => {
   await pbApi('unload');
   pb.bar.hidden = true;
+  setText(pb.name, '');
 };
 
 // render() 가 매 폴 부른다 — 서버가 준 play 상태를 UI 에 반영한다.
@@ -1240,6 +1351,11 @@ function renderPlay(p) {
   document.body.classList.toggle('replaying', !!p);
   if (!p) { pb.toggle.dataset.playing = '0'; return; }
   if (pb.bar.hidden) pb.bar.hidden = false;   // 다른 창에서 걸었어도 보이게
+  // 다른 탭이 걸어 둔 재생이면 이름칸이 비어 있다. 서버가 파일명을 주므로
+  // 그것으로 채운다 — 무엇을 보고 있는지 모른 채 계기만 도는 일이 없게.
+  if (!pb.name.textContent) {
+    setText(pb.name, (p.name || '').replace(/_KST_?/, ' ').replace(/\.tlog$/, ''));
+  }
   pb.toggle.dataset.playing = p.playing ? '1' : '0';
   setText(pb.toggle, p.playing ? '❚❚' : '▶');
   setText(pb.time, mmss(p.pos) + ' / ' + mmss(p.dur));

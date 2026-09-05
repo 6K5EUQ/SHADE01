@@ -28,6 +28,7 @@ import errno
 import json
 import math
 import os
+import re
 import socket
 import sys
 import threading
@@ -121,40 +122,58 @@ LIVE_DIR = os.environ.get(
 # 잘리지 않게 한다 — 9/5 세션에서 Kill 이후 5초 안에 진단이 나왔다.
 REC_TAIL_S = 10.0
 
+# ── 야외 판정 ──────────────────────────────────────────────────────────
+# arm 만으로는 안 적는다. 실내 벤치에서 프로펠러 없이 arm 해 보는 일이 잦은데,
+# 그것까지 남기면 목록이 쓸모없는 파일로 덮인다.
+#
+# 🔴 GPS 로 가른다 — 3D fix 이고 위성 6기 이상. 실내에서는 fix 가 2 이하로
+#    머물거나 위성이 서너 개에서 멎으므로 자연히 걸러진다. `qgclog.py` 가
+#    지난 로그를 실내로 판정하는 기준과 같은 성질이다.
+#
+# ⚠️ arm 순간에 못 넘었어도 **포기하지 않는다.** fix 는 arm 뒤에 잡히기도
+#    한다 — 매 프레임 다시 보고, 넘어서는 순간 그때부터 적는다. 그 앞은
+#    잃지만 비행 본체는 남는다.
+REC_MIN_FIX = 3
+REC_MIN_SATS = 6
 
-class Recorder:
-    """ARM 구간을 원시 MAVLink(.tlog)로 받아 적는다.
 
-    QGC 표준 tlog 형식이다 — 프레임마다 **8바이트 빅엔디안 마이크로초 UTC**를
-    앞에 붙인 것. 그래서 QGC 로 바로 열리고 pymavlink 로도 재파싱된다.
+def _outdoor(d):
+    """지금 값이 야외인가. `State.d` 를 그대로 받는다."""
+    fix = d.get('fix')
+    sats = d.get('sats')
+    if fix is None or sats is None:
+        return False
+    return fix >= REC_MIN_FIX and sats >= REC_MIN_SATS
 
-    🔴 읽기 전용 원칙은 그대로다. 이 클래스는 **디스크에만** 쓴다. 소켓으로
-       나가는 바이트는 여전히 0 이다.
 
-    왜 원시 바이트인가: 파싱에 실패한 프레임도 원본이 남는다. 화면에 안 나가는
-    필드도 나중에 다시 뽑을 수 있다 — 무엇이 필요할지는 사고가 난 뒤에 안다.
-    """
+class _Sink:
+    """한 수신 경로의 파일 하나. 열고·쓰고·닫는 것만 안다."""
 
-    def __init__(self, dirpath, enabled=True):
-        self.dir = os.path.abspath(dirpath)
-        self.enabled = enabled
+    def __init__(self, dirpath, kind):
+        self.dir = dirpath
+        self.kind = kind           # 'ELRS' | 'FC'
         self.f = None
         self.path = None
-        self.started = None        # 이 파일이 열린 시각 (time.time)
+        self.started = None
         self.frames = 0
         self.bytes = 0
-        self._closing_at = None    # disarm 후 닫을 시각 (monotonic)
-        self.last = None           # 마지막으로 닫은 파일 (화면 표시용)
-        self.error = None          # 디스크 문제를 화면에 드러낸다
+        self.error = None
 
-    def _open(self):
+    def open(self, stamp):
+        """stamp 는 이 **비행 세션**의 시작 시각 (time.time). 경로가 달라도
+        같은 비행이면 같은 stamp 를 받아 파일명 앞부분이 같아진다 — 목록에서
+        두 파일을 한 비행으로 묶는 근거가 이 이름이다."""
         try:
             os.makedirs(self.dir, exist_ok=True)
             # 파일명은 **KST 로컬시각**이다. `.ulg` 가 UTC 라 헷갈리는 것을
             # 문서가 반복해 경고하는데(PROCEDURE §1-3), 이 파일은 사람이
             # 고르라고 있는 것이므로 조종자의 시계에 맞춘다. 안이 UTC 인 것과
             # 무관하다 — 그래서 이름에 KST 를 박아 둔다.
-            name = time.strftime('%Y-%m-%d_%H-%M-%S_KST.tlog', time.localtime())
+            #
+            # 🔴 뒤의 `_KST_<경로>` 두 토막이 규약이다. `list_recordings()` 가
+            #    앞의 시각으로 비행을 묶고 뒤의 경로로 줄을 가른다.
+            name = '%s_KST_%s.tlog' % (
+                time.strftime('%Y-%m-%d_%H-%M-%S', time.localtime(stamp)), self.kind)
             path = os.path.join(self.dir, name)
             self.f = open(path, 'ab')
             self.path = path
@@ -168,42 +187,8 @@ class Recorder:
             self.error = str(e)
             print('기록 못 함: %s' % e, file=sys.stderr, flush=True)
 
-    def _close(self):
-        if self.f is None:
-            self.path = None
-            return
-        try:
-            self.f.close()
-        except OSError:
-            pass
-        if self.path:
-            dur = time.time() - self.started if self.started else 0
-            self.last = {'name': os.path.basename(self.path),
-                         'frames': self.frames, 'bytes': self.bytes,
-                         'dur': round(dur, 1)}
-            print('기록 종료  %s  (%d프레임 %.1fMB %.0f초)'
-                  % (self.path, self.frames, self.bytes / 1e6, dur), flush=True)
-        self.f = self.path = self.started = None
-        self._closing_at = None
-
-    def on_arm(self, armed):
-        """armed 가 **바뀐** 순간에만 불린다."""
-        if not self.enabled:
-            return
-        if armed:
-            self._closing_at = None       # 꼬리 대기 중에 다시 떴으면 이어 쓴다
-            if self.f is None:
-                self._open()
-        elif self.f is not None:
-            # 바로 닫지 않는다. REC_TAIL_S 동안 더 받아 적는다.
-            self._closing_at = time.monotonic() + REC_TAIL_S
-
     def write(self, data):
-        """수신한 UDP 페이로드 그대로. 락 밖에서 부르지 마라 (st.lock 안)."""
         if self.f is None:
-            return
-        if self._closing_at is not None and time.monotonic() >= self._closing_at:
-            self._close()
             return
         try:
             # 8바이트 빅엔디안 마이크로초 — QGC tlog 규약.
@@ -214,22 +199,152 @@ class Recorder:
         except OSError as e:
             self.error = str(e)
             print('기록 중단: %s' % e, file=sys.stderr, flush=True)
-            self._close()
+            self.close()
+
+    def close(self):
+        """닫은 파일의 요약을 준다. 안 열려 있었으면 None."""
+        if self.f is None:
+            self.path = None
+            return None
+        try:
+            self.f.close()
+        except OSError:
+            pass
+        info = None
+        if self.path:
+            dur = time.time() - self.started if self.started else 0
+            info = {'name': os.path.basename(self.path), 'kind': self.kind,
+                    'frames': self.frames, 'bytes': self.bytes,
+                    'dur': round(dur, 1)}
+            print('기록 종료  %s  (%d프레임 %.1fMB %.0f초)'
+                  % (self.path, self.frames, self.bytes / 1e6, dur), flush=True)
+        self.f = self.path = self.started = None
+        return info
+
+
+class Recorder:
+    """야외 ARM 구간을 원시 MAVLink(.tlog)로 받아 적는다.
+
+    QGC 표준 tlog 형식이다 — 프레임마다 **8바이트 빅엔디안 마이크로초 UTC**를
+    앞에 붙인 것. 그래서 QGC 로 바로 열리고 pymavlink 로도 재파싱된다.
+
+    🔴 읽기 전용 원칙은 그대로다. 이 클래스는 **디스크에만** 쓴다. 소켓으로
+       나가는 바이트는 여전히 0 이다.
+
+    왜 원시 바이트인가: 파싱에 실패한 프레임도 원본이 남는다. 화면에 안 나가는
+    필드도 나중에 다시 뽑을 수 있다 — 무엇이 필요할지는 사고가 난 뒤에 안다.
+
+    🔴 **수신 경로마다 파일을 따로 연다** (ELRS 백팩 / FC USB 브리지). 둘은
+       대역폭도 갱신 주기도 다르고(실측: 백팩 285 B/s·자세 1.6Hz vs USB
+       28.4 KB/s), 한 파일에 섞으면 어느 링크가 무엇을 놓쳤는지 못 가린다 —
+       링크 비교가 이 기체의 반복 과제라 섞으면 안 된다.
+
+       같은 비행의 파일들은 **같은 세션 시각**을 이름에 달고 나온다. 목록이
+       그 시각으로 묶어 한 줄로 보여 준다.
+    """
+
+    def __init__(self, dirpath, enabled=True):
+        self.dir = os.path.abspath(dirpath)
+        self.enabled = enabled
+        self.sinks = {}            # 'ELRS'|'FC' -> _Sink (열려 있는 것만)
+        self.stamp = None          # 이 비행 세션의 시작 시각 (time.time)
+        self.armed = False         # 기체가 지금 arm 인가
+        self._closing_at = None    # disarm 후 닫을 시각 (monotonic)
+        self.last = None           # 마지막으로 닫은 비행 (화면 표시용)
+        self.error = None          # 디스크 문제를 화면에 드러낸다
+        # arm 은 했는데 아직 야외가 아니라 못 적고 있는 상태. 화면에 드러낸다 —
+        # "왜 안 찍히나" 를 조종자가 바로 알아야 한다.
+        self.waiting = False
+
+    # ── 세션 ──────────────────────────────────────────────────────
+    def _closeall(self):
+        infos = [s.close() for s in self.sinks.values()]
+        infos = [i for i in infos if i]
+        if infos:
+            self.last = {'when': self.stamp, 'files': infos,
+                         'dur': max(i['dur'] for i in infos)}
+        self.sinks = {}
+        self.stamp = None
+        self._closing_at = None
+        self.waiting = False
+
+    def on_arm(self, armed):
+        """armed 가 **바뀐** 순간에만 불린다."""
+        if not self.enabled:
+            return
+        self.armed = armed
+        if armed:
+            self._closing_at = None       # 꼬리 대기 중에 다시 떴으면 이어 쓴다
+            # 파일은 여기서 열지 않는다. 야외 판정을 통과한 첫 프레임에서
+            # `write()` 가 연다 — arm 시점에 fix 가 아직 없을 수 있다.
+        elif self.sinks:
+            # 바로 닫지 않는다. REC_TAIL_S 동안 더 받아 적는다.
+            self._closing_at = time.monotonic() + REC_TAIL_S
+        else:
+            self.waiting = False          # 못 적은 채 끝난 arm
+
+    def write(self, data, kind, d):
+        """수신한 UDP 페이로드 그대로. 락 밖에서 부르지 마라 (st.lock 안).
+
+        kind 는 `_link_kind()` 결과('ELRS'/'USB'), d 는 지금 `State.d` 다.
+        """
+        if not self.enabled:
+            return
+        if self._closing_at is not None and time.monotonic() >= self._closing_at:
+            self._closeall()
+            return
+        if not self.armed and self._closing_at is None:
+            return
+        # 파일명에 쓰는 이름. 'USB' 는 사람이 읽을 때 'FC' 가 분명하다 —
+        # 그 경로는 FC 를 USB 로 직결한 브리지다.
+        k = 'FC' if kind != 'ELRS' else 'ELRS'
+        sink = self.sinks.get(k)
+        if sink is None:
+            # 꼬리 시간에 처음 보는 경로가 나타나면 새로 열지 않는다 —
+            # disarm 뒤 10초짜리 조각 파일이 목록을 어지럽힌다.
+            if self._closing_at is not None:
+                return
+            if not _outdoor(d):
+                self.waiting = True
+                return
+            if self.stamp is None:
+                self.stamp = time.time()
+            sink = self.sinks[k] = _Sink(self.dir, k)
+            sink.open(self.stamp)
+            self.waiting = False
+            if sink.error:
+                self.error = sink.error
+        sink.write(data)
+        if sink.error:
+            self.error = sink.error
 
     def tick(self):
         """프레임이 안 들어와도 꼬리 시간이 지나면 닫아야 한다."""
-        if self.f is not None and self._closing_at is not None \
+        if self.sinks and self._closing_at is not None \
                 and time.monotonic() >= self._closing_at:
-            self._close()
+            self._closeall()
+
+    def _close(self):
+        """종료 경로용. main() 이 Ctrl-C 에서 부른다."""
+        self._closeall()
 
     def status(self):
+        files = [{'kind': s.kind, 'name': os.path.basename(s.path) if s.path else None,
+                  'frames': s.frames, 'bytes': s.bytes}
+                 for s in self.sinks.values() if s.path]
+        started = min((s.started for s in self.sinks.values() if s.started),
+                      default=None)
         return {
             'on': self.enabled,
-            'rec': self.f is not None,
-            'name': os.path.basename(self.path) if self.path else None,
-            'frames': self.frames,
-            'bytes': self.bytes,
-            'dur': round(time.time() - self.started, 1) if self.started else None,
+            'rec': bool(files),
+            # 지금 적고 있는 경로들. 화면이 'ELRS+FC' 처럼 보여 준다.
+            'kinds': sorted(f['kind'] for f in files),
+            'files': files,
+            'frames': sum(f['frames'] for f in files),
+            'bytes': sum(f['bytes'] for f in files),
+            'dur': round(time.time() - started, 1) if started else None,
+            # arm 했는데 GPS 를 기다리는 중 — 화면이 "실내" 라고 말한다.
+            'waiting': self.waiting,
             'last': self.last,
             'error': self.error,
         }
@@ -419,22 +534,89 @@ class Player:
                 'speed': self.speed, 'frames': len(self.frames)}
 
 
+# 파일명 규약: `YYYY-MM-DD_HH-MM-SS_KST_<경로>.tlog`. `_Sink.open()` 이 만든다.
+# 경로가 없는 옛 파일(`..._KST.tlog`)도 읽는다 — 9/5 이전 기록이 그 이름이다.
+_REC_NAME = re.compile(
+    r'^(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})_KST(?:_(ELRS|FC))?\.tlog$')
+
+# 같은 비행으로 묶는 시각 허용치(초). 두 경로의 첫 프레임이 정확히 같은 순간에
+# 오지는 않는다 — 한 세션에서 같은 stamp 로 열므로 보통 0 이지만, 옛 파일과
+# 서버 재시작을 건너뛰지 않으려면 여유가 필요하다.
+#
+# ⚠️ 너무 크게 잡으면 연달아 띄운 두 비행이 한 줄로 뭉친다. 이 기체는 배터리
+#    교체에 수 분이 걸리므로 90초면 겹칠 일이 없다.
+REC_GROUP_S = 90.0
+
+
+def _rec_stamp(name):
+    """파일명 → (epoch 초, 경로). 규약에서 벗어난 이름은 None."""
+    m = _REC_NAME.match(name)
+    if not m:
+        return None
+    date, hh, mm, ss, kind = m.groups()
+    try:
+        # 파일명은 KST 로컬시각이다 — 로컬 타임존으로 되돌린다.
+        tm = time.strptime('%s %s:%s:%s' % (date, hh, mm, ss), '%Y-%m-%d %H:%M:%S')
+        epoch = time.mktime(tm)
+    except (ValueError, OverflowError):
+        return None
+    return epoch, (kind or 'FC')
+
+
 def list_recordings(dirpath):
-    """logs/live/ 의 .tlog 목록. 최신 먼저."""
+    """logs/live/ 의 .tlog 를 **비행 단위로 묶어** 돌려준다. 최신 먼저.
+
+    한 비행에서 ELRS 백팩과 FC USB 브리지 양쪽으로 받으면 파일이 둘 나온다.
+    둘은 같은 시각을 이름에 달고 열리므로(`_Sink.open()`), 시각이
+    REC_GROUP_S 안이면 한 줄로 묶는다.
+
+    반환: [{'when': epoch, 'label': '2026-09-05 09:24',
+            'files': [{'name','kind','size','mtime'}, ...],
+            'size': 합계, 'kinds': ['ELRS','FC']}, ...]
+    """
     try:
         names = [n for n in os.listdir(dirpath) if n.endswith('.tlog')]
     except OSError:
         return []
-    out = []
+    items = []
     for n in names:
         p = os.path.join(dirpath, n)
         try:
             stt = os.stat(p)
         except OSError:
             continue
-        out.append({'name': n, 'size': stt.st_size,
-                    'mtime': int(stt.st_mtime)})
-    out.sort(key=lambda x: x['mtime'], reverse=True)
+        parsed = _rec_stamp(n)
+        # 이름이 규약을 벗어나면 파일 mtime 을 시각으로 쓴다. 묶이지 않고
+        # 혼자 한 줄이 되겠지만 **목록에서 사라지지는 않는다.**
+        when, kind = parsed if parsed else (stt.st_mtime, 'FC')
+        items.append({'name': n, 'kind': kind, 'size': stt.st_size,
+                      'mtime': int(stt.st_mtime), 'when': when})
+
+    items.sort(key=lambda x: x['when'], reverse=True)
+
+    groups = []
+    for it in items:
+        g = groups[-1] if groups else None
+        # 같은 경로가 이미 그 그룹에 있으면 다른 비행이다 — 한 비행에서 같은
+        # 경로로 두 파일이 나오지 않는다. 안 가르면 연속 비행이 통째로 뭉친다.
+        if g is not None and abs(g['when'] - it['when']) <= REC_GROUP_S \
+                and not any(f['kind'] == it['kind'] for f in g['files']):
+            g['files'].append(it)
+            g['when'] = max(g['when'], it['when'])
+        else:
+            groups.append({'when': it['when'], 'files': [it]})
+
+    out = []
+    for g in groups:
+        fs = sorted(g['files'], key=lambda f: f['kind'])
+        out.append({
+            'when': int(g['when']),
+            'label': time.strftime('%Y-%m-%d %H:%M', time.localtime(g['when'])),
+            'files': [{'name': f['name'], 'kind': f['kind'],
+                       'size': f['size'], 'mtime': f['mtime']} for f in fs],
+            'size': sum(f['size'] for f in fs),
+            'kinds': [f['kind'] for f in fs],
+        })
     return out
 
 
@@ -494,6 +676,10 @@ class State:
         #    d 가 과거 프레임의 값으로 덮이므로, 그것을 기준으로 삼으면 실제
         #    기체가 arm 해도 파일이 안 갈린다.
         self._rec_armed = None
+        # 🔴 기록기의 야외 판정이 보는 GPS 도 d 와 **따로** 둔다. 같은 이유다 —
+        #    재생 중에는 d 의 fix/sats 가 로그의 값이라, 실내에서 arm 해도
+        #    지난 비행의 위성 12기가 보여 파일이 열려 버린다.
+        self.rec_gps = {}
         self.d = {}                # 화면에 그대로 나가는 값들
         self.track = []            # [[lat, lon, alt_rel], ...]
         self.messages = []         # STATUSTEXT 최근 것
@@ -660,6 +846,9 @@ def handle(msg, st):
     elif t == 'GPS_RAW_INT':
         d['fix'] = msg.fix_type
         d['sats'] = msg.satellites_visible
+        # 기록기의 야외 판정용 사본. d 는 재생이 덮으므로 따로 둔다.
+        st.rec_gps['fix'] = msg.fix_type
+        st.rec_gps['sats'] = msg.satellites_visible
         d['eph'] = msg.eph / 100.0 if msg.eph != 65535 else None
 
     elif t == 'VIBRATION':
@@ -745,6 +934,19 @@ def _moved(a, b):
     return math.hypot(dlat, dlon)
 
 
+def _sniff_gps(msgs, st):
+    """재생 중에도 **실기의** GPS 만 골라 `st.rec_gps` 를 갱신한다.
+
+    재생 중에는 `handle()` 이 안 돌아 rec_gps 가 멎는다. 그 사이 실제로 arm
+    하면 야외 판정이 옛 값(또는 빈 값)으로 굳어 기록이 안 열리거나 잘못 열린다.
+    화면에는 아무것도 넣지 않는다 — 이 함수는 판정용 두 숫자만 만진다.
+    """
+    for m in msgs:
+        if m.get_type() == 'GPS_RAW_INT':
+            st.rec_gps['fix'] = m.fix_type
+            st.rec_gps['sats'] = m.satellites_visible
+
+
 def receiver(sock, st):
     """UDP 수신 루프. 이 함수는 소켓에 쓰지 않는다."""
     # 송신 주소마다 파서를 따로 둔다. 한 파서에 여러 기기의 바이트를 섞어
@@ -819,8 +1021,16 @@ def receiver(sock, st):
                     st._rec_armed = a
             # handle() 뒤에 쓴다 — HEARTBEAT 이 파일을 여는 순간의 그 패킷도
             # 기록에 들어가야 arm 시점이 파일 첫 프레임이 된다.
+            #
+            # 🔴 야외 판정은 `st.rec_gps` 로 한다 — `st.d` 가 아니다. 재생 중에는
+            #    d 가 과거 프레임의 GPS 로 덮이므로, 지난 비행을 돌려 보는 동안
+            #    실내 arm 이 야외로 오인돼 파일이 열린다. rec_gps 는 실기 프레임만
+            #    본다 (`handle()` 이 재생 경로에서는 안 돌고, 아래가 원본 바이트를
+            #    따로 훑기 때문이다).
             if st.rec is not None:
-                st.rec.write(data)
+                if replaying:
+                    _sniff_gps(msgs, st)
+                st.rec.write(data, _link_kind(addr), st.rec_gps)
 
 
 class Playback:
@@ -840,12 +1050,33 @@ class Playback:
         self.fl = None            # load_flight() 결과
         self.err = None
         self.loading = None       # 로딩 중인 파일 이름
+        self.note = None          # 「받는 중」처럼 지금 무엇을 하는지
+
+    def begin(self, name, note=None):
+        """열기를 시작했다고 표시한다. **파일을 받기 전에** 부른다.
+
+        labserver 에서 내려받는 동안에도 화면이 「여는 중」을 보여야 한다 —
+        안 그러면 큰 로그를 받는 수십 초 동안 아무 일도 안 일어난 것처럼 보인다.
+        """
+        with self.lock:
+            self.loading = name
+            self.note = note
+            self.err = None
+            self.fl = None
+
+    def fail(self, msg):
+        """열기 실패. 내려받기가 깨졌을 때 호출자가 부른다."""
+        with self.lock:
+            self.err = msg
+            self.loading = None
+            self.note = None
 
     def open(self, path):
         """로그를 연다. 오래 걸리므로(대형 로그 수십 초) 호출자가 스레드로 돌린다."""
         import playback
         with self.lock:
             self.loading = os.path.basename(path)
+            self.note = None
             self.err = None
             self.fl = None
         try:
@@ -864,12 +1095,14 @@ class Playback:
             self.fl = None
             self.err = None
             self.loading = None
+            self.note = None
 
     def info(self):
         """지금 무엇이 열려 있나. 프레임은 빼고 요약만."""
         with self.lock:
             if self.loading:
-                return {'state': 'loading', 'name': self.loading}
+                return {'state': 'loading', 'name': self.loading,
+                        'note': self.note}
             if self.err:
                 return {'state': 'error', 'error': self.err}
             if not self.fl:
@@ -1008,30 +1241,48 @@ class Handler(BaseHTTPRequestHandler):
         #    재생은 로컬 파일을 읽을 뿐 FC 와 아무 관계가 없지만, 보장을
         #    깨뜨리지 않는 편이 검증하기 쉽다.
         if path == '/api/logs':
-            import playback
+            # 🔴 목록의 정본은 **labserver** 다. 이 PC 의 logs/ 는 작업 사본이라
+            #    여기에만 있는 로그가 생기면 그 PC 가 죽을 때 사라진다 —
+            #    gram 에만 있던 20개를 9/6 에 발견했다. 재생할 때 그 파일
+            #    하나만 받아 온다 (logsource.ensure_local).
+            import logsource
             try:
-                items = playback.list_logs()
-            except SystemExit as exc:      # find_log_dir 이 못 찾으면 exit 한다
+                c = logsource.catalog(force=_qs(query, 'refresh') == '1')
+            except Exception as exc:
                 return self._send(200, dumps_json({'logs': [], 'error': str(exc)}),
                                   'application/json; charset=utf-8')
-            return self._send(200, dumps_json({'logs': items}),
-                              'application/json; charset=utf-8')
+            return self._send(200, dumps_json(
+                {'logs': c['items'], 'source': c['source'],
+                 'remote': c['remote'], 'error': c['error']}),
+                'application/json; charset=utf-8')
 
         if path == '/api/playback/open':
             name = _qs(query, 'name')
             if not name:
                 return self._send(400, '{"error":"name 이 없다"}', 'application/json')
-            import playback
+            import logsource
             # 🔴 목록에 있는 파일만 연다. 이름을 그대로 경로로 쓰면
             #    ?name=../../etc/passwd 로 아무 파일이나 열린다.
             try:
-                allowed = {e['name']: e['path'] for e in playback.list_logs()}
-            except SystemExit as exc:
+                allowed = {e['name'] for e in logsource.catalog()['items']}
+            except Exception as exc:
                 return self._send(500, dumps_json({'error': str(exc)}), 'application/json')
-            full = allowed.get(name)
-            if not full:
+            if name not in allowed:
                 return self._send(404, '{"error":"그런 로그가 없다"}', 'application/json')
-            threading.Thread(target=self.pb.open, args=(full,), daemon=True).start()
+
+            # 이 PC 에 없으면 labserver 에서 받아 온다. 큰 로그는 수십 초 걸리므로
+            # 굽는 것과 함께 **딴 스레드**에서 한다 — 프론트는 /api/playback/info
+            # 를 폴하며 기다린다 (state='opening').
+            self.pb.begin(name, 'labserver 에서 받는 중')
+
+            def _open():
+                try:
+                    full = logsource.ensure_local(name)
+                except Exception as exc:
+                    self.pb.fail(str(exc))
+                    return
+                self.pb.open(full)
+            threading.Thread(target=_open, daemon=True).start()
             return self._send(200, dumps_json({'ok': True, 'name': name}),
                               'application/json; charset=utf-8')
 

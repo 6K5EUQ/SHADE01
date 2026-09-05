@@ -198,6 +198,126 @@ const num = (e, a) => parseFloat(e.getAttribute(a));
   const scs = [...D.querySelectorAll('#strip .sc')];
   ok('좁아도 스트립 칸이 안 사라진다', scs.length >= 6, `칸 ${scs.length}개`);
 
+  // ── 기록 배지 ────────────────────────────────────────────────────
+  // 야외 게이트를 넣은 뒤로 "안 찍히는 것"도 정상 동작이 됐다. 그 사실이
+  // 화면에 없으면 조종자는 착륙한 뒤에야 파일이 없는 것을 안다.
+  note('■ 기록 상태 — 왜 안 찍히나가 화면에 있나');
+  f = await load('rec=on');
+  D = f.contentDocument;
+  let rc = D.getElementById('recSt');
+  ok('적는 중이면 REC 가 뜬다', !rc.hidden && /^REC /.test(rc.textContent),
+     `"${rc.textContent}" hidden=${rc.hidden}`);
+  ok('어느 경로로 적는지 같이 말한다', /ELRS/.test(rc.textContent) && /FC/.test(rc.textContent),
+     rc.textContent);
+
+  f = await load('rec=wait');
+  rc = f.contentDocument.getElementById('recSt');
+  ok('GPS 대기는 실내대기로 뜬다', !rc.hidden && rc.textContent.includes('실내대기'),
+     `"${rc.textContent}" hidden=${rc.hidden}`);
+  ok('실내대기 이유가 title 에 있다',
+     /GPS|fix|위성/.test(rc.title), rc.title.slice(0, 60));
+
+  f = await load('rec=off');
+  rc = f.contentDocument.getElementById('recSt');
+  ok('안 적을 때는 칸이 숨는다', rc.hidden, `hidden=${rc.hidden} "${rc.textContent}"`);
+
+  // ── 통합 재생 목록 ───────────────────────────────────────────────
+  // 버튼은 하나여야 한다. 두 개였을 때 사용자가 "로그 재생" 과 "재생" 의
+  // 차이를 물어야 했다 — 재생 방식의 차이는 사정이지 선택지가 아니다.
+  note('■ 통합 재생 목록');
+  f = await load('');
+  D = f.contentDocument; W = f.contentWindow;
+  ok('재생 버튼이 하나다', !!D.getElementById('pbOpen') && !D.getElementById('recBtn'),
+     `pbOpen=${!!D.getElementById('pbOpen')} recBtn=${!!D.getElementById('recBtn')}`);
+
+  // 목록은 서버를 때린다. 실기 데이터에 기대면 검사가 그날그날 달라지므로
+  // fetch 를 갈아끼워 **합성 응답**을 먹인다 — 한 비행 두 경로 + ulg 하나.
+  const real = W.fetch;
+  W.fetch = (u, o) => {
+    if (String(u).startsWith('/api/recordings')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({
+        items: [{ when: 1, label: '2026-09-05 09:24', size: 3e6,
+                  kinds: ['ELRS', 'FC'],
+                  files: [{ name: 'a_ELRS.tlog', kind: 'ELRS', size: 1e6 },
+                          { name: 'a_FC.tlog', kind: 'FC', size: 2e6 }] },
+                { when: 2, label: '2026-09-05 08:10', size: 1e6, kinds: ['FC'],
+                  files: [{ name: 'b_FC.tlog', kind: 'FC', size: 1e6 }] }] }) });
+    }
+    if (String(u).startsWith('/api/logs')) {
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({
+        source: 'labserver', error: null,
+        logs: [
+          { name: '2026-08-25_09_09_49.ulg', disp: 'log_98_2026-8-25-18-11-28.ulg',
+            num: 98, exact: false, size: 5.1e6, local: true, recovered: false,
+            when: '2026-08-25 18:11' },
+          // 복구본 — 원본과 **같은 disp** 를 받는다.
+          { name: 'RECOVERED_09_09_49.ulg', disp: 'log_98_2026-8-25-18-11-28.ulg',
+            num: 98, exact: false, size: 5.09e6, local: true, recovered: true,
+            when: '2026-08-25 18:11' },
+        ] }) });
+    }
+    return real(u, o);
+  };
+  D.getElementById('pbOpen').click();
+  await new Promise((z) => setTimeout(z, 400));
+
+  const rows = [...D.querySelectorAll('#pbList .row')];
+  ok('두 종류가 한 목록에 선다', rows.length === 4, `줄 ${rows.length}개 (기대 4)`);
+
+  // 🔴 FC 로그에는 머리말이 없어야 한다. 이름이 log_<번호>_<시각> 이라
+  //    무엇인지 이름만 봐도 안다 (사용자 지시 2026-09-06).
+  const heads = [...D.querySelectorAll('#pbList .gh')].map((e) => e.textContent);
+  ok('머리말은 실시간 기록 하나뿐이다',
+     heads.length === 1 && /실시간/.test(heads[0]), heads.join(' | ') || '(없음)');
+
+  // 배지가 **맨 왼쪽**이어야 한다 — 종류가 이름보다 먼저 보인다.
+  const first = rows[0].firstElementChild;
+  ok('배지가 줄 맨 왼쪽이다', first && first.classList.contains('kinds'),
+     first ? first.className : '(빈 줄)');
+
+  // 같은 비행의 두 경로가 한 줄 안에 배지 둘로 붙어야 한다.
+  const b0 = [...rows[0].querySelectorAll('.kind')].map((e) => e.textContent);
+  ok('같은 비행의 두 링크가 한 줄에 붙는다',
+     b0.length === 2 && b0.includes('ELRS') && b0.includes('FC'), b0.join('+'));
+
+  // ulg 줄: 이름이 통합 형식 하나이고, 시각이 따로 또 안 적혀야 한다.
+  const ulgRows = rows.filter((r) => r.querySelector('.k-ULG,.k-ULGX'));
+  ok('ulg 가 두 줄이다 (정상 + 복구본)', ulgRows.length === 2, `${ulgRows.length}줄`);
+  const nm = ulgRows[0].querySelector('.nm').textContent;
+  ok('제목이 log_<번호>_<시각>.ulg 통합 형식이다',
+     /^log_\d+_\d{4}-\d{1,2}-\d{1,2}-\d{2}-\d{2}-\d{2}\.ulg$/.test(nm), nm);
+  ok('제목 말고 시각을 또 적지 않는다',
+     !/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(ulgRows[0].textContent),
+     ulgRows[0].textContent.trim());
+
+  // 🔴 복구본은 **원본과 같은 제목**을 쓰고 배지로만 갈린다 (사용자 지시).
+  const recRow = ulgRows.find((r) => r.querySelector('.k-REC2'));
+  ok('복구본이 배지로 표시된다', !!recRow,
+     recRow ? recRow.querySelector('.nm').textContent : '(없음)');
+  ok('복구본 제목이 원본과 같다',
+     !!recRow && recRow.querySelector('.nm').textContent === nm,
+     recRow ? recRow.querySelector('.nm').textContent + ' vs ' + nm : '-');
+
+  // 추론한 번호는 형태로도 갈려야 한다 (색만으로는 색맹에게 안 보인다).
+  const cs = (e) => W.getComputedStyle(e);
+  const bx = D.querySelector('#pbList .k-ULGX');
+  ok('추론 번호 배지는 점선이다', !!bx && cs(bx).borderStyle === 'dashed',
+     bx ? cs(bx).borderStyle : '(없음)');
+  const be = rows[0].querySelector('.k-ELRS'), bf = rows[0].querySelector('.k-FC');
+  ok('두 경로 배지가 다른 색이다', !!be && !!bf && cs(be).color !== cs(bf).color,
+     `${be ? cs(be).color : '-'} vs ${bf ? cs(bf).color : '-'}`);
+
+  // ── 버튼 자리 ────────────────────────────────────────────────────
+  // 재생 버튼은 접기 버튼 **바로 왼쪽**이다 (사용자 지시 2026-09-06).
+  const po = D.getElementById('pbOpen'), mt = D.getElementById('msgToggle');
+  ok('재생 버튼이 접기 버튼 바로 왼쪽이다', po && mt && po.nextElementSibling === mt,
+     po && mt ? `pbOpen 다음=${po.nextElementSibling && po.nextElementSibling.id}` : '-');
+
+  // 피커 제목
+  const hd = D.querySelector('#pbPick .hd b');
+  ok('피커 제목이 「비행 로그 재생」이다', hd && hd.textContent === '비행 로그 재생',
+     hd ? hd.textContent : '(없음)');
+
   note('완료. FAIL 이 0 이어야 배포한다.');
 })().catch((e) => { ok('자체검사 자체가 죽었다', false, e.message); });
 </script>

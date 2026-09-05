@@ -220,6 +220,18 @@ a.btn { display: inline-block; text-decoration: none; }
   font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border);
 }
 .msgs .hd .cnt { color: var(--bad); font-weight: 700; }
+/* 기록 상태 배지. 적는 중에는 붉게 깜빡인다 — 비디오 장비의 관습을 따른다.
+   실내대기는 노랑(경고가 아니라 "아직") 이다. */
+.msgs .hd #recSt {
+  font-family: var(--mono); font-size: 10px; font-weight: 700;
+  padding: 0 4px; border-radius: 3px; border: 1px solid transparent;
+}
+#recSt.rec-on { color: var(--bad); border-color: var(--bad); animation: recblink 2s infinite; }
+#recSt.rec-wait { color: var(--warn); border-color: var(--warn); }
+#recSt.rec-err { color: var(--bad); border-color: var(--bad); }
+@keyframes recblink { 0%,60% { opacity: 1; } 80%,100% { opacity: .45; } }
+/* 움직임에 민감한 사람에게는 깜빡임을 끈다. 색만으로도 뜻이 통한다. */
+@media (prefers-reduced-motion: reduce) { #recSt.rec-on { animation: none; } }
 /* 데이터 원천 배지 — ELRS 는 느린 경로라 눈에 띄게, USB 는 평범하게. */
 #linkSrc { font-weight: 700; letter-spacing: .4px; padding: 0 5px;
            border-radius: 4px; font-size: 11px; }
@@ -358,6 +370,9 @@ body.playback { padding-bottom: 38px; }
   display: flex; align-items: baseline; gap: 8px;
   padding: 5px 12px; cursor: pointer; border-bottom: 1px solid var(--border);
 }
+/* 배지가 맨 왼쪽이다. 폭을 고정해 이름의 왼쪽 끝이 줄마다 맞는다 —
+   안 맞추면 배지 개수에 따라 이름이 들쭉날쭉해 목록을 훑기 어렵다. */
+#pbList .kinds { min-width: 9ch; }
 #pbList .row:last-child { border-bottom: 0; }
 #pbList .row:hover { background: var(--panel-2); }
 #pbList .nm { font-family: var(--mono); font-size: 11px; flex: 1;
@@ -365,3 +380,37 @@ body.playback { padding-bottom: 38px; }
 #pbList .wh { color: var(--dim); font-size: 11px; }
 #pbList .sz { color: var(--muted); font-size: 11px; min-width: 7ch; text-align: right; }
 #pbList .msg { padding: 10px 12px; color: var(--muted); font-size: 12px; }
+
+/* 통합 목록의 구획 머리 — 실시간 기록 / FC 로그. 두 종류가 한 목록에 서므로
+   어디서 온 파일인지 줄마다 안 써도 되게 한 번만 말한다. */
+#pbList .gh {
+  padding: 8px 12px 3px; font-size: 11px; font-weight: 600;
+  color: var(--dim); border-bottom: 1px solid var(--border);
+  background: var(--panel-2);
+}
+#pbList .gh:first-child { padding-top: 4px; }
+
+/* 경로 배지. 한 비행에서 두 링크로 받았으면 두 개가 나란히 선다 —
+   눌러서 그 링크의 기록만 튼다 (어느 쪽이 무엇을 놓쳤나가 요점이다). */
+#pbList .kinds { display: flex; gap: 4px; flex: 0 0 auto; }
+#pbList .kind {
+  font-family: var(--mono); font-size: 10px; line-height: 1.5;
+  padding: 0 5px; border-radius: 3px; cursor: pointer;
+  border: 1px solid var(--border-2); background: var(--panel-2); color: var(--dim);
+}
+#pbList .kind:hover { border-color: var(--muted); }
+/* 색으로 가른다. ELRS 는 조종기 백팩(느리고 성긴 링크), FC 는 USB 브리지
+   직결(빠르다), ulg 는 기체 SD 에서 내려받은 원본이다. */
+#pbList .k-ELRS { color: var(--warn); border-color: var(--warn); }
+#pbList .k-FC   { color: var(--accent); border-color: var(--accent); }
+#pbList .k-ULG  { color: var(--ok); border-color: var(--ok); cursor: default; }
+/* 번호를 추론한 로그. 같은 초록이되 테두리를 점선으로 — FC 가 준 번호와
+   같다는 보장이 없다는 것을 색이 아니라 형태로 말한다 (색맹에게도 보인다). */
+#pbList .k-ULGX {
+  color: var(--ok); border-color: var(--ok); border-style: dashed;
+  opacity: .75; cursor: default;
+}
+/* 복구본·원격은 곁다리 표시라 눈에 덜 띄어야 한다. */
+#pbList .k-REC2 { color: var(--warn); border-color: var(--warn); cursor: default; }
+#pbList .k-REM  { color: var(--muted); border-color: var(--border-2); cursor: default; }
+#pbList .msg.warn { color: var(--warn); }
