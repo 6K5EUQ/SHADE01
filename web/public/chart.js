@@ -55,9 +55,31 @@ function niceScale(values, opts = {}) {
   }
   if (opts.min != null) lo = Math.min(lo, opts.min);
   if (opts.max != null) hi = Math.max(hi, opts.max);
-  if (hi - lo < 1e-9) { hi = lo + 1; lo -= 1; }     // 평평한 계열도 그려야 한다
+
+  // 🔴 최소 표시 폭. 이게 없으면 축이 노이즈를 화면 가득 확대한다 —
+  //    지상 정지 중 상승률 ±0.001 m/s 가 산맥처럼 그려지고 y축 눈금은
+  //    `0 / -0 / 0` 이 되어 아무 의미가 없다 (실측 rim3 2026-09-05:
+  //    climb -0.0013, groundspeed 0.0008).
+  //    값이 실제로 그만큼 안 움직이면 **평평하게 보이는 것이 사실이다.**
+  //    단위마다 "이 정도는 움직여야 의미가 있다" 가 달라 호출자가 정한다.
+  const span = hi - lo;
+  const minSpan = opts.minSpan || 0;
+  if (minSpan > 0 && span < minSpan) {
+    const mid = (hi + lo) / 2;
+    lo = mid - minSpan / 2;
+    hi = mid + minSpan / 2;
+    // 음수가 없는 양(전류·속도·위성·진동)은 축을 0 밑으로 내리지 않는다.
+    // -5.4A 눈금은 물리적으로 없는 값이라 읽는 사람을 헷갈리게 한다.
+    // 0 에 붙이고 폭은 그대로 유지한다.
+    if (opts.nonNeg && lo < 0) { lo = 0; hi = minSpan; }
+  } else if (span < 1e-9) {
+    hi = lo + 1; lo -= 1;                          // 완전히 평평한 계열
+  }
   const pad = (hi - lo) * 0.08;
-  return { lo: lo - pad, hi: hi + pad };
+  // 여백까지 더하면 0 아래로 다시 내려간다 — 전류 -0.8A 눈금이 그렇게 생겼다.
+  // 음수가 없는 양은 바닥을 0 에 붙인 채 위로만 여백을 준다.
+  const flo = (opts.nonNeg && lo - pad < 0 && lo >= 0) ? 0 : lo - pad;
+  return { lo: flo, hi: hi + pad };
 }
 
 function esc(s) {
@@ -106,6 +128,12 @@ function drawChart(el, trk, spec) {
     const extra = {};
     if (ax === 'left' && spec.thresholds) {
       for (const th of spec.thresholds) extra.max = Math.max(extra.max ?? -Infinity, th.v);
+    }
+    // 그 축에 실린 계열들이 요구하는 최소 폭 중 가장 큰 것을 쓴다.
+    for (const sx of spec.series) {
+      if ((sx.axis || 'left') !== ax) continue;
+      if (sx.minSpan) extra.minSpan = Math.max(extra.minSpan || 0, sx.minSpan);
+      if (sx.nonNeg) extra.nonNeg = true;
     }
     scales[ax] = niceScale(vals, extra);
   }

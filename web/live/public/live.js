@@ -360,9 +360,12 @@ function layout(w, hh) {
 // ── 차트 ────────────────────────────────────────────────────────────
 // 단 구성·색은 로그 뷰어(log.html 의 CHARTS)와 맞춘다.
 const CHARTS = [
+  // minSpan — 축이 최소한 이만큼은 담는다. 없으면 지상 정지 중 ±1cm 노이즈가
+  // 화면을 가득 채우고 눈금이 `0 / -0 / 0` 이 된다 (실측 rim3: climb -0.0013).
+  // 값이 실제로 안 움직이면 **평평하게 보이는 것이 사실**이다.
   { id: 'k-alt', title: '고도', on: true, series: [
-      { key: 'alt', color: 'var(--c-alt)', label: '고도', axis: 'left', weight: 2, unit: 'm' },
-      { key: 'climb', color: 'var(--c-spd)', label: '상승률', axis: 'right', unit: 'm/s' }] },
+      { key: 'alt', color: 'var(--c-alt)', label: '고도', axis: 'left', weight: 2, unit: 'm', minSpan: 4 },
+      { key: 'climb', color: 'var(--c-spd)', label: '상승률', axis: 'right', unit: 'm/s', minSpan: 2 }] },
   // 두 속도의 출처가 다르다 — 이름에 그대로 적는다.
   //   GPS 속도    GLOBAL_POSITION_INT 의 vx·vy 합성 (EKF 융합). 믿는 값.
   //   피토관 속도  VFR_HUD.airspeed. 🔴 이 기체는 고장품이다 — 정지 시
@@ -370,27 +373,30 @@ const CHARTS = [
   //               같은 굵기로 나란히 놓이지 않게 한다 (HUD 가 좌측 테이프를
   //               '대지속도' 로 못박은 것과 같은 이유).
   { id: 'k-spd', title: '속도', on: true, series: [
-      { key: 'spd', color: 'var(--c-spd)', label: 'GPS 속도', axis: 'left', weight: 2, unit: 'm/s' },
-      { key: 'aspd', color: '#a371f7', label: '피토관 속도(고장)', axis: 'left', dim: true, unit: 'm/s' }] },
+      { key: 'spd', color: 'var(--c-spd)', label: 'GPS 속도', axis: 'left', weight: 2, unit: 'm/s', minSpan: 4, nonNeg: true },
+      { key: 'aspd', color: '#a371f7', label: '피토관 속도(고장)', axis: 'left', dim: true, unit: 'm/s', minSpan: 4, nonNeg: true }] },
   { id: 'k-pwr', title: '전력', on: true, series: [
-      { key: 'cur', color: 'var(--c-cur)', label: '전류', axis: 'left', weight: 2, unit: 'A' },
-      { key: 'volt', color: 'var(--c-volt)', label: '전압', axis: 'right', unit: 'V' }],
+      { key: 'cur', color: 'var(--c-cur)', label: '전류', axis: 'left', weight: 2, unit: 'A', minSpan: 10, nonNeg: true },
+      // 6S 는 만충 25.2V·저전압 21.0V 라 폭이 4V 면 비행 전체가 담긴다.
+      { key: 'volt', color: 'var(--c-volt)', label: '전압', axis: 'right', unit: 'V', minSpan: 2 }],
     // 45A 는 8/31 비행에서 453초 중 270초를 넘긴 선이다 (README 「전류」).
     thresholds: [{ v: 45, label: '45A', color: '#d29922' }] },
   { id: 'k-att', title: '자세', on: false, series: [
-      { key: 'roll', color: '#d55e00', label: '롤', axis: 'left', weight: 2, unit: '°' },
-      { key: 'pitch', color: '#e69f00', label: '피치', axis: 'left', weight: 2, unit: '°' }] },
+      { key: 'roll', color: '#d55e00', label: '롤', axis: 'left', weight: 2, unit: '°', minSpan: 20 },
+      { key: 'pitch', color: '#e69f00', label: '피치', axis: 'left', weight: 2, unit: '°', minSpan: 20 }] },
   { id: 'k-vib', title: '진동', on: false, series: [
-      { key: 'vib', color: '#f0883e', label: '진동(최대축)', axis: 'left', weight: 2 }],
+      { key: 'vib', color: '#f0883e', label: '진동(최대축)', axis: 'left', weight: 2, minSpan: 10, nonNeg: true }],
     thresholds: [{ v: 30, label: '한계', color: '#d29922' }] },
   { id: 'k-gps', title: 'GPS', on: false, series: [
-      { key: 'sats', color: '#3fb950', label: '위성 수', axis: 'left', weight: 2 },
-      { key: 'eph', color: '#f85149', label: '위치 오차', axis: 'right', unit: 'm' }] },
+      { key: 'sats', color: '#3fb950', label: '위성 수', axis: 'left', weight: 2, minSpan: 6, nonNeg: true },
+      { key: 'eph', color: '#f85149', label: '위치 오차', axis: 'right', unit: 'm', minSpan: 2, nonNeg: true }] },
   { id: 'k-ekf', title: 'EKF', on: false, series: [
-      { key: 'ekf_vel', color: '#58a6ff', label: '속도', axis: 'left' },
-      { key: 'ekf_pos', color: '#3fb950', label: '위치', axis: 'left' },
-      { key: 'ekf_alt', color: '#f0883e', label: '고도', axis: 'left' },
-      { key: 'ekf_mag', color: '#a371f7', label: '지자기', axis: 'left' }],
+      // EKF 는 비율이라 1.0 이 한계선이다. 축이 늘 0~1 을 담아야 지금이
+      // 한계에서 얼마나 떨어져 있는지 한눈에 읽힌다.
+      { key: 'ekf_vel', color: '#58a6ff', label: '속도', axis: 'left', minSpan: 1.2, nonNeg: true },
+      { key: 'ekf_pos', color: '#3fb950', label: '위치', axis: 'left', minSpan: 1.2, nonNeg: true },
+      { key: 'ekf_alt', color: '#f0883e', label: '고도', axis: 'left', minSpan: 1.2, nonNeg: true },
+      { key: 'ekf_mag', color: '#a371f7', label: '지자기', axis: 'left', minSpan: 1.2, nonNeg: true }],
     // 비율이다. 1 을 넘으면 그 센서의 혁신 검사가 깨지고 있다는 뜻.
     thresholds: [{ v: 1, label: '한계', color: '#d29922' }] },
 ];
