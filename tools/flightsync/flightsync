@@ -97,13 +97,22 @@ bridge() {   # bridge start|stop
 #    남고, 다음 사람이 원인을 모른 채 기체 앞에 선다.
 STOPPED=0
 restore() {
-  if [ "$STOPPED" = 1 ]; then
-    say "브리지 복구 중…"
-    if bridge start; then say "  ✅ 브리지 복구"; else fail "브리지 복구 실패 — 손으로 확인하라: ssh $FC_HOST"; fi
-    STOPPED=0
-  fi
+  [ "$STOPPED" = 1 ] || return 0
+  # 🔴 **출력보다 먼저** 상태를 내린다. 아래 어느 줄에서 죽어도 두 번 돌지 않는다.
+  STOPPED=0
+  # 🔴 복구는 출력에 의존하면 안 된다. 파이프가 끊긴 상태(`| head`)에서 트랩이
+  #    돌면, 여기서 stdout 에 쓰는 순간 SIGPIPE 를 또 맞아 **ssh 를 부르기도 전에
+  #    죽는다** — 실측으로 물렸다. 그래서 신호를 막고, 쓰기 실패를 전부 삼킨다.
+  trap '' PIPE HUP
+  bridge start >/dev/null 2>&1
+  local ok=$?
+  { [ "$ok" = 0 ] && printf '  ✅ 브리지 복구\n' \
+                  || printf '✗ 브리지 복구 실패 — 손으로: ssh %s '"'"'systemctl --user start shade-bridge.service'"'"'\n' "$FC_HOST"; } 2>/dev/null || true
 }
-trap restore EXIT INT TERM
+# 🔴 PIPE 를 빠뜨리면 안 된다. 출력을 `| head` 로 받는 순간 SIGPIPE 로 죽는데,
+#    그때 EXIT 트랩이 안 돌아 **브리지가 내려간 채 남는다** — 실측으로 물렸다.
+#    HUP 은 ssh 세션이 끊길 때 온다.
+trap restore EXIT INT TERM HUP PIPE
 
 # ── 1. FC 목록 ──────────────────────────────────────────────────────
 say "== FC 로그 목록 =="
