@@ -18,6 +18,9 @@ PY="${QGCLOG_PYTHON:-$REPO/.venv/bin/python}"
 # systemd 유닛은 인자를 못 주므로(ExecStart 고정) 환경변수 경로가 필요하다.
 PORT="${1:-${LIVE_UDP:-14550}}"
 HTTP="${LIVE_HTTP:-4400}"
+# 바인딩 주소. 기본은 모든 인터페이스지만, 백팩 경로에서는 WiFi 주소에만
+# 못박아 shade-bridge(Tailscale 주소)와 같은 포트를 나눠 쓴다.
+BIND="${LIVE_BIND:-0.0.0.0}"
 
 if [[ ! -x "$PY" ]]; then
   echo "python venv 이 없다: $PY" >&2
@@ -34,7 +37,9 @@ if ! "$PY" -c "import pymavlink" 2>/dev/null; then
 fi
 
 # 포트가 이미 쓰이고 있으면 미리 알려준다. 안 그러면 bind 실패 메시지만 뜬다.
-if ss -ulnp 2>/dev/null | grep -q ":${PORT}\b"; then
+# 특정 주소에 못박아 열 때는 다른 주소의 같은 포트와 안 부딪힌다 — 그때
+# 경고를 띄우면 거짓말이다 (shade-bridge 는 Tailscale 주소에만 바인딩한다).
+if [[ "$BIND" == "0.0.0.0" ]] && ss -ulnp 2>/dev/null | grep -q ":${PORT}\b"; then
   echo "⚠️  UDP ${PORT} 를 이미 누가 쓰고 있다:"
   ss -ulnp 2>/dev/null | grep ":${PORT}\b" | sed 's/^/    /'
   echo "    QGC 나 shade-bridge 다. 그쪽을 끄거나 다른 포트를 써라: $0 14551"
@@ -42,4 +47,4 @@ if ss -ulnp 2>/dev/null | grep -q ":${PORT}\b"; then
 fi
 
 echo "브라우저: http://localhost:${HTTP}"
-exec "$PY" "$REPO/web/live/mav_live.py" --port "$PORT" --http "$HTTP"
+exec "$PY" "$REPO/web/live/mav_live.py" --port "$PORT" --http "$HTTP" --bind "$BIND"

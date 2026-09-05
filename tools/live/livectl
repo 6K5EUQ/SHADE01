@@ -145,16 +145,21 @@ cmd_on() {
       #    rim3 에서 실제로 그랬다: 백팩은 10.0.0.100:14550 으로 보내는데
       #    트래커는 14551 을 듣고 있어 packets_down 33743 이 통째로 사라졌다.
       local bport; bport="$(backpack_send_port)"
-      if [[ "$bport" != "$want" ]]; then
-        echo "   ⚠️  백팩은 ${bport} 로 보내는데 트래커는 ${want} 를 듣는다 — ${bport} 로 맞춘다"
+      # 🔴 포트가 겹쳐도 대개 **주소로 피할 수 있다.** shade-bridge 는
+      #    Tailscale 주소에만 바인딩하므로(100.x:14550) WiFi 쪽
+      #    10.0.0.x:14550 은 비어 있다 — 트래커를 그 주소에 못박으면 둘이
+      #    같은 포트를 쓰면서 안 부딪힌다 (실측 rim3 2026-09-05).
+      #    0.0.0.0 으로 열면 브리지와 충돌해 시작조차 못 한다.
+      local wifi_ip
+      wifi_ip="$(ip -4 -br addr show 2>/dev/null \
+                 | grep -oE '10\.0\.0\.[0-9]+' | head -1 || true)"
+      if [[ -n "$wifi_ip" ]]; then
+        printf 'LIVE_UDP=%s\nLIVE_HTTP=%s\nLIVE_BIND=%s\n' \
+               "$bport" "$HTTP_PORT" "$wifi_ip" > "$ENV_FILE"
         want="$bport"
-        printf 'LIVE_UDP=%s\nLIVE_HTTP=%s\n' "$bport" "$HTTP_PORT" > "$ENV_FILE"
-        if port_taken_by_other "$bport"; then
-          echo "   ❌ ${bport} 를 다른 것이 쥐고 있다 — 백팩 텔레메트리를 못 받는다:"
-          ss -ulnp 2>/dev/null | grep -E "[:.]${bport}\b" | sed 's/^/       /'
-          echo "       shade-bridge 라면: systemctl --user stop shade-bridge"
-        else
-          systemctl --user restart "$UNIT"; sleep 1
+        systemctl --user restart "$UNIT"; sleep 1.2
+        if ! systemctl --user is-active --quiet "$UNIT"; then
+          echo "   ❌ ${wifi_ip}:${bport} 를 못 열었다:  ./qgc live log" >&2
         fi
       fi
       # 백팩이 먼저 밀어주므로 poker 는 대개 필요 없다. 그래도 띄워 둔다 —
