@@ -33,6 +33,7 @@ import sys
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import unquote
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 
@@ -108,6 +109,332 @@ SEVERITY = ['EMERG', 'ALERT', 'CRIT', 'ERROR', 'WARN', 'NOTICE', 'INFO', 'DEBUG'
 
 MAX_MESSAGES = 200
 
+# 실시간 기록물이 쌓이는 곳. `.ulg` 와 섞이지 않게 하위 폴더를 쓴다 —
+# qgclog 의 `_repair()` 가 형제 로그를 기증자로 찾으므로 `logs/` 평면에
+# tlog 를 끼워 넣으면 안 된다 (PROCEDURE.md "평면으로 쌓는다").
+LIVE_DIR = os.environ.get(
+    'LIVE_TLOG_DIR', os.path.join(HERE, '..', '..', 'logs', 'live'))
+
+# disarm 뒤 이만큼 더 받아 적고 닫는다. 착륙 직후의 경고·마지막 자세가
+# 잘리지 않게 한다 — 9/5 세션에서 Kill 이후 5초 안에 진단이 나왔다.
+REC_TAIL_S = 10.0
+
+
+class Recorder:
+    """ARM 구간을 원시 MAVLink(.tlog)로 받아 적는다.
+
+    QGC 표준 tlog 형식이다 — 프레임마다 **8바이트 빅엔디안 마이크로초 UTC**를
+    앞에 붙인 것. 그래서 QGC 로 바로 열리고 pymavlink 로도 재파싱된다.
+
+    🔴 읽기 전용 원칙은 그대로다. 이 클래스는 **디스크에만** 쓴다. 소켓으로
+       나가는 바이트는 여전히 0 이다.
+
+    왜 원시 바이트인가: 파싱에 실패한 프레임도 원본이 남는다. 화면에 안 나가는
+    필드도 나중에 다시 뽑을 수 있다 — 무엇이 필요할지는 사고가 난 뒤에 안다.
+    """
+
+    def __init__(self, dirpath, enabled=True):
+        self.dir = os.path.abspath(dirpath)
+        self.enabled = enabled
+        self.f = None
+        self.path = None
+        self.started = None        # 이 파일이 열린 시각 (time.time)
+        self.frames = 0
+        self.bytes = 0
+        self._closing_at = None    # disarm 후 닫을 시각 (monotonic)
+        self.last = None           # 마지막으로 닫은 파일 (화면 표시용)
+        self.error = None          # 디스크 문제를 화면에 드러낸다
+
+    def _open(self):
+        try:
+            os.makedirs(self.dir, exist_ok=True)
+            # 파일명은 **KST 로컬시각**이다. `.ulg` 가 UTC 라 헷갈리는 것을
+            # 문서가 반복해 경고하는데(PROCEDURE §1-3), 이 파일은 사람이
+            # 고르라고 있는 것이므로 조종자의 시계에 맞춘다. 안이 UTC 인 것과
+            # 무관하다 — 그래서 이름에 KST 를 박아 둔다.
+            name = time.strftime('%Y-%m-%d_%H-%M-%S_KST.tlog', time.localtime())
+            path = os.path.join(self.dir, name)
+            self.f = open(path, 'ab')
+            self.path = path
+            self.started = time.time()
+            self.frames = self.bytes = 0
+            self.error = None
+            print('기록 시작  %s' % path, flush=True)
+        except OSError as e:
+            # 디스크가 차거나 권한이 없어도 **트래킹은 계속돼야 한다.**
+            self.f = self.path = None
+            self.error = str(e)
+            print('기록 못 함: %s' % e, file=sys.stderr, flush=True)
+
+    def _close(self):
+        if self.f is None:
+            self.path = None
+            return
+        try:
+            self.f.close()
+        except OSError:
+            pass
+        if self.path:
+            dur = time.time() - self.started if self.started else 0
+            self.last = {'name': os.path.basename(self.path),
+                         'frames': self.frames, 'bytes': self.bytes,
+                         'dur': round(dur, 1)}
+            print('기록 종료  %s  (%d프레임 %.1fMB %.0f초)'
+                  % (self.path, self.frames, self.bytes / 1e6, dur), flush=True)
+        self.f = self.path = self.started = None
+        self._closing_at = None
+
+    def on_arm(self, armed):
+        """armed 가 **바뀐** 순간에만 불린다."""
+        if not self.enabled:
+            return
+        if armed:
+            self._closing_at = None       # 꼬리 대기 중에 다시 떴으면 이어 쓴다
+            if self.f is None:
+                self._open()
+        elif self.f is not None:
+            # 바로 닫지 않는다. REC_TAIL_S 동안 더 받아 적는다.
+            self._closing_at = time.monotonic() + REC_TAIL_S
+
+    def write(self, data):
+        """수신한 UDP 페이로드 그대로. 락 밖에서 부르지 마라 (st.lock 안)."""
+        if self.f is None:
+            return
+        if self._closing_at is not None and time.monotonic() >= self._closing_at:
+            self._close()
+            return
+        try:
+            # 8바이트 빅엔디안 마이크로초 — QGC tlog 규약.
+            self.f.write(int(time.time() * 1e6).to_bytes(8, 'big'))
+            self.f.write(data)
+            self.frames += 1
+            self.bytes += len(data) + 8
+        except OSError as e:
+            self.error = str(e)
+            print('기록 중단: %s' % e, file=sys.stderr, flush=True)
+            self._close()
+
+    def tick(self):
+        """프레임이 안 들어와도 꼬리 시간이 지나면 닫아야 한다."""
+        if self.f is not None and self._closing_at is not None \
+                and time.monotonic() >= self._closing_at:
+            self._close()
+
+    def status(self):
+        return {
+            'on': self.enabled,
+            'rec': self.f is not None,
+            'name': os.path.basename(self.path) if self.path else None,
+            'frames': self.frames,
+            'bytes': self.bytes,
+            'dur': round(time.time() - self.started, 1) if self.started else None,
+            'last': self.last,
+            'error': self.error,
+        }
+
+
+def read_tlog(path):
+    """tlog 를 [(t_us, bytes), ...] 로 읽는다. 형식이 깨진 지점에서 멈춘다.
+
+    QGC tlog = [8바이트 빅엔디안 us][MAVLink 프레임] 반복. 프레임 길이는
+    헤더에서 읽는다 (v2: 0xFD, payload len 은 두 번째 바이트).
+
+    ⚠️ 전원이 급단되면 마지막 프레임이 잘린다 — `.ulg` 와 같은 성질이다
+       (PROCEDURE "꼬리 잘림은 손상이 아니다"). 그 앞까지 읽고 조용히 끝낸다.
+    """
+    out = []
+    with open(path, 'rb') as f:
+        buf = f.read()
+    i, n = 0, len(buf)
+    while i + 8 <= n:
+        t_us = int.from_bytes(buf[i:i + 8], 'big')
+        i += 8
+        if i >= n:
+            break
+        magic = buf[i]
+        if magic == 0xFD:                      # MAVLink v2
+            if i + 3 > n:
+                break
+            plen = buf[i + 1]
+            incompat = buf[i + 2]
+            flen = 12 + plen + (13 if incompat & 0x01 else 0)
+        elif magic == 0xFE:                    # MAVLink v1
+            if i + 2 > n:
+                break
+            flen = 8 + buf[i + 1]
+        else:
+            break                              # 동기 상실 — 여기까지가 유효하다
+        if i + flen > n:
+            break
+        out.append((t_us, buf[i:i + flen]))
+        i += flen
+    return out
+
+
+class Player:
+    """녹화된 tlog 를 시간축에 맞춰 State 에 흘려 넣는다.
+
+    재생도 **실시간과 같은 handle() 을 통과한다.** 그래서 화면에 나오는 값이
+    실시간과 한 글자도 다르지 않다 — 재생 전용 경로를 따로 만들면 두 그림이
+    조용히 갈라진다.
+    """
+
+    def __init__(self, st):
+        self.st = st
+        self.frames = []
+        self.name = None
+        self.i = 0
+        self.speed = 1.0
+        self.playing = False
+        self.t0 = None             # 프레임 기준 시각(us)
+        self.wall = None           # 재생을 시작한 monotonic
+        self.base = 0.0            # 시작 시점의 재생 위치(초)
+        self.dur = 0.0
+        self.thread = None
+        self.stop = False
+
+    def load(self, path):
+        frames = read_tlog(path)
+        if not frames:
+            raise ValueError('읽을 프레임이 없다')
+        with self.st.lock:
+            self.frames = frames
+            self.name = os.path.basename(path)
+            self.t0 = frames[0][0]
+            self.dur = (frames[-1][0] - self.t0) / 1e6
+            self.i = 0
+            self.base = 0.0
+            self.playing = False
+            self._reset_state()
+        return {'name': self.name, 'frames': len(frames), 'dur': round(self.dur, 1)}
+
+    def _reset_state(self):
+        """st.lock 을 잡은 채로 부른다."""
+        st = self.st
+        st.d.clear()
+        st.track.clear()
+        st.track_total = 0
+        st._last_pt = None
+        st.messages.clear()
+        st.home = None
+        st.mission = []
+        st._seq += 1
+
+    def pos(self):
+        """지금 재생 위치(초)."""
+        if self.playing and self.wall is not None:
+            return min(self.base + (time.monotonic() - self.wall) * self.speed, self.dur)
+        return self.base
+
+    def _apply_upto(self, target_s):
+        """target_s 까지의 프레임을 State 에 먹인다. st.lock 안에서."""
+        mav = mavlink2.MAVLink(None)
+        mav.robust_parsing = True
+        while self.i < len(self.frames):
+            t_us, data = self.frames[self.i]
+            if (t_us - self.t0) / 1e6 > target_s:
+                break
+            try:
+                for m in mav.parse_buffer(data) or []:
+                    if m.get_type() == 'BAD_DATA':
+                        continue
+                    try:
+                        handle(m, self.st)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            self.i += 1
+        # 재생 중에는 링크가 살아 있는 것처럼 보여야 한다 — 화면의 '끊김'
+        # 표시는 실시간 전용 판정이다.
+        self.st.seen = time.monotonic()
+
+    def seek(self, sec):
+        sec = max(0.0, min(sec, self.dur))
+        with self.st.lock:
+            # 뒤로 갈 때는 상태를 지우고 처음부터 다시 먹인다. MAVLink 는
+            # 증분이라 되감기가 없다 — 앞 프레임을 안 먹으면 값이 남는다.
+            if sec < self.pos():
+                self._reset_state()
+                self.i = 0
+            self.base = sec
+            self.wall = time.monotonic()
+            self._apply_upto(sec)
+
+    def _run(self):
+        while not self.stop and self.playing:
+            with self.st.lock:
+                p = self.pos()
+                self._apply_upto(p)
+                if p >= self.dur:
+                    self.playing = False
+                    self.base = self.dur
+                    break
+            time.sleep(0.05)
+
+    def play(self):
+        with self.st.lock:
+            if not self.frames or self.playing:
+                return
+            if self.base >= self.dur:        # 끝에서 다시 누르면 처음부터
+                self._reset_state()
+                self.i = 0
+                self.base = 0.0
+            self.playing = True
+            self.wall = time.monotonic()
+        self.stop = False
+        if self.thread is None or not self.thread.is_alive():
+            self.thread = threading.Thread(target=self._run, daemon=True)
+            self.thread.start()
+
+    def pause(self):
+        with self.st.lock:
+            if self.playing:
+                self.base = self.pos()
+                self.playing = False
+
+    def set_speed(self, v):
+        with self.st.lock:
+            if self.playing:
+                self.base = self.pos()
+                self.wall = time.monotonic()
+            self.speed = max(0.1, min(v, 50.0))
+
+    def unload(self):
+        self.pause()
+        with self.st.lock:
+            self.frames = []
+            self.name = None
+            self.i = 0
+            self.base = self.dur = 0.0
+            self._reset_state()
+
+    def status(self):
+        if not self.frames:
+            return None
+        return {'name': self.name, 'playing': self.playing,
+                'pos': round(self.pos(), 2), 'dur': round(self.dur, 2),
+                'speed': self.speed, 'frames': len(self.frames)}
+
+
+def list_recordings(dirpath):
+    """logs/live/ 의 .tlog 목록. 최신 먼저."""
+    try:
+        names = [n for n in os.listdir(dirpath) if n.endswith('.tlog')]
+    except OSError:
+        return []
+    out = []
+    for n in names:
+        p = os.path.join(dirpath, n)
+        try:
+            stt = os.stat(p)
+        except OSError:
+            continue
+        out.append({'name': n, 'size': stt.st_size,
+                    'mtime': int(stt.st_mtime)})
+    out.sort(key=lambda x: x['mtime'], reverse=True)
+    return out
+
 
 def _finite(o):
     """NaN·Infinity 를 None 으로 바꾼다. 중첩 dict/list 까지 훑는다.
@@ -148,6 +475,12 @@ class State:
         self.sysid = None
         self.compid = None
 
+        self.rec = None            # Recorder. main() 이 꽂는다
+        self.player = None         # Player. main() 이 꽂는다
+        # 🔴 기록기가 보는 arm 상태는 d['armed'] 와 **따로** 둔다. 재생 중에는
+        #    d 가 과거 프레임의 값으로 덮이므로, 그것을 기준으로 삼으면 실제
+        #    기체가 arm 해도 파일이 안 갈린다.
+        self._rec_armed = None
         self.d = {}                # 화면에 그대로 나가는 값들
         self.track = []            # [[lat, lon, alt_rel], ...]
         self.messages = []         # STATUSTEXT 최근 것
@@ -202,6 +535,8 @@ class State:
                 'track_from': dropped + start,
                 'track': self.track[start:] if want_track else [],
                 'messages': self.messages[-40:],
+                'rec': self.rec.status() if self.rec else None,
+                'play': self.player.status() if self.player else None,
             }
 
 
@@ -235,7 +570,16 @@ def handle(msg, st):
             return
         st.sysid = msg.get_srcSystem()
         st.compid = msg.get_srcComponent()
-        d['armed'] = bool(msg.base_mode & mavlink2.MAV_MODE_FLAG_SAFETY_ARMED)
+        armed = bool(msg.base_mode & mavlink2.MAV_MODE_FLAG_SAFETY_ARMED)
+        # 바뀐 순간에만 기록기를 건드린다. 하트비트는 1Hz 로 계속 오므로
+        # 매번 부르면 파일을 여닫는 판정이 초마다 돈다.
+        # 재생 중이면 이 경로로 오는 것은 과거 프레임이다 — 기록기는 위쪽
+        # 수신 루프가 실기 하트비트로 따로 몬다.
+        replaying = st.player is not None and st.player.frames
+        if st.rec is not None and not replaying and armed != st._rec_armed:
+            st.rec.on_arm(armed)
+            st._rec_armed = armed
+        d['armed'] = armed
         d['mode'] = decode_px4_mode(msg.custom_mode, msg.base_mode)
         d['mav_type'] = msg.type
         d['system_status'] = msg.system_status
@@ -399,9 +743,18 @@ def receiver(sock, st):
     # 오래된 것을 버린다.
     parsers = {}                    # addr -> [MAVLink, 마지막 수신 monotonic]
     last_sweep = time.monotonic()
+    # 🔴 블로킹으로 두면 링크가 끊긴 순간 이 루프가 영영 멈춘다. 그러면
+    #    disarm 뒤 꼬리 시간이 지나도 파일이 안 닫혀 열린 채 남는다.
+    #    1초마다 깨어나 rec.tick() 을 돌린다.
+    sock.settimeout(1.0)
     while True:
         try:
             data, addr = sock.recvfrom(4096)
+        except socket.timeout:
+            if st.rec is not None:
+                with st.lock:
+                    st.rec.tick()
+            continue
         except OSError:
             continue
         if not data:
@@ -428,17 +781,38 @@ def receiver(sock, st):
         except Exception:
             continue
         with st.lock:
-            for m in msgs:
-                if m.get_type() == 'BAD_DATA':
-                    continue
-                try:
-                    handle(m, st)
-                except Exception:
-                    pass          # 한 메시지가 이상해도 수집은 계속돼야 한다
+            # 🔴 재생 중에는 들어오는 프레임을 화면에 반영하지 않는다. 섞으면
+            #    과거와 현재가 한 화면에서 엎치락뒤치락한다. 기록은 계속한다 —
+            #    재생을 보는 사이에도 실제 비행이 벌어질 수 있다.
+            replaying = st.player is not None and st.player.frames
+            if not replaying:
+                for m in msgs:
+                    if m.get_type() == 'BAD_DATA':
+                        continue
+                    try:
+                        handle(m, st)
+                    except Exception:
+                        pass      # 한 메시지가 이상해도 수집은 계속돼야 한다
+            else:
+                # 화면에는 안 넣더라도 arm 전환은 봐야 기록 파일이 갈린다.
+                for m in msgs:
+                    if m.get_type() != 'HEARTBEAT':
+                        continue
+                    if m.autopilot == mavlink2.MAV_AUTOPILOT_INVALID:
+                        continue
+                    a = bool(m.base_mode & mavlink2.MAV_MODE_FLAG_SAFETY_ARMED)
+                    if st.rec is not None and a != st._rec_armed:
+                        st.rec.on_arm(a)
+                    st._rec_armed = a
+            # handle() 뒤에 쓴다 — HEARTBEAT 이 파일을 여는 순간의 그 패킷도
+            # 기록에 들어가야 arm 시점이 파일 첫 프레임이 된다.
+            if st.rec is not None:
+                st.rec.write(data)
 
 
 class Handler(BaseHTTPRequestHandler):
     st = None
+    rec_dir = None
 
     def _send(self, code, body, ctype):
         if isinstance(body, str):
@@ -482,6 +856,50 @@ class Handler(BaseHTTPRequestHandler):
                 self.st.messages.clear()
             return self._send(200, '{"ok":true}', 'application/json')
 
+        # ── 재생 ──────────────────────────────────────────────────
+        # 기록된 .tlog 를 같은 화면에 흘린다. 프론트는 /api/state 하나만
+        # 보므로, 서버가 State 를 과거 값으로 채우면 그림이 그대로 나온다.
+        if path == '/api/recordings':
+            body = dumps_json({'dir': os.path.abspath(self.rec_dir),
+                               'items': list_recordings(self.rec_dir)})
+            return self._send(200, body, 'application/json; charset=utf-8')
+
+        if path.startswith('/api/play'):
+            pl = self.st.player
+            q = dict(kv.split('=', 1) for kv in query.split('&') if '=' in kv)
+            act = path[len('/api/play'):].lstrip('/')
+            try:
+                if act == 'load':
+                    name = unquote(q.get('name', ''))
+                    # 🔴 경로 탈출 방지 — 파일명만 받는다.
+                    if not name or '/' in name or '\\' in name or not name.endswith('.tlog'):
+                        return self._send(400, '{"error":"이름이 이상하다"}',
+                                          'application/json')
+                    full = os.path.join(self.rec_dir, name)
+                    if not os.path.isfile(full):
+                        return self._send(404, '{"error":"없는 파일"}',
+                                          'application/json')
+                    info = pl.load(full)
+                    return self._send(200, dumps_json({'ok': True, **info}),
+                                      'application/json; charset=utf-8')
+                if act == 'play':
+                    pl.play()
+                elif act == 'pause':
+                    pl.pause()
+                elif act == 'seek':
+                    pl.seek(float(q.get('t', 0)))
+                elif act == 'speed':
+                    pl.set_speed(float(q.get('v', 1)))
+                elif act == 'unload':
+                    pl.unload()
+                else:
+                    return self._send(404, '{"error":"모르는 동작"}', 'application/json')
+            except (ValueError, OSError) as e:
+                return self._send(400, dumps_json({'error': str(e)}),
+                                  'application/json; charset=utf-8')
+            return self._send(200, dumps_json({'ok': True, 'play': pl.status()}),
+                              'application/json; charset=utf-8')
+
         rel = 'index.html' if path == '/' else path.lstrip('/')
         full = os.path.normpath(os.path.join(PUBLIC, rel))
         if not full.startswith(PUBLIC):
@@ -517,9 +935,16 @@ def main():
     ap.add_argument('--bind', default='0.0.0.0',
                     help='UDP 바인딩 주소. 기본은 전부 — 백팩(10.0.0.x)과 '
                          '브리지(tailscale)가 서로 다른 인터페이스로 들어오기 때문이다')
+    ap.add_argument('--rec-dir', default=LIVE_DIR,
+                    help='실시간 기록(.tlog) 폴더. 기본은 리포의 logs/live/ '
+                         '— 이 PC 안에만 쓴다')
+    ap.add_argument('--no-record', action='store_true',
+                    help='ARM 구간 .tlog 기록을 끈다 (기본은 켜짐)')
     args = ap.parse_args()
 
     st = State()
+    st.rec = Recorder(args.rec_dir, enabled=not args.no_record)
+    st.player = Player(st)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # SO_REUSEADDR 을 켜지 않는다 — mav_bridge.py 와 같은 이유다. 조용히 포트를
@@ -554,17 +979,27 @@ def main():
     threading.Thread(target=receiver, args=(sock, st), daemon=True).start()
 
     Handler.st = st
+    Handler.rec_dir = os.path.abspath(args.rec_dir)
     srv = ThreadingHTTPServer(('127.0.0.1', args.http), Handler)
     srv.daemon_threads = True
 
     print('MAVLink UDP  %s:%d  (읽기 전용 — FC 로 아무것도 안 보낸다)'
           % (args.bind, args.port))
     print('라이브 페이지  http://127.0.0.1:%d' % args.http)
+    if st.rec.enabled:
+        print('기록          %s  (ARM 마다 새 .tlog)' % os.path.abspath(args.rec_dir))
+    else:
+        print('기록          꺼짐 (--no-record)')
     print('멈추려면 Ctrl-C')
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
         print('\n종료')
+    finally:
+        # 🔴 Ctrl-C 로 죽어도 파일을 닫는다. 안 닫으면 마지막 몇 프레임이
+        #    OS 버퍼에 남은 채 사라진다.
+        with st.lock:
+            st.rec._close()
 
 
 if __name__ == '__main__':

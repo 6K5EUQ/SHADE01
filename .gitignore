@@ -1,6 +1,9 @@
 __pycache__/
 *.pyc
 *.ulg
+# 실시간 기록(.tlog) — .ulg 와 같은 이유로 커밋하지 않는다 (크고, PC 로컬이다)
+*.tlog
+logs/live/
 .venv/
 
 # QGC app data and build trees (large, machine-local)

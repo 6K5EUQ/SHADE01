@@ -608,6 +608,9 @@ function bearing(from, to) {
 function render(s) {
   pollN++;
   const d = s.d || {};
+  // 재생 바는 값 렌더와 무관하게 항상 최신 상태로 둔다 — 아래 조기반환
+  // 경로가 여럿이라 여기서 먼저 부른다.
+  if (typeof renderPlay === 'function') renderPlay(s.play);
 
   // ② 링크·프리즈·경고 만료 — 조기반환과 무관하게 항상 돈다.
   const changed = s.seq !== lastSeq;
@@ -944,3 +947,91 @@ $('msgToggle').onclick = () => {
   $('msgToggle').textContent = c ? '펴기' : '접기';
 };
 poll();
+
+// ── 재생 ────────────────────────────────────────────────────────────
+// 서버가 State 를 과거 프레임으로 채우므로, 이 코드는 **조작만** 한다.
+// 값을 그리는 것은 위의 render() 가 그대로 한다 — 재생 전용 렌더 경로를
+// 만들면 실시간 그림과 조용히 갈라진다.
+const pb = {
+  bar: $('playBar'), pick: $('playPick'), toggle: $('playToggle'),
+  seek: $('playSeek'), time: $('playTime'), speed: $('playSpeed'),
+  exit: $('playExit'), open: $('recBtn'),
+  dragging: false,
+};
+
+const mmss = (s) => {
+  s = Math.max(0, Math.round(s || 0));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+};
+
+async function pbApi(path) {
+  try {
+    const r = await fetch('/api/play/' + path, { cache: 'no-store' });
+    return r.ok ? await r.json() : null;
+  } catch (e) { return null; }
+}
+
+async function pbList() {
+  try {
+    const r = await fetch('/api/recordings', { cache: 'no-store' });
+    if (!r.ok) return;
+    const j = await r.json();
+    pb.pick.innerHTML = '';
+    if (!j.items.length) {
+      const o = document.createElement('option');
+      o.textContent = '녹화 없음';  o.value = '';
+      pb.pick.appendChild(o);
+      return;
+    }
+    for (const it of j.items) {
+      const o = document.createElement('option');
+      o.value = it.name;
+      // 이름에서 날짜/시각만 뽑아 짧게. 파일명은 KST 다.
+      o.textContent = it.name.replace(/_KST\.tlog$/, '').replace(/_/g, ' ')
+        + '  (' + (it.size / 1e6).toFixed(1) + 'MB)';
+      pb.pick.appendChild(o);
+    }
+  } catch (e) { /* 서버가 없으면 조용히 둔다 */ }
+}
+
+pb.open.onclick = async () => {
+  const showing = !pb.bar.hidden;
+  if (showing) { pb.bar.hidden = true; return; }
+  await pbList();
+  pb.bar.hidden = false;
+  if (pb.pick.value) await pbApi('load?name=' + encodeURIComponent(pb.pick.value));
+};
+
+pb.pick.onchange = async () => {
+  if (pb.pick.value) await pbApi('load?name=' + encodeURIComponent(pb.pick.value));
+};
+
+// 재생/일시정지를 한 버튼으로 — 서버가 알려 준 지금 상태의 반대를 부른다.
+pb.toggle.onclick = async () => {
+  const cur = pb.toggle.dataset.playing === '1';
+  await pbApi(cur ? 'pause' : 'play');
+};
+
+pb.seek.oninput = () => { pb.dragging = true; };
+pb.seek.onchange = async () => {
+  const dur = +pb.seek.dataset.dur || 0;
+  await pbApi('seek?t=' + (dur * pb.seek.value / 1000));
+  pb.dragging = false;
+};
+pb.speed.onchange = () => pbApi('speed?v=' + pb.speed.value);
+pb.exit.onclick = async () => {
+  await pbApi('unload');
+  pb.bar.hidden = true;
+};
+
+// render() 가 매 폴 부른다 — 서버가 준 play 상태를 UI 에 반영한다.
+function renderPlay(p) {
+  document.body.classList.toggle('replaying', !!p);
+  if (!p) { pb.toggle.dataset.playing = '0'; return; }
+  if (pb.bar.hidden) pb.bar.hidden = false;   // 다른 창에서 걸었어도 보이게
+  pb.toggle.dataset.playing = p.playing ? '1' : '0';
+  setText(pb.toggle, p.playing ? '❚❚' : '▶');
+  setText(pb.time, mmss(p.pos) + ' / ' + mmss(p.dur));
+  pb.seek.dataset.dur = p.dur;
+  if (!pb.dragging && p.dur > 0) pb.seek.value = Math.round(p.pos / p.dur * 1000);
+}

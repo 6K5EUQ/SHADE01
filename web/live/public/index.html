@@ -66,7 +66,26 @@
           <option value="600">10분</option>
           <option value="0">전체</option>
         </select>
+        <!-- 재생. 녹화된 .tlog 를 같은 화면에 흘린다 — 실시간과 같은
+             handle() 을 통과하므로 그림이 한 글자도 안 다르다. -->
+        <button id="recBtn" title="녹화 재생">재생</button>
         <button id="msgToggle" title="서랍 접기/펴기">접기</button>
+      </div>
+      <!-- 재생 바. 평소엔 숨어 있고 '재생' 을 누르면 나온다. -->
+      <div id="playBar" hidden>
+        <select id="playPick" title="녹화 파일"></select>
+        <button id="playToggle" title="재생/일시정지">▶</button>
+        <input id="playSeek" type="range" min="0" max="1000" value="0"
+               title="위치" />
+        <span id="playTime" class="stats">0:00 / 0:00</span>
+        <select id="playSpeed" title="배속">
+          <option value="0.5">0.5×</option>
+          <option value="1" selected>1×</option>
+          <option value="2">2×</option>
+          <option value="4">4×</option>
+          <option value="10">10×</option>
+        </select>
+        <button id="playExit" title="실시간으로 돌아간다">실시간</button>
       </div>
       <div id="msgs"></div>
     </div>
