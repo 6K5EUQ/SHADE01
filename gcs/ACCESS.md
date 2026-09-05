@@ -42,6 +42,11 @@ gram 에 무언가를 설치하려면 **gram 앞에 앉아서** 하거나, gram 
 `yyrrm` 리모트는 **전부 제거했다.** 원본은 `github.com/6K5EUQ/SHADE01` 이고, 각 PC 에서
 `origin` 이 그것을 가리킨다.
 
+⚠️ **"전부" 가 아니었다.** gram 에는 9/6 까지 `origin = yyrrm` 이 남아 있었고, 그
+PC 에서 `git push origin main` 을 하면 조용히 **다른 저장소로** 올라갔다. 두 리모트가
+같은 이름 공간에 섞여 있으면 어느 쪽으로 밀었는지 출력 한 줄을 봐야만 안다 —
+지금은 gram 도 `origin` 하나뿐이다.
+
 ```bash
 git remote -v      # origin  https://github.com/6K5EUQ/SHADE01.git 만 나와야 한다
 ```
@@ -53,7 +58,8 @@ git remote -v      # origin  https://github.com/6K5EUQ/SHADE01.git 만 나와야
 |---|---|
 | `ku-dgs1` | ✅ origin 교체 완료 |
 | `rim3` | ✅ origin 교체 + 커밋 신원 `6k5euq` · **push 는 SSH 키로 해결** (2026-09-06, 아래) |
-| `gram-labtop` · `rim` · `central` | ⬜ **미처리** — 그때 꺼져 있었다 |
+| `gram-labtop` | ✅ origin 교체 완료 (2026-09-06). HTTPS + `credential.helper=store` 로 push 된다 |
+| `rim` · `central` | ⬜ **미처리** — 그때 꺼져 있었다 |
 
 미처리 PC 는 각각 한 번씩 돌려야 한다:
 
