@@ -42,6 +42,24 @@ POKE_SEC = 1.0
 QUIET_WARN = 10.0
 
 
+BACKPACK_HOST = os.environ.get('BACKPACK_IP', '10.0.0.1')
+
+
+def _ask_listen_port(host, default=14555):
+    """백팩에게 '너는 어느 포트로 듣냐' 고 직접 묻는다.
+
+    GET /mavlink → {"ports":{"listen":14555,"send":14550}, ...}
+    실패하면 ELRS 기본값 14555.
+    """
+    try:
+        import json as _json
+        import urllib.request
+        with urllib.request.urlopen('http://%s/mavlink' % host, timeout=3) as r:
+            return int(_json.loads(r.read().decode())['ports']['listen'])
+    except Exception:
+        return default
+
+
 def parse_hostport(s, default_port):
     if ':' in s:
         h, _, p = s.rpartition(':')
@@ -51,8 +69,9 @@ def parse_hostport(s, default_port):
 
 def main():
     ap = argparse.ArgumentParser(description='ELRS 백팩 깨우기 (빈 하트비트만 보낸다)')
-    ap.add_argument('--backpack', default=os.environ.get('BACKPACK', '10.0.0.1:14550'),
-                    help='백팩 주소 (기본 10.0.0.1:14550)')
+    ap.add_argument('--backpack', default=os.environ.get('BACKPACK', ''),
+                    help='백팩 주소. 비우면 /mavlink 에 물어본다 '
+                         '(기본 10.0.0.1:<listen 포트>)')
     # 🔴 기본값은 트래커가 실제로 듣는 포트를 따라간다. 여기만 14550 으로
     #    박아 두면 14551 로 비켜 앉은 PC(rim3·rim)에서는 poker 가 아무도 안
     #    듣는 포트로 부어 넣어 패킷 0 이 된다 — 유닛이 EnvironmentFile 로
@@ -65,7 +84,16 @@ def main():
                          '(기본 127.0.0.1:$LIVE_UDP, 없으면 14550)')
     args = ap.parse_args()
 
-    bp = parse_hostport(args.backpack, 14550)
+    # 🔴 백팩에 **말을 걸 포트**는 /mavlink 의 `listen` 이다 (`send` 가 아니다).
+    #    send=14550 은 백팩이 우리에게 **보내는** 포트고, listen=14555 가
+    #    백팩이 **듣는** 포트다. 여기를 헷갈리면 하트비트가 아무도 안 읽는
+    #    포트로 가고, 백팩은 GCS 주소를 영영 못 배운다 —
+    #    /mavlink 의 ip.gcs 가 "IP UNSET" 인 채로 남는다 (실측 rim3 2026-09-05:
+    #    백팩은 93패킷/12초를 만들고 있는데 보낼 곳을 몰라 버리고 있었다).
+    if args.backpack:
+        bp = parse_hostport(args.backpack, 14555)
+    else:
+        bp = (BACKPACK_HOST, _ask_listen_port(BACKPACK_HOST))
     to = parse_hostport(args.to, 14550)
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
