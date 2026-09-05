@@ -306,6 +306,30 @@ curl -s "http://localhost:4400/api/state?track=0" | python3 -m json.tool >/dev/n
 🟡 **PX4 모드는 `custom_mode` 상위 바이트에 있다.** pymavlink 의 `mode_mapping`
 은 ArduPilot 용이라 그대로 쓰면 엉뚱한 이름이 나온다.
 
+### 백팩에 붙었는데 QGC 도 이 페이지도 아무것도 안 뜬다 (2026-09-05 rim3)
+
+**노트북 잘못이 아니었다.** 순서대로 갈랐다:
+
+| 확인 | 결과 | 뜻 |
+|---|---|---|
+| `nmcli con show --active` | `ExpressLRS TX Backpack 17B49E` · `10.0.0.100/24` | AP 접속은 됐다 |
+| `ping 10.0.0.1` | ✅ 응답 | WiFi 링크는 살아 있다 |
+| `curl http://10.0.0.1/` | **200** | 백팩 자체는 멀쩡히 돈다 |
+| 빈 하트비트 10초 쏘기 | **0 바이트** | 백팩이 **텔레메트리를 안 보낸다** |
+| `curl http://10.0.0.1/config` | `"RadioMaster Boxer Internal 2.4GHz TX"` | ← **여기가 답** |
+
+`/config` 가 자기를 **TX 모듈**이라고 밝힌다. 그 WiFi 는 **펌웨어 업데이트용**이라
+MAVLink 를 중계하지 않는다. 백팩 텔레메트리가 흐르려면 조종기 쪽 설정이 필요하다:
+
+- TX **Link Mode = MAVLink**
+- 백팩 **Telemetry = wifi**
+
+둘 다 **조종기에서** 잡는 값이다 (README 「ELRS」 표). 노트북에서 할 수 있는 일이 없다.
+
+⚠️ 그리고 이때 **기체 FC 는 USB 가 빠져 있었다** (`/dev/ttyACM0` 없음, 14:45 부터
+브리지가 재시도 중). 조종기 백팩이 정상이어도 **기체가 꺼져 있으면** 보낼
+텔레메트리 자체가 없다. 백팩을 의심하기 전에 기체가 켜져 있는지부터 본다.
+
 ## 장애 대응
 
 | 증상 | 확인 | 대응 |
