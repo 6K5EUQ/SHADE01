@@ -112,8 +112,16 @@ const num = (e, a) => parseFloat(e.getAttribute(a));
   // '어디에도 안 나온다' 이다 — 고장 센서를 계기로 쓰지 않는 것이 핵심이다.
   ok('대기속도가 스트립에 없다', !D.getElementById('st-air'),
      D.getElementById('st-air') ? '아직 있다' : '없음');
-  const heads = [...svg.querySelectorAll('text')].map(t => t.textContent);
-  ok('좌측 테이프가 대지속도(GS)로 못박힘', heads.includes('대지속도') && heads.includes('GS m/s'));
+  // 테이프 머리말은 뺐다 (2026-09-05). 그래도 지켜야 할 것은 그대로다:
+  // 좌측 테이프에 **피토관 값이 오면 안 된다**. 고장 센서를 계기로 쓰는 순간
+  // 조종자가 그걸 읽고 판단한다. 값이 GS(수평속도)와 같은지로 확인한다.
+  const spdShown = parseFloat((D.getElementById('st-spd') || {}).textContent);
+  const tapeVal = [...svg.querySelectorAll('text')]
+    .map(t => parseFloat(t.textContent))
+    .filter(v => isFinite(v));
+  ok('좌측 테이프가 대지속도다 (피토관 아님)',
+     isFinite(spdShown) && tapeVal.includes(spdShown),
+     `스트립 속도=${spdShown} 테이프에 그 값이 있나`);
 
   // ── 색 예산 ─────────────────────────────────────────────────────
   note('■ 색 예산 — 색이 보이는 것 자체가 신호다');
@@ -147,15 +155,15 @@ const num = (e, a) => parseFloat(e.getAttribute(a));
   // WP 칸은 통합하면서 뺐다. 대신 남긴 6칸이 전부 있는지 본다 —
   // 하나라도 없으면 render 가 조용히 죽은 것이다.
   // 모터는 칸 하나가 아니라 기체 자리대로 넷이다 (2026-09-05).
-  const want = ['sc-spd', 'sc-alt', 'sc-batt', 'sc-cur', 'sc-sats',
+  const want = ['sc-spd', 'sc-alt', 'sc-batt', 'sc-cur', 'sc-sats', 'sc-eph',
                 'sc-mLF', 'sc-mRF', 'sc-mLB', 'sc-mRB'];
   const missing = want.filter((id) => !D.getElementById(id));
-  ok('계기판 9칸이 전부 있다', missing.length === 0, missing.join(',') || 'ok');
+  ok('계기판 10칸이 전부 있다', missing.length === 0, missing.join(',') || 'ok');
   // 모터 2×2 가 실제 기체 배치와 같은 자리에 있는지 — 좌전이 좌상단이어야 한다.
   const cellBox = (id) => D.getElementById(id).getBoundingClientRect();
   ok('모터 좌전이 우전 왼쪽', cellBox('sc-mLF').left < cellBox('sc-mRF').left);
   ok('모터 좌후가 좌전 아래', cellBox('sc-mLB').top > cellBox('sc-mLF').top);
-  const vals = ['st-cur', 'st-batt', 'st-spd', 'st-alt', 'st-sats']
+  const vals = ['st-cur', 'st-batt', 'st-spd', 'st-alt', 'st-sats', 'st-eph']
     .map((id) => (D.getElementById(id) || {}).textContent);
   ok('스트립 값이 채워진다', vals.every((v) => v && v !== ''), vals.join(' / '));
 

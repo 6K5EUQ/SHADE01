@@ -132,8 +132,13 @@ function drawChart(el, trk, spec) {
       const bc = modeColor(trk.modes[i].name);
       bands += `<rect x="${bx}" y="${PAD.t}" width="${bw}"
               height="${ih}" fill="${bc}" opacity=".10"/>`;
-      bands += `<rect x="${bx}" y="${PAD.t}" width="${bw}"
-              height="3" fill="${bc}" opacity=".85"/>`;
+      // 단 꼭대기의 3px 색 띠. 로그 뷰어에서는 모드 경계를 짚어 주지만,
+      // 라이브처럼 단이 세로로 붙어 쌓이면 **아래 단의 테두리처럼** 보여
+      // 차트마다 진한 선이 그어진 것으로 읽힌다. spec.bandTop 으로 끈다.
+      if (spec.bandTop !== false) {
+        bands += `<rect x="${bx}" y="${PAD.t}" width="${bw}"
+                height="3" fill="${bc}" opacity=".85"/>`;
+      }
       // 라벨은 보이는 영역 안쪽에 붙인다 — 확대해서 밴드 시작이 왼쪽 밖으로
       // 나가도 이름이 보여야 한다.
       const lx = Math.max(x(a) + 4, PAD.l + 4);

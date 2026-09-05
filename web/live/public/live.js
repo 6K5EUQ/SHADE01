@@ -196,13 +196,11 @@ function buildHUD() {
   h.spdBox = el('rect', { fill: '#0d1117', opacity: .92, stroke: 'var(--c-spd)', 'stroke-width': 1.5 }, svg);
   h.spdApex = el('polygon', { fill: '#0d1117', opacity: .92, stroke: 'var(--c-spd)', 'stroke-width': 1.5 }, svg);
   h.spdVal = el('text', { 'text-anchor': 'end', 'font-size': 22, fill: '#e6edf3' }, svg);
-  // 🔴 두 줄이다 — 한 줄이면 폭이 테이프(62~92px)를 넘어 잘린다.
-  //    MP 는 이 자리가 대기속도지만 이 기체 airspeed 는 고장 센서다.
-  //    자리만 같고 소스가 다르면 오독하므로 계기 면에 GS 라고 못박는다.
-  h.spdHead = el('text', { 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--muted)' }, svg);
-  h.spdHead.textContent = '대지속도';
-  h.spdHead2 = el('text', { 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--muted)' }, svg);
-  h.spdHead2.textContent = 'GS m/s';
+  // 테이프 머리말(대지속도 GS / 고도 AGL)은 뺐다 (2026-09-05). 눈금과 겹쳐
+  // 지저분하고, 어느 값인지는 아래 계기판이 '속도'·'고도' 로 이미 적는다.
+  // ⚠️ 좌측 테이프가 **대지속도**라는 사실 자체는 여전히 중요하다 —
+  //    피토관은 고장품이라 이 자리에 오면 안 된다. 그 근거는
+  //    web/live/README.md 「고장 센서 격리」에 남아 있다.
 
   // ④ 우측 테이프 — 고도 AGL + 지면대 + 펜스 천장선
   h.altBg = el('rect', { fill: 'rgba(13,17,23,.55)' }, svg);
@@ -211,13 +209,9 @@ function buildHUD() {
   h.gndBand = el('rect', { y: 0, fill: 'var(--bad)', opacity: .10 }, h.altSlide);
   h.gndLine = el('line', { x1: 0, y1: 0, y2: 0, stroke: 'var(--dim)', 'stroke-width': 2 }, h.altSlide);
   h.fenceLine = el('line', { x1: 0, y1: -FENCE.VER * PPU_ALT, y2: -FENCE.VER * PPU_ALT, stroke: 'var(--bad)', 'stroke-width': 2 }, h.altSlide);
-  // 🔴 펜스 라벨은 눈금 숫자와 **같은 높이에 두면 안 된다.** 50m 눈금 글자가
-  //    y=-400+4 인데 라벨을 y=-400-4 에 두면 8px 차이로 겹쳐 둘 다 못 읽는다
-  //    (실측 2026-09-05: 빨간 '펜스 50 설정값' 위에 흰 '50' 이 얹혔다).
-  //    선 위로 12px 띄우고, 글자도 '펜스'로 줄인다 — 무엇의 선인지만 알면 된다.
-  h.fenceTxt = el('text', { x: 4, y: -FENCE.VER * PPU_ALT - 12, 'font-size': 10,
-                            'font-weight': 700, fill: 'var(--bad)' }, h.altSlide);
-  h.fenceTxt.textContent = '펜스 ' + FENCE.VER;
+  // 펜스는 **선만** 그린다 (2026-09-05). 눈금 숫자와 겹쳐 둘 다 못 읽던 라벨을
+  // 뺐다 — 고도 테이프에서 빨간 가로선 하나면 '여기가 천장' 이라는 뜻이 통한다.
+  // 값(50m)은 테이프 눈금이 이미 말해 준다.
   for (let v = -10; v <= 120; v += 2) {
     const y = -v * PPU_ALT, ten = v % 10 === 0;
     el('line', { x1: 0, y1: y, x2: ten ? 14 : 8, y2: y, stroke: '#e6edf3', 'stroke-width': ten ? 1.6 : 1, opacity: ten ? 1 : .6 }, h.altSlide);
@@ -229,10 +223,7 @@ function buildHUD() {
   h.altBox = el('rect', { fill: '#0d1117', opacity: .92, stroke: 'var(--c-alt)', 'stroke-width': 1.5 }, svg);
   h.altApex = el('polygon', { fill: '#0d1117', opacity: .92, stroke: 'var(--c-alt)', 'stroke-width': 1.5 }, svg);
   h.altVal = el('text', { 'text-anchor': 'start', 'font-size': 22, fill: '#e6edf3' }, svg);
-  h.altHead = el('text', { 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--muted)' }, svg);
-  h.altHead.textContent = '고도 AGL';
-  h.altHead2 = el('text', { 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--muted)' }, svg);
-  h.altHead2.textContent = '홈기준 m';
+
 
   // ⑤ 상승률 리본 — 숫자는 안 쓴다. 크기보다 부호와 추세라 막대가 더 빠르다.
   h.vsiTicks = [];
@@ -335,16 +326,12 @@ function layout(w, hh) {
   box(h.spdBox, 0, cy - 15, TAPE_W, 30);
   setAttr(h.spdApex, 'points', `${TAPE_W},${cy - 9} ${TAPE_W + 12},${cy} ${TAPE_W},${cy + 9}`);
   setAttr(h.spdVal, 'x', TAPE_W - 6); setAttr(h.spdVal, 'y', cy + 8);
-  setAttr(h.spdHead, 'x', TAPE_W / 2); setAttr(h.spdHead, 'y', AY0 + 13);
-  setAttr(h.spdHead2, 'x', TAPE_W / 2); setAttr(h.spdHead2, 'y', AY0 + 25);
 
   // 우 테이프
   box(h.altBg, W - TAPE_W, AY0, TAPE_W, AH);
   box(h.altBox, W - TAPE_W, cy - 15, TAPE_W, 30);
   setAttr(h.altApex, 'points', `${W - TAPE_W},${cy - 9} ${W - TAPE_W - 12},${cy} ${W - TAPE_W},${cy + 9}`);
   setAttr(h.altVal, 'x', W - TAPE_W + 6); setAttr(h.altVal, 'y', cy + 8);
-  setAttr(h.altHead, 'x', W - TAPE_W / 2); setAttr(h.altHead, 'y', AY0 + 13);
-  setAttr(h.altHead2, 'x', W - TAPE_W / 2); setAttr(h.altHead2, 'y', AY0 + 25);
   setAttr(h.gndBand, 'width', TAPE_W); setAttr(h.gndBand, 'height', 80);
   setAttr(h.gndLine, 'x2', TAPE_W);
   setAttr(h.fenceLine, 'x2', TAPE_W);
@@ -376,9 +363,15 @@ const CHARTS = [
   { id: 'k-alt', title: '고도', on: true, series: [
       { key: 'alt', color: 'var(--c-alt)', label: '고도', axis: 'left', weight: 2, unit: 'm' },
       { key: 'climb', color: 'var(--c-spd)', label: '상승률', axis: 'right', unit: 'm/s' }] },
+  // 두 속도의 출처가 다르다 — 이름에 그대로 적는다.
+  //   GPS 속도    GLOBAL_POSITION_INT 의 vx·vy 합성 (EKF 융합). 믿는 값.
+  //   피토관 속도  VFR_HUD.airspeed. 🔴 이 기체는 고장품이다 — 정지 시
+  //               −4.7~−5.0 m/s (SENS_DPRES_OFF=-4.52). dim 으로 흐리게 둬
+  //               같은 굵기로 나란히 놓이지 않게 한다 (HUD 가 좌측 테이프를
+  //               '대지속도' 로 못박은 것과 같은 이유).
   { id: 'k-spd', title: '속도', on: true, series: [
-      { key: 'spd', color: 'var(--c-spd)', label: '수평속도', axis: 'left', weight: 2, unit: 'm/s' },
-      { key: 'aspd', color: '#a371f7', label: '대기속도', axis: 'left', unit: 'm/s' }] },
+      { key: 'spd', color: 'var(--c-spd)', label: 'GPS 속도', axis: 'left', weight: 2, unit: 'm/s' },
+      { key: 'aspd', color: '#a371f7', label: '피토관 속도(고장)', axis: 'left', dim: true, unit: 'm/s' }] },
   { id: 'k-pwr', title: '전력', on: true, series: [
       { key: 'cur', color: 'var(--c-cur)', label: '전류', axis: 'left', weight: 2, unit: 'A' },
       { key: 'volt', color: 'var(--c-volt)', label: '전압', axis: 'right', unit: 'V' }],
@@ -472,11 +465,9 @@ function buildCharts() {
   }
   host.innerHTML = want.map((c) => `
     <div class="lchart">
-      <!-- 계열 이름은 chart.js 가 축 머리말로 이미 적는다 (색까지 같이).
-           여기서 또 적으면 같은 말이 두 번이다 — 그 자리는 현재값에 준다. -->
-      <div class="now" id="n-${c.id}"></div>
+      <!-- 계열 이름은 chart.js 가 축 머리말로 적고, 지금 값은 왼쪽 계기판이
+           크게 말한다. 여기에 또 띄우면 같은 숫자가 화면에 두 번이다. -->
       <svg id="${c.id}"></svg>
-      <div class="tip" id="tip-${c.id}"></div>
     </div>`).join('');
   for (const c of want) bindHover(c);
   renderCharts();
@@ -495,15 +486,17 @@ function buildToc() {
   });
 }
 
-/** 마우스를 올린 지점의 값을 읽어 준다 (로그 뷰어 log.html 과 같은 관용구).
+/** 마우스를 올린 지점에 세로 커서선을 세운다.
  *
- * 흘러가는 화면이라 커서를 올린 동안에는 **그 시각을 붙잡아** 다시 그린다 —
- * 안 그러면 읽는 사이에 그래프가 밀려 다른 값을 가리킨다.
+ * 값 말풍선은 안 띄운다 (2026-09-05) — 지금 값은 왼쪽 계기판이 크게 말하고,
+ * 없는 값까지 `전류 –A` 처럼 적어 두면 화면에 쓰레기만 는다. 커서선은
+ * 남긴다: 여러 단을 세로로 훑을 때 같은 시각을 짚어 주는 것이 그 선이다.
+ *
+ * 흘러가는 화면이라 커서를 올린 동안에는 **그 시각을 붙잡아** 창을 멈춘다.
  */
 function bindHover(c) {
   const el = $(c.id);
-  const tip = $('tip-' + c.id);
-  if (!el || !tip || el._bound) return;
+  if (!el || el._bound) return;
   el._bound = true;
 
   const move = (e) => {
@@ -511,38 +504,8 @@ function bindHover(c) {
     if (!g || !trk.n) return;
     const r = el.getBoundingClientRect();
     // _geom.tAt 은 viewBox 좌표를 받는다. 화면 px → viewBox px 로 환산한다.
-    const vx = (e.clientX - r.left) * (g.W / r.width);
-    const t = g.tAt(vx);
+    const t = g.tAt((e.clientX - r.left) * (g.W / r.width));
     if (t < g.v0 || t > g.v1) { hide(); return; }
-
-    const i = Math.max(0, Math.min(trk.n - 1, Math.round(t * trk.hz)));
-    const ago = trk.dur - t;
-    let html = `<div class="t">${ago < 1 ? '지금' : '-' + ago.toFixed(1) + 's'}` +
-               `${modeAt(t) ? ' · ' + modeAt(t) : ''}</div>`;
-    for (const sx of c.series) {
-      const arr = trk[sx.key];
-      const v = arr ? arr[i] : null;
-      html += `<div class="r"><span class="d" style="background:${sx.color}"></span>` +
-              `<span class="n">${sx.label}</span>` +
-              `<b>${v == null ? '–' : (+v).toFixed(2)}</b>` +
-              (sx.unit ? `<i>${sx.unit}</i>` : '') + '</div>';
-    }
-    tip.innerHTML = html;
-    tip.style.opacity = '1';
-
-    // 커서 옆에 두되 단 밖으로 안 나가게 접는다.
-    const sec = el.parentElement.getBoundingClientRect();
-    const w = tip.offsetWidth, hh = tip.offsetHeight;
-    let x = e.clientX - sec.left + 14;
-    if (x + w > sec.width - 4) x = e.clientX - sec.left - 14 - w;
-    if (x < 4) x = 4;
-    let y = e.clientY - sec.top - hh - 12;
-    if (y < 4) y = e.clientY - sec.top + 16;
-    if (y + hh > sec.height - 4) y = Math.max(4, sec.height - hh - 4);
-    tip.style.left = x + 'px';
-    tip.style.top = y + 'px';
-
-    // 커서 세로선. chart.js 가 만들어 둔 .cursor 를 그대로 쓴다.
     const cur = el.querySelector('.cursor');
     if (cur) {
       cur.setAttribute('x1', g.x(t)); cur.setAttribute('x2', g.x(t));
@@ -552,7 +515,6 @@ function bindHover(c) {
   };
 
   const hide = () => {
-    tip.style.opacity = '0';
     const cur = el.querySelector('.cursor');
     if (cur) cur.style.display = 'none';
     hoverT = null;
@@ -583,17 +545,10 @@ function renderCharts() {
     if (!el) continue;
     drawChart(el, trk, {
       series: c.series, bands: true, thresholds: c.thresholds,
+      bandTop: false,         // 단 꼭대기 색 띠 끔 — 아래 단 테두리처럼 보인다
       relTime: true,          // x축을 "몇 초 전" 으로
       view: { t0, t1: Math.max(t1, t0 + 1e-3) },
     });
-    const s0 = c.series[0];
-    const arr = trk[s0.key] || [];
-    const v = arr.length ? arr[arr.length - 1] : null;
-    const n = $('n-' + c.id);
-    if (n) {
-      setText(n, v == null ? '' : v.toFixed(1) + (s0.unit || ''));
-      n.style.color = s0.color;
-    }
   }
 }
 
@@ -791,6 +746,11 @@ function render(s) {
   // 위성은 개수와 fix 를 같이 본다 — 8기라도 fix 가 없으면 위치는 없다.
   setText($('st-sats'), d.sats != null ? String(d.sats) : '—');
   sc('sc-sats', d.fix != null && d.fix < 3 ? 'bad' : (d.sats != null && d.sats < 8) ? 'warn' : '');
+
+  // eph — fix 가 3D 를 유지한 채 이 값이 먼저 부푸는 것이 위치 열화의 첫 징후다.
+  // 실측 평소 0.15~0.23m. 1m 넘으면 노랑, 3m 넘으면 빨강.
+  setText($('st-eph'), d.eph != null ? d.eph.toFixed(2) : '—');
+  sc('sc-eph', d.eph != null && d.eph > 3 ? 'bad' : d.eph != null && d.eph > 1 ? 'warn' : '');
 
   // 모터 4개. 기체에 붙은 자리 그대로 2×2 로 놓인다 — 절대값보다
   // **넷이 서로 비슷한가**가 판정이다.

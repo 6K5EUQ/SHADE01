@@ -29,6 +29,9 @@
 
       <div class="sc" id="sc-cur"><span class="k">전류</span><b id="st-cur">—</b><i>A</i></div>
       <div class="sc" id="sc-sats"><span class="k">위성</span><b id="st-sats">—</b><i>기</i></div>
+      <!-- eph — 위성 수가 많아도 이 값이 부풀면 위치가 흔들린다.
+           실측 평소 0.15~0.23m 라 1m 를 넘는 것 자체가 신호다. -->
+      <div class="sc" id="sc-eph"><span class="k">위치 오차</span><b id="st-eph">—</b><i>m</i></div>
 
       <div class="sc mot" id="sc-mLF"><span class="k">모터 좌전</span><b id="st-mLF">—</b><i>%</i></div>
       <div class="sc mot" id="sc-mRF"><span class="k">모터 우전</span><b id="st-mRF">—</b><i>%</i></div>
