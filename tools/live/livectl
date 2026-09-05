@@ -55,16 +55,23 @@ install_unit() {
 #   backpack — 조종기 백팩 AP 에 붙어 있다 (10.0.0.1 이 응답)
 #   none     — 둘 다 아니다
 detect_path() {
-  # 1) USB/브리지 우선. FC 가 이 PC 에 꽂혀 있거나 브리지가 돌고 있으면 그 경로다.
-  if ls /dev/ttyACM* /dev/ttyUSB* >/dev/null 2>&1; then echo usb; return; fi
-  if pgrep -f mav_bridge.py >/dev/null 2>&1; then echo usb; return; fi
-  # 다른 PC 의 브리지가 밀어주는 경우 — 이미 프레임이 들어오고 있는지로 본다.
+  # 1) 이미 프레임이 들어오는 중이면 그게 정답이다 — 어느 경로든 상관없다.
   if systemctl --user is-active --quiet "$UNIT" 2>/dev/null && \
      command -v curl >/dev/null 2>&1; then
     if curl -s --max-time 2 "http://127.0.0.1:${HTTP_PORT}/api/state?track=0" 2>/dev/null \
        | grep -q '"live": true'; then echo usb; return; fi
   fi
-  # 2) 백팩. AP 에 붙어 있으면 10.0.0.1 이 ping 에 답한다.
+
+  # 2) FC 가 이 PC 에 **실제로 꽂혀 있으면** USB 경로.
+  #
+  # 🔴 "브리지 프로세스가 돈다" 를 근거로 쓰면 안 된다. 브리지는 포트가 없어도
+  #    Restart=always 로 계속 살아 있고 /dev/ttyACM0 을 무한 재시도한다 —
+  #    FC 를 뽑아도 pgrep 은 잡히므로 USB 로 오판해 백팩 poker 를 안 띄운다
+  #    (rim3 에서 실제로 그랬다: FC 뽑힌 지 30분인데 "경로: USB 직결/브리지").
+  #    장치 파일이 있는지로만 판단한다.
+  if ls /dev/ttyACM* /dev/ttyUSB* >/dev/null 2>&1; then echo usb; return; fi
+
+  # 3) 백팩. AP 에 붙어 있으면 10.0.0.1 이 ping 에 답한다.
   if ping -c1 -W1 "$BACKPACK_IP" >/dev/null 2>&1; then echo backpack; return; fi
   echo none
 }
