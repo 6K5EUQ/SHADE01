@@ -4,6 +4,8 @@
 #   ./qgc sync              오늘(KST) 비행을 받아 올린다
 #   ./qgc sync 2026-09-05   그날 것
 #   ./qgc sync --dry        무엇을 받고 올릴지 보여주기만
+#   ./qgc sync --all        서버 기준 증분을 무시하고 FC 전체를 훑는다
+#   ./qgc sync --prune      서버에서 **야외 비행이 아닌 것**을 지운다 (FC 안 건드림)
 #   ./qgc sync --verify     5회씩 받아 바이트 다수결로 복원 (느리지만 정확)
 #
 # 왜 이게 있나: 손으로 하면 브리지 정지 → fcfetch → 브리지 복구 → scp →
@@ -14,6 +16,9 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 LOCAL="$REPO/logs"
+# 중간 산물 자리. 리포를 더럽히지 않는다.
+SCRATCH="${TMPDIR:-/tmp}/shade-sync.$$"
+mkdir -p "$SCRATCH"
 
 # ── 설정 ────────────────────────────────────────────────────────────
 # 🔴 리포가 public 이라 주소를 여기 적지 않는다. web/tools/hosts.conf 에 적는다.
@@ -58,12 +63,14 @@ UPLOAD_BADGES="${SYNC_BADGES:-flight hover}"
 # ⚠️ 받는 시간이 N 배가 된다. 기본은 꺼 둔다 — 켜는 것은 정확도가 필요할 때다.
 VOTE_N="${SYNC_VOTE:-0}"
 
-DRY=0; DATE=""
+DRY=0; DATE=""; ALL=0; PRUNE=0
 for a in "$@"; do
   case "$a" in
     --dry) DRY=1 ;;
     --min-size=*) MIN_MB="${a#*=}" ;;
     --all-badges) UPLOAD_BADGES="flight hover ground noarm unknown" ;;
+    --all) ALL=1 ;;
+    --prune) PRUNE=1 ;;
     --verify) VOTE_N=5 ;;
     --verify=*) VOTE_N="${a#*=}" ;;
     -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
@@ -72,18 +79,93 @@ for a in "$@"; do
   esac
 done
 
-# 날짜는 **UTC** 다 — FC 의 폴더 이름이 UTC 이기 때문이다. 인자를 안 주면
-# 오늘(KST) 비행이 들어 있을 UTC 폴더를 고른다.
-# ⚠️ KST = UTC+9 라 KST 09시 이전 비행은 **어제 UTC 폴더**에 있다. 그래서
-#    인자 없이 부르면 두 폴더를 다 훑는다.
+# 날짜 폴더는 **UTC** 다 (FC 가 그렇게 만든다).
+#
+# 기본 동작은 **서버 기준 증분**이다 — 정본 보관소가 가진 마지막 로그보다 뒤인
+# 것만 받는다. 날짜를 인자로 주면 그 폴더만 보고, `--all` 이면 자르지 않는다.
+#
+# 왜 서버가 기준인가: 로컬 `logs/` 는 PC 마다 다르고 지웠다 받았다 한다.
+# **서버는 한 곳이고 정본**이라, "무엇까지 반영됐나" 를 물어볼 곳이 거기뿐이다.
+CUTOFF=""
 if [ -n "$DATE" ]; then
   DIRS=("$DATE")
+elif [ "$ALL" = 1 ]; then
+  DIRS=()            # 아래에서 FC 의 폴더 전부를 읽는다
 else
-  DIRS=("$(date -u +%F)" "$(date -u -d yesterday +%F)")
+  DIRS=()
 fi
+
+pick_python() {
+  for c in "${QGCLOG_PYTHON:-}" "$REPO/.venv/bin/python" \
+           "$REPO/venv-ardupilot/bin/python" python3; do
+    [ -n "$c" ] || continue
+    command -v "$c" >/dev/null 2>&1 && "$c" -c "import pyulog,numpy" >/dev/null 2>&1 && { echo "$c"; return 0; }
+  done
+  return 1
+}
+PY_EARLY="$(pick_python || echo python3)"
 
 say() { printf '%s\n' "$*"; }
 fail() { printf '✗ %s\n' "$*" >&2; }
+
+# ── 서버 정리 (--prune) ─────────────────────────────────────────────
+# 서버에 **야외 비행만** 남긴다. FC 를 안 건드리므로 브리지도 안 멈춘다.
+#
+# 🔴 판정하려면 파일을 읽어야 하고, 그러려면 이 PC 에 사본이 있어야 한다.
+#    **사본이 없는 것은 건드리지 않는다** — 못 읽는 것을 지우면 그게 무엇이었는지
+#    영영 모른다. (`logsource.py` 가 받아올 수 있지만, 지우기 위해 내려받는
+#    것은 순서가 거꾸로다.)
+if [ "$PRUNE" = 1 ]; then
+  PY_P="$(pick_python)" || { fail "pyulog 를 가진 python 이 없다"; exit 1; }
+  say "== 서버 정리 =="
+  names=$(ssh -n -o BatchMode=yes -o ConnectTimeout=30 "$SERVER" \
+          "ls '$SERVER_LOGS'/*.ulg 2>/dev/null | xargs -rn1 basename" 2>/dev/null)
+  [ -n "$names" ] || { say "  서버가 비어 있다"; exit 0; }
+  say "  서버 $(printf '%s\n' "$names" | wc -l)개"
+
+  cand=(); nolocal=0
+  while read -r b; do
+    [ -n "$b" ] || continue
+    if [ -e "$LOCAL/$b" ]; then cand+=("$LOCAL/$b"); else
+      printf '   ? %-34s 로컬에 없다 — 건드리지 않는다\n' "$b"; nolocal=$((nolocal+1)); fi
+  done <<< "$names"
+  [ ${#cand[@]} -gt 0 ] || { say "  판정할 것이 없다"; exit 0; }
+
+  del="$SCRATCH/prune.txt"; : > "$del"
+  keep=0
+  while IFS=$'\t' read -r v why pth; do
+    [ -n "$v" ] || continue
+    b=$(basename "$pth")
+    if [ "$v" = "keep" ] && grep -qw -- "$why" <<< "$UPLOAD_BADGES"; then
+      keep=$((keep+1))
+    else
+      printf '   − %-34s %s\n' "$b" "$why"
+      printf '%s\n' "$b" >> "$del"
+    fi
+  done < <("$PY_P" "$REPO/web/tools/uploadable.py" "${cand[@]}" 2>/dev/null)
+
+  ndel=$(grep -c . "$del" || true)
+  say "  남길 야외 비행 ${keep}개 / 지울 것 ${ndel}개${nolocal:+ / 판정 못 함 ${nolocal}개}"
+  [ "$ndel" -gt 0 ] || { say "  ✅ 이미 야외 비행만 있다"; exit 0; }
+
+  if [ "$DRY" = 1 ]; then say "  [dry] 실제로는 안 지웠다"; exit 0; fi
+
+  scp -q -o BatchMode=yes "$del" "$SERVER:/tmp/shade_prune.txt" || { fail "목록 전송 실패"; exit 1; }
+  # glob 을 쓰지 않는다 — 이름을 한 줄씩 받아 그것만 지운다.
+  ssh -n -o BatchMode=yes "$SERVER" \
+    'cd ~/shade01-data/logs && b=$(ls *.ulg|wc -l) && n=0 && while read -r f; do [ -f "$f" ] && rm -f -- "$f" && n=$((n+1)); done < /tmp/shade_prune.txt; echo "  지움 $n개   $b -> $(ls *.ulg|wc -l)"; rm -f /tmp/shade_prune.txt' \
+    || { fail "삭제 실패"; exit 1; }
+
+  say "== 서버 반영 =="
+  ssh -n -o BatchMode=yes "$SERVER" "sudo systemctl restart $SERVER_UNIT" || fail "서비스 재시작 실패"
+  for _ in $(seq 1 12); do
+    h=$(curl -s --max-time 20 "$PUBLIC_URL/api/health" 2>/dev/null)
+    case "$h" in *'"ok":true'*) say "  $h"; break ;; esac
+    sleep 5
+  done
+  exit 0
+fi
+
 
 # ── 브리지 ──────────────────────────────────────────────────────────
 # FC 시리얼 포트는 하나뿐이다. 브리지가 잡고 있으면 MAVFTP 가 못 붙는다.
@@ -127,7 +209,10 @@ restore() {
 # 🔴 PIPE 를 빠뜨리면 안 된다. 출력을 `| head` 로 받는 순간 SIGPIPE 로 죽는데,
 #    그때 EXIT 트랩이 안 돌아 **브리지가 내려간 채 남는다** — 실측으로 물렸다.
 #    HUP 은 ssh 세션이 끊길 때 온다.
-trap restore EXIT INT TERM HUP PIPE
+# 🔴 정리는 restore 와 **따로** 둔다. restore 는 브리지를 멈췄을 때만 도는데,
+#    임시 디렉토리는 어느 경로로 끝나든 지워야 한다.
+cleanup() { restore; rm -rf "$SCRATCH" 2>/dev/null || true; }
+trap cleanup EXIT INT TERM HUP PIPE
 
 # ── 1. FC 목록 ──────────────────────────────────────────────────────
 say "== FC 로그 목록 =="
@@ -140,8 +225,52 @@ else
 fi
 
 scp -q -o BatchMode=yes -o ConnectTimeout=60 \
-    "$REPO/tools/qgclog/fcfetch.py" "$REPO/tools/qgclog/fcvote.py" "$FC_HOST:/tmp/" || {
+    "$REPO/tools/qgclog/fcfetch.py" "$REPO/tools/qgclog/fcvote.py" \
+    "$REPO/tools/qgclog/fclist.py" "$REPO/tools/qgclog/lognum.py" "$FC_HOST:/tmp/" || {
   fail "fcfetch.py 전송 실패"; exit 1; }
+
+# ── 서버 기준 증분 ──────────────────────────────────────────────────
+# 정본 보관소가 가진 **마지막 로그의 UTC 시각**을 구한다. 그보다 뒤인 것만 받는다.
+#
+# ⚠️ 서버 API 의 `utc` 필드는 이름과 달리 **KST** 다. 그래서 API 가 아니라
+#    **파일명**으로 계산한다 — 파일명이 FC 경로와 같은 기준(UTC)이라 변환이
+#    한 번뿐이다. 두 이름 형식의 시간대가 다른 것은 since.py 가 다룬다.
+if [ -z "$DATE" ] && [ "$ALL" != 1 ]; then
+  srvnames=$(ssh -n -o BatchMode=yes -o ConnectTimeout=30 "$SERVER" \
+             "ls '$SERVER_LOGS'/*.ulg 2>/dev/null | xargs -rn1 basename" 2>/dev/null)
+  if [ -z "$srvnames" ]; then
+    say "  서버가 비어 있다 — FC 전체를 훑는다"
+  else
+    CUTOFF=$(printf '%s\n' "$srvnames" | python3 "$HERE/since.py" cutoff)
+    if [ -n "$CUTOFF" ]; then
+      # ⚠️ `date -d "<t> UTC +9 hours"` 는 오프셋을 두 번 먹어 9시간이 더 간다.
+      #    TZ 로 변환시킨다 — 실측으로 09-05 18:34 를 09-06 03:34 로 찍었다.
+      say "  서버 마지막 로그: $CUTOFF UTC (KST $(TZ=Asia/Seoul date -d "$CUTOFF UTC" '+%m-%d %H:%M' 2>/dev/null))"
+    fi
+  fi
+fi
+
+# 훑을 폴더를 정한다. 인자로 날짜를 줬으면 그것만, 아니면 FC 의 폴더 목록에서
+# cutoff 날짜 이후만 고른다 — 폴더 하나 훑는 데 왕복이 한 번씩 들기 때문이다.
+if [ ${#DIRS[@]} -eq 0 ]; then
+  root=$(ssh -n -o BatchMode=yes -o ConnectTimeout=60 "$FC_HOST" \
+         "cd /tmp && $FC_VENV fcfetch.py ls" 2>&1)
+  if ! grep -q 'err=0' <<< "$root"; then
+    fail "FC 폴더 목록을 못 읽었다"
+    printf '%s\n' "$root" | tail -3 | sed 's/^/     /'
+    exit 1
+  fi
+  # cutoff 의 **날짜**까지 포함한다 — 같은 날 안에서 시각으로 다시 자른다.
+  cutday="${CUTOFF%% *}"
+  mapfile -t DIRS < <(printf '%s\n' "$root" | awk -v c="$cutday" \
+    '/DIR /{ for(i=1;i<=NF;i++) if ($i ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) { if (c=="" || $i >= c) print $i } }')
+  say "  훑을 폴더 ${#DIRS[@]}개${CUTOFF:+ (${cutday} 이후)}"
+fi
+
+if [ ${#DIRS[@]} -eq 0 ]; then
+  say "  서버가 이미 최신이다 — 받을 폴더가 없다"
+  exit 0
+fi
 
 # 폴더별 목록을 모아 "이름<TAB>MB<TAB>UTC폴더" 로 만든다.
 #
@@ -185,6 +314,19 @@ if [ -z "$LIST" ]; then
 fi
 say "  FC 에 $(printf '%s\n' "$LIST" | wc -l)개"
 
+# 같은 날 안에서 **시각**으로 다시 자른다. 폴더 단위로는 cutoff 당일이 통째로
+# 들어와 있기 때문이다.
+if [ -n "$CUTOFF" ]; then
+  before=$(printf '%s\n' "$LIST" | grep -c . || true)
+  LIST=$(printf '%s\n' "$LIST" | python3 "$HERE/since.py" pick "$CUTOFF")
+  after=$(printf '%s' "$LIST" | grep -c . || true)
+  say "  서버 이후만: ${after}개 (${before}개 중 $((before-after))개는 이미 반영됨)"
+  if [ "$after" = 0 ]; then
+    say "  ✅ 서버가 이미 최신이다 — 새 비행이 없다"
+    exit 0
+  fi
+fi
+
 # ── 2. 크기 게이트 ──────────────────────────────────────────────────
 WANT=$(printf '%s\n' "$LIST" | awk -F'\t' -v m="$MIN_MB" '$2+0 >= m')
 SKIP=$(printf '%s\n' "$LIST" | awk -F'\t' -v m="$MIN_MB" '$2+0 <  m')
@@ -208,6 +350,7 @@ fi
 say "== FC → $FC_HOST =="
 t0=$(date +%s)
 got=0
+FETCHED=()      # 이번에 실제로 받은 파일 이름 — 번호는 이것들에만 붙인다
 while IFS=$'\t' read -r name mb d; do
   [ -n "$name" ] || continue
   dest="${d}_${name}"                     # 저장 이름은 리포 규약 그대로
@@ -224,7 +367,7 @@ while IFS=$'\t' read -r name mb d; do
   fi
   if out=$(ssh -n -o BatchMode=yes -o ConnectTimeout=60 -o ServerAliveInterval=30 \
        "$FC_HOST" "cd /tmp && $cmd" 2>&1); then
-    printf '   ✅ %-26s %sMB\n' "$dest" "$mb"; got=$((got+1))
+    printf '   ✅ %-26s %sMB\n' "$dest" "$mb"; got=$((got+1)); FETCHED+=("$dest")
     # 다수결 통계는 눈에 보여야 한다 — 표차가 아슬아슬하면 횟수를 늘려야 한다.
     if [ "$VOTE_N" -ge 3 ] 2>/dev/null; then
       printf '%s\n' "$out" | grep -E '의견 갈린|leave-one-out|⚠️' | sed 's/^ */      /'
@@ -237,6 +380,26 @@ while IFS=$'\t' read -r name mb d; do
   fi
 done <<< "$WANT"
 say "  ${got}개 받음 ($(( $(date +%s) - t0 ))초)"
+
+# ── 3b. 로그 번호 ───────────────────────────────────────────────────
+# MAVFTP 는 SD 디렉토리를 훑을 뿐이라 **엔트리 번호가 안 온다.** 번호는
+# `LOG_REQUEST_LIST` 라는 다른 프로토콜에 있고, 그것이 이 기체의 비행을 세는
+# 유일한 일련번호다 (QGC 가 `log_129_...` 이름을 만드는 근거).
+#
+# 🔴 FC 가 붙어 있는 지금(브리지 정지 중)만 물어볼 수 있다. 목록만 조회하고
+#    FC 상태는 바꾸지 않는다. 받아 둔 JSON 은 아래 회수 뒤에 적용한다.
+ENTRIES=""
+if [ "$got" -gt 0 ] 2>/dev/null; then
+  if ssh -n -o BatchMode=yes -o ConnectTimeout=60 "$FC_HOST" \
+       "cd /tmp && $FC_VENV fclist.py --save /tmp/fcentries.json >/dev/null 2>&1" \
+     && scp -q -o BatchMode=yes -o ConnectTimeout=60 \
+          "$FC_HOST:/tmp/fcentries.json" "$SCRATCH/fcentries.json" 2>/dev/null; then
+    ENTRIES="$SCRATCH/fcentries.json"
+    say "  FC 엔트리 목록 받음"
+  else
+    say "  ⚠️ 엔트리 번호를 못 받았다 — 파일명에 번호가 안 붙는다"
+  fi
+fi
 
 # 브리지를 **여기서** 되살린다. 아래 단계는 FC 와 무관하므로 링크를 더 붙들
 # 이유가 없다.
@@ -255,24 +418,47 @@ while IFS=$'\t' read -r name mb d; do
 done <<< "$WANT"
 say "  로컬 $(ls "$LOCAL"/*.ulg 2>/dev/null | wc -l)개 (이전 ${before}개)"
 
+# ── 4b. 번호 붙이기 ─────────────────────────────────────────────────
+# 받은 파일 이름을 `log_<번호>_<KST시각>.ulg` 로 바꾼다 — QGC 가 쓰는 형식이고,
+# **이 기체의 비행 일련번호**가 이름에 남는다.
+#
+# ⚠️ 이름이 바뀌어도 증분은 안 깨진다. `since.py` 가 두 형식의 시간대 차이
+#    (FC 이름=UTC, QGC 이름=KST)를 알고 전부 UTC 로 맞춘다.
+if [ -n "$ENTRIES" ] && [ ${#FETCHED[@]} -gt 0 ]; then
+  say "== 번호 붙이기 =="
+  # 🔴 **이번에 받은 것만** 건드린다. 디렉토리 전체를 개명하면 서버 이름과
+  #    어긋나고, 중복쌍에서 이름이 충돌해 fclist 가 전체를 취소한다
+  #    (실측: `log_108` 이 이미 있어 아무것도 안 바뀌었다).
+  "$PY_EARLY" "$HERE/number_new.py" --out "$SCRATCH/final.txt" \
+      "$ENTRIES" "$LOCAL" "${FETCHED[@]}" 2>&1 | sed 's/^/  /' || true
+  # 🔴 개명됐으면 **새 이름**으로 다시 잡는다. 옛 이름으로 찾으면 뒤의 판정이
+  #    "판정할 파일이 없다" 로 조용히 끝난다 — 실측으로 물렸다.
+  if [ -s "$SCRATCH/final.txt" ]; then
+    mapfile -t FETCHED < "$SCRATCH/final.txt"
+  fi
+fi
+
 # ── 5. 판정 ─────────────────────────────────────────────────────────
-pick_python() {
-  for c in "${QGCLOG_PYTHON:-}" "$REPO/.venv/bin/python" \
-           "$REPO/venv-ardupilot/bin/python" python3; do
-    [ -n "$c" ] || continue
-    command -v "$c" >/dev/null 2>&1 && "$c" -c "import pyulog,numpy" >/dev/null 2>&1 && { echo "$c"; return 0; }
-  done
-  return 1
-}
-PY="$(pick_python)" || { fail "pyulog 를 가진 python 이 없다 — PROCEDURE.md 2-0"; exit 1; }
+# 인터프리터는 위에서 이미 골랐다 (번호 붙이기에도 필요하다).
+PY="$PY_EARLY"
+"$PY" -c "import pyulog,numpy" >/dev/null 2>&1 || {
+  fail "pyulog 를 가진 python 이 없다 — PROCEDURE.md 2-0"; exit 1; }
 
 say "== 판정 =="
+# 후보는 **이번에 받은 것**이다. 번호가 붙었으면 그 이름으로 들어와 있다.
 cand=()
-while IFS=$'\t' read -r name mb d; do
-  [ -n "$name" ] || continue
-  f="$LOCAL/${d}_${name}"
-  [ -e "$f" ] && cand+=("$f")
-done <<< "$WANT"
+for b in "${FETCHED[@]:-}"; do
+  [ -n "$b" ] || continue
+  [ -e "$LOCAL/$b" ] && cand+=("$LOCAL/$b")
+done
+# 받은 것이 없으면(전부 이미 있었던 경우) 대상 목록에서 찾는다.
+if [ ${#cand[@]} -eq 0 ]; then
+  while IFS=$'\t' read -r name mb d; do
+    [ -n "$name" ] || continue
+    f="$LOCAL/${d}_${name}"
+    [ -e "$f" ] && cand+=("$f")
+  done <<< "$WANT"
+fi
 
 [ ${#cand[@]} -gt 0 ] || { say "  판정할 파일이 없다"; exit 0; }
 
