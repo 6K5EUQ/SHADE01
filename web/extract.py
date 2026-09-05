@@ -145,11 +145,16 @@ def build_track(ulog, t0, t1):
     grid = np.arange(n) / hz
     trk = {"hz": hz, "n": n, "dur": round(dur, 2)}
 
+    # 한계는 qgclog 의 것과 같은 상수를 쓴다 — 요약과 시계열이 갈리면 안 된다.
+    # 🔴 함수 첫머리에서 잡는다. `vehicle_local_position` 블록 안에 두면 그 토픽이
+    #    없는 로그에서 아래 대기속도 줄이 UnboundLocalError 로 터져 **로그 전체가
+    #    "읽기 실패"로 보인다** (실측 2026-09-05: 6개가 이 한 줄 때문에 회색 행이
+    #    돼 있었다. row 모드는 멀쩡해서 목록만 보고는 원인을 못 찾는다).
+    AL, SP = qgclog._SANE_ALT_M, qgclog._SANE_SPEED_MS
+
     # ── 위치·고도·속도 ──────────────────────────────────────────
     p, tp, mp = win(ulog, "vehicle_local_position", t0, t1)
     if p is not None:
-        # 한계는 qgclog 의 것과 같은 상수를 쓴다 — 요약과 시계열이 갈리면 안 된다.
-        AL, SP = qgclog._SANE_ALT_M, qgclog._SANE_SPEED_MS
         agl = qgclog._agl(-clean(p.data["z"][mp], AL), tp)
         trk["alt"] = to_grid(tp, clean(agl, AL), grid)
         trk["spd"] = to_grid(tp, np.hypot(clean(p.data["vx"][mp], SP),
@@ -422,12 +427,17 @@ def classify(row):
     dur = row.get("duration") or 0
     alt = row.get("alt_max")
     spd = row.get("speed_max")
-    if alt is None or spd is None:
-        return "unknown"
-    if spd >= 3.0 or alt >= 10.0:
+    if spd is not None and spd >= 3.0:
+        return "flight"
+    if alt is not None and alt >= 10.0:
         return "flight"          # 실비행
+    # ⚠️ 고도·속도가 없어도 **arm 하고 6초 만에 내린 것은 abort 다.** 이 검사가
+    #    None 가드 뒤에 있던 동안, 위치 토픽이 안 실린 1~5초짜리 로그가 전부
+    #    `unknown` 으로 빠져 지상 시험과 구분되지 않았다 (실측 2026-09-05: 6건).
     if dur <= 6:
         return "abort"           # 즉시 disarm — 이륙 포기이거나 지상 점검
+    if alt is None or spd is None:
+        return "unknown"
     if alt < 0.5 and spd <= 0.5:
         return "ground"          # 지상
     return "hover"               # 저고도·저속 — 호버이거나 지상 확인
