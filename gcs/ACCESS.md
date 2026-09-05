@@ -52,7 +52,7 @@ git remote -v      # origin  https://github.com/6K5EUQ/SHADE01.git 만 나와야
 | PC | 처리 |
 |---|---|
 | `ku-dgs1` | ✅ origin 교체 완료 |
-| `rim3` | ✅ origin 교체 + 커밋 신원 `6k5euq` 로 변경 |
+| `rim3` | ✅ origin 교체 + 커밋 신원 `6k5euq` · **push 는 SSH 키로 해결** (2026-09-06, 아래) |
 | `gram-labtop` · `rim` · `central` | ⬜ **미처리** — 그때 꺼져 있었다 |
 
 미처리 PC 는 각각 한 번씩 돌려야 한다:
@@ -66,17 +66,46 @@ git config --global user.name 6k5euq
 git config --global user.email 6k5euq@gmail.com
 ```
 
-⚠️ **`rim3`·`rim` 은 여전히 push 가 안 된다.** `gh` 가 `yyrrm` 계정으로 로그인돼 있어서고,
-리모트를 바꾼다고 풀리지 않는다. 풀려면 그 PC 에서 `gh auth login` 을 6K5EUQ 로 다시 해야
-한다 (대화형이라 원격으로 못 한다).
+### `rim3` push 해결 — SSH 키로 (2026-09-06)
+
+✅ **`rim3` 는 이제 push 된다.** `c5f4f8d` 를 실제로 올려 확인했다.
+
+**원인은 `gh` 로그인 자체가 아니었다.** 사슬은 이랬다:
+
+```
+origin = https://github.com/6K5EUQ/SHADE01.git   ← HTTPS 라 자격증명이 필요
+   ↓
+credential.helper = !/usr/bin/gh auth git-credential   ← gh 가 대행자로 꽂혀 있다
+   ↓
+gh 활성 계정 = yyrrm   →   403 Permission to 6K5EUQ/SHADE01.git denied to yyrrm
+```
+
+커밋 신원(`user.name=6k5euq`)은 이미 맞았지만 **그건 push 권한과 무관하다** — 그래서
+"신원은 고쳤는데 왜 안 되지" 가 됐다. `gh auth login` 을 다시 하는 것도 방법이지만,
+**SSH 로 바꾸면 이 사슬을 통째로 우회한다.** `gh` 는 `yyrrm` 인 채로 둬도 되고
+(다른 용도로 쓰고 있을 수 있다), 토큰 만료도 없다.
+
+`~/.ssh/id_ed25519` 는 이미 있었고 GitHub 에 등록만 안 돼 있었다. 등록 후:
+
+```bash
+git remote set-url origin git@github.com:6K5EUQ/SHADE01.git
+ssh -T git@github.com          # "Hi 6K5EUQ!" 가 나와야 한다
+git push origin main
+```
+
+⚠️ **공개키를 반드시 `6K5EUQ` 계정에 등록해라.** `yyrrm` 에 넣으면 지금과 똑같이 막힌다.
+확인은 `ssh -T git@github.com` 의 인사말로 한다 — 계정 이름이 거기 찍힌다.
+
+⚠️ **`rim` 은 아직 fetch 만 된다.** 같은 방식으로 풀 수 있다 (그 PC 의 공개키를
+`6K5EUQ` 에 등록 → `git remote set-url` 을 SSH 로).
 
 ### PC 별 하드웨어 제약
 
 | | WiFi 라디오 | [ELRS 백팩 링크](qgroundcontrol/README.md#어느-pc-에서-되나-2026-09-03-확인) | GitHub 접속 |
 |---|---|---|---|
 | `gram-labtop` | `wlp0s20f3` | ✅ | ✅ |
-| `rim3` | `wlo1` | ✅ | fetch 만 (`gh` 가 `yyrrm` 로그인) |
-| `rim` | **없음** (유선) | ❌ 동글 필요 | fetch 만 (`gh` 가 `yyrrm` 로그인) |
+| `rim3` | `wlo1` | ✅ | ✅ **push 됨** (SSH 키, 2026-09-06) |
+| `rim` | **없음** (유선) | ❌ 동글 필요 | fetch 만 — [SSH 키로 풀 수 있다](#rim3-push-해결--ssh-키로-2026-09-06) |
 | `ku-dgs1` | **없음** (유선 `enp3s0`) | ❌ 동글 필요 | ✅ |
 
 ## 살아있는지 확인

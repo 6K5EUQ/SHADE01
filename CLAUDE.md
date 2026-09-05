@@ -38,6 +38,8 @@ ARM·모드변경·미션업로드가 실기에 들어간다 — 그래서 기�
 - **로그는 `logs/` 에 평면으로 쌓는다.** 날짜 하위폴더를 만들지 마라 —
   `_repair()` 가 같은 디렉토리의 형제 로그만 기증자로 쓴다.
 - **`pyulog` 를 직접 부르지 마라.** 잘린 메시지에서 조용히 멈춘다. `./qgc` 를 거쳐라.
-- **`rim3` 은 push 권한이 없다.** `gh` 가 `yyrrm` 계정으로 로그인돼 있어서다
-  (2026-09-04 확인). 커밋 신원은 `6k5euq` 로 고쳤으나 **자격증명은 그대로**다 —
-  풀려면 `rim3` 에서 `gh auth login` 을 6K5EUQ 로 다시 해야 한다. fetch 는 된다.
+- **`rim3` 도 이제 push 된다** (2026-09-06, SSH 키로 해결). 원인은 `gh` 로그인이
+  아니라 `credential.helper` 가 `gh auth git-credential` 이라 HTTPS push 에
+  `yyrrm` 토큰이 쓰이던 것이었다. origin 을 SSH 로 바꿔 우회했다 —
+  [절차](gcs/ACCESS.md#rim3-push-해결--ssh-키로-2026-09-06).
+  **`rim` 은 아직 fetch 만** 된다 (같은 방식으로 풀 수 있다).
