@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# SHADE01 진입점.
+#
+#   ./shade01 sync        FC → 랩서버. 비행 끝나고 이 한 줄이면 된다
+#   ./shade01 log ...     지난 비행 분석      (= ./qgc log)
+#   ./shade01 live ...    실시간 트래킹       (= ./qgc live)
+#
+# `./qgc` 는 같은 것을 가리키는 옛 이름이다 — 둘 다 동작한다.
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+usage() {
+  cat >&2 <<'USAGE'
+사용법:
+  ./shade01 sync              FC 에서 새 비행을 받아 랩서버에 올린다
+    --dry                       무엇을 할지 보여주기만
+    --verify[=N]                N회씩 받아 바이트 다수결로 복원 (기본 5)
+    --min-size=<MB>             크기 문턱 (기본 1.0)
+    --all                       FC 전체를 훑는다 (삭제 기록도 무시)
+    --keep-ground               지상 시험도 남긴다 (기본은 지운다)
+
+  ./shade01 log list          최근 비행 나열
+  ./shade01 log <번호>        해당 비행 분석
+  ./shade01 live on|off       실시간 트래킹 (http://localhost:4400)
+
+절차 전문: FLIGHT-SYNC.md
+USAGE
+  exit 1
+}
+
+[ $# -ge 1 ] || usage
+
+case "$1" in
+  sync) shift; exec "$HERE/tools/flightsync/flightsync" "$@" ;;
+  log)  shift; [ $# -ge 1 ] || set -- list
+        exec "$HERE/tools/qgclog/qgclog" "$@" ;;
+  live) shift; exec "$HERE/tools/live/livectl" "$@" ;;
+  -h|--help|help) usage ;;
+  *) echo "모르는 명령: $1" >&2; usage ;;
+esac

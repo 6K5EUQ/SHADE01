@@ -1,24 +1,29 @@
 #!/usr/bin/env bash
-# 비행 끝나고 한 줄. FC → 이 PC → shade01.bewe.co.kr.
+# 비행 끝나고 한 줄. FC → 랩서버.
 #
-#   ./qgc sync              오늘(KST) 비행을 받아 올린다
-#   ./qgc sync 2026-09-05   그날 것
-#   ./qgc sync --dry        무엇을 받고 올릴지 보여주기만
-#   ./qgc sync --all        서버 기준 증분을 무시하고 FC 전체를 훑는다
-#   ./qgc sync --prune      서버에서 **야외 비행이 아닌 것**을 지운다 (FC 안 건드림)
-#   ./qgc sync --verify     5회씩 받아 바이트 다수결로 복원 (느리지만 정확)
+#   ./shade01 sync                FC 에 없는 것을 받아 올리고, 야외가 아니면 지운다
+#   ./shade01 sync --dry          무엇을 할지 보여주기만
+#   ./shade01 sync --verify[=N]   N회씩 받아 바이트 다수결로 복원 (기본 5)
+#   ./shade01 sync --all          삭제 기록까지 무시하고 FC 전체를 다시 본다
+#   ./shade01 sync --keep-ground  지상 시험도 남긴다
+#   ./shade01 sync --min-size=MB  크기 문턱 (기본 1.0)
 #
-# 왜 이게 있나: 손으로 하면 브리지 정지 → fcfetch → 브리지 복구 → scp →
-# 판정 → 업로드 → 서비스 재시작이 일곱 단계다. 하나만 빠뜨려도(특히 **브리지
-# 복구**) QGC 링크가 끊긴 채 남는다. 여기서는 어떻게 끝나든 복구가 돈다.
+# 일곱 단계가 한 번에 돈다:
+#   1 브리지 정지 → 2 FC 목록 ↔ 랩서버 대조 → 3 없는 것만 받기 →
+#   4 회수 → 5 번호 라벨링 → 6 랩서버로 업로드 →
+#   7 랩서버에서 야외 판정 · 아니면 삭제
+#
+# 손으로 하면 순서대로 일곱 번을 해야 하고, 하나만 빠뜨려도 — 특히 **브리지
+# 복구** — QGC 무선 링크가 끊긴 채 남는다. 여기서는 어떻게 끝나든 복구가 돈다.
+#
+# 절차 전문·근거: FLIGHT-SYNC.md
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../.." && pwd)"
 LOCAL="$REPO/logs"
 # 중간 산물 자리. 리포를 더럽히지 않는다.
-SCRATCH="${TMPDIR:-/tmp}/shade-sync.$$"
-mkdir -p "$SCRATCH"
+SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/shade-sync.XXXXXX")"
 
 # ── 설정 ────────────────────────────────────────────────────────────
 # 🔴 리포가 public 이라 주소를 여기 적지 않는다. web/tools/hosts.conf 에 적는다.
@@ -32,193 +37,114 @@ FC_HOST="${FC_HOST:-rim3@rim3}"                 # FC 가 USB 로 붙어 있는 P
 FC_VENV="${FC_VENV:-~/.venv-mav/bin/python}"    # 그 PC 의 pymavlink 인터프리터
 FC_LOGDIR="${FC_LOGDIR:-~/SHADE01/logs}"        # 그 PC 가 받아 둘 곳
 SERVER_LOGS="${SERVER_LOGS:-/home/ku/shade01-data/logs}"
+SERVER_VENV="${SERVER_VENV:-~/shade01-venv/bin/python}"   # 랩서버의 pyulog
+SERVER_REPO="${SERVER_REPO:-~/SHADE01}"
 PUBLIC_URL="${PUBLIC_URL:-https://shade01.bewe.co.kr}"
 SERVER_UNIT="${SERVER_UNIT:-lab-shade01}"
 
+# 판정에서 지운 로그를 적어 두는 곳. **이게 없으면 무한 반복이 된다** —
+# 다음 sync 가 "서버에 없네" 하고 다시 받고, 판정이 다시 지운다.
+PRUNED_FILE="${PRUNED_FILE:-/home/ku/shade01-data/pruned.txt}"
+
 # 이 크기 미만은 **받지도 않는다.** 재연결이 파일당 7.7초라 총시간의 72% 를
-# 먹는 것이 실측이므로(2026-09-05: 49개 562초 중 377초), 받는 개수를 줄이는
-# 것이 유일하게 듣는 최적화다. FC 는 한 연결에 파일 하나만 내주므로 병렬은
-# 불가능하다 (PROCEDURE.md "FC 는 한 연결에 파일 하나만 내준다").
+# 먹는 것이 실측이다 (2026-09-05: 49개 562초 중 377초). FC 는 한 연결에 파일
+# 하나만 내주므로 병렬은 불가능하다 — 받는 개수를 줄이는 것만 남는다.
 #
 # ⚠️ 1.0MB 근거 — 2026-09-05 실측 49개:
 #      실비행·호버 8개  = 1.17 ~ 22.41 MB   (전부 위)
-#      지상·즉시disarm  = 0.19 ~ 0.95 MB    (하나 빼고 전부 아래)
-#    경계에 가장 가까운 것은 지상 로그 0.95MB 다. 호버 최소는 1.17MB 였다.
-#    아슬아슬하면 --min-size 로 낮춰라. 건너뛴 것 중 **가장 큰 크기를 항상
-#    출력**하므로, 경계에 붙은 파일이 있었는지 눈으로 확인할 수 있다.
+#      지상·즉시disarm  = 0.19 ~ 0.95 MB    (전부 아래)
+#    건너뛴 것 중 **가장 큰 크기를 항상 출력**하므로 경계를 눈으로 볼 수 있다.
 MIN_MB="${SYNC_MIN_MB:-1.0}"
 
-# 서버에 올릴 배지. 사용자가 보려는 것은 실제로 뜬 비행이다.
-UPLOAD_BADGES="${SYNC_BADGES:-flight hover}"
+# 랩서버에 남길 배지. 사용자가 보려는 것은 실제로 뜬 야외 비행이다.
+KEEP_BADGES="${SYNC_BADGES:-flight hover}"
 
 # 0 이면 한 번만 받는다. N>=3 이면 N 번 받아 **바이트 다수결**로 복원한다.
 #
-# 🔴 FC 가 SD 를 읽을 때마다 다른 바이트를 낸다 — 512바이트 섹터 단위로,
-#    한 번 읽을 때 2278섹터 중 7~14개(약 1.4%)가 어긋난다 (2026-09-06 실측).
-#    어긋나는 섹터가 매번 다르므로 다수결이 원본을 되살린다. 5회면 충분한 것을
-#    leave-one-out 으로 확인했고, 서로 다른 두 시행이 바이트 단위로 같은 결과를
-#    냈다. 복원본의 CRC 는 FC 자신이 낸 값 중 하나와 일치했다.
+# 🔴 FC 가 SD 를 읽을 때마다 다른 바이트를 낸다 — 512바이트 섹터 단위로, 한 번
+#    읽을 때 2278섹터 중 7~14개(약 1.4%)가 어긋난다 (2026-09-06 실측). 어긋나는
+#    섹터가 매번 달라 다수결이 원본을 되살린다. 서로 다른 4회 시행이 바이트
+#    단위로 같은 결과를 냈고, 복원본 CRC 가 FC 자신이 낸 값과 일치했다.
 #    근거: FLIGHT-SYNC.md · tools/qgclog/fcvote.py
 #
-# ⚠️ 받는 시간이 N 배가 된다. 기본은 꺼 둔다 — 켜는 것은 정확도가 필요할 때다.
+# ⚠️ 받는 시간이 N 배가 된다. 기본은 꺼 둔다.
 VOTE_N="${SYNC_VOTE:-0}"
 
-DRY=0; DATE=""; ALL=0; PRUNE=0
+DRY=0; ALL=0
 for a in "$@"; do
   case "$a" in
     --dry) DRY=1 ;;
-    --min-size=*) MIN_MB="${a#*=}" ;;
-    --all-badges) UPLOAD_BADGES="flight hover ground noarm unknown" ;;
     --all) ALL=1 ;;
-    --prune) PRUNE=1 ;;
+    --keep-ground) KEEP_BADGES="flight hover ground" ;;
+    --min-size=*) MIN_MB="${a#*=}" ;;
     --verify) VOTE_N=5 ;;
     --verify=*) VOTE_N="${a#*=}" ;;
-    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
-    -*) echo "모르는 옵션: $a"; exit 1 ;;
-    *) DATE="$a" ;;
+    -h|--help) sed -n '2,18p' "$0"; exit 0 ;;
+    *) echo "모르는 인자: $a" >&2; exit 1 ;;
   esac
 done
 
-# 날짜 폴더는 **UTC** 다 (FC 가 그렇게 만든다).
-#
-# 기본 동작은 **서버 기준 증분**이다 — 정본 보관소가 가진 마지막 로그보다 뒤인
-# 것만 받는다. 날짜를 인자로 주면 그 폴더만 보고, `--all` 이면 자르지 않는다.
-#
-# 왜 서버가 기준인가: 로컬 `logs/` 는 PC 마다 다르고 지웠다 받았다 한다.
-# **서버는 한 곳이고 정본**이라, "무엇까지 반영됐나" 를 물어볼 곳이 거기뿐이다.
-CUTOFF=""
-if [ -n "$DATE" ]; then
-  DIRS=("$DATE")
-elif [ "$ALL" = 1 ]; then
-  DIRS=()            # 아래에서 FC 의 폴더 전부를 읽는다
-else
-  DIRS=()
-fi
+say()  { printf '%s\n' "$*"; }
+step() { printf '\n== %s ==\n' "$*"; }
+fail() { printf '✗ %s\n' "$*" >&2; }
 
 pick_python() {
   for c in "${QGCLOG_PYTHON:-}" "$REPO/.venv/bin/python" \
            "$REPO/venv-ardupilot/bin/python" python3; do
     [ -n "$c" ] || continue
-    command -v "$c" >/dev/null 2>&1 && "$c" -c "import pyulog,numpy" >/dev/null 2>&1 && { echo "$c"; return 0; }
+    command -v "$c" >/dev/null 2>&1 \
+      && "$c" -c "import pyulog,numpy" >/dev/null 2>&1 && { echo "$c"; return 0; }
   done
   return 1
 }
-PY_EARLY="$(pick_python || echo python3)"
+PY="$(pick_python || echo python3)"
 
-say() { printf '%s\n' "$*"; }
-fail() { printf '✗ %s\n' "$*" >&2; }
-
-# ── 서버 정리 (--prune) ─────────────────────────────────────────────
-# 서버에 **야외 비행만** 남긴다. FC 를 안 건드리므로 브리지도 안 멈춘다.
-#
-# 🔴 판정하려면 파일을 읽어야 하고, 그러려면 이 PC 에 사본이 있어야 한다.
-#    **사본이 없는 것은 건드리지 않는다** — 못 읽는 것을 지우면 그게 무엇이었는지
-#    영영 모른다. (`logsource.py` 가 받아올 수 있지만, 지우기 위해 내려받는
-#    것은 순서가 거꾸로다.)
-if [ "$PRUNE" = 1 ]; then
-  PY_P="$(pick_python)" || { fail "pyulog 를 가진 python 이 없다"; exit 1; }
-  say "== 서버 정리 =="
-  names=$(ssh -n -o BatchMode=yes -o ConnectTimeout=30 "$SERVER" \
-          "ls '$SERVER_LOGS'/*.ulg 2>/dev/null | xargs -rn1 basename" 2>/dev/null)
-  [ -n "$names" ] || { say "  서버가 비어 있다"; exit 0; }
-  say "  서버 $(printf '%s\n' "$names" | wc -l)개"
-
-  cand=(); nolocal=0
-  while read -r b; do
-    [ -n "$b" ] || continue
-    if [ -e "$LOCAL/$b" ]; then cand+=("$LOCAL/$b"); else
-      printf '   ? %-34s 로컬에 없다 — 건드리지 않는다\n' "$b"; nolocal=$((nolocal+1)); fi
-  done <<< "$names"
-  [ ${#cand[@]} -gt 0 ] || { say "  판정할 것이 없다"; exit 0; }
-
-  del="$SCRATCH/prune.txt"; : > "$del"
-  keep=0
-  while IFS=$'\t' read -r v why pth; do
-    [ -n "$v" ] || continue
-    b=$(basename "$pth")
-    if [ "$v" = "keep" ] && grep -qw -- "$why" <<< "$UPLOAD_BADGES"; then
-      keep=$((keep+1))
-    else
-      printf '   − %-34s %s\n' "$b" "$why"
-      printf '%s\n' "$b" >> "$del"
-    fi
-  done < <("$PY_P" "$REPO/web/tools/uploadable.py" "${cand[@]}" 2>/dev/null)
-
-  ndel=$(grep -c . "$del" || true)
-  say "  남길 야외 비행 ${keep}개 / 지울 것 ${ndel}개${nolocal:+ / 판정 못 함 ${nolocal}개}"
-  [ "$ndel" -gt 0 ] || { say "  ✅ 이미 야외 비행만 있다"; exit 0; }
-
-  if [ "$DRY" = 1 ]; then say "  [dry] 실제로는 안 지웠다"; exit 0; fi
-
-  scp -q -o BatchMode=yes "$del" "$SERVER:/tmp/shade_prune.txt" || { fail "목록 전송 실패"; exit 1; }
-  # glob 을 쓰지 않는다 — 이름을 한 줄씩 받아 그것만 지운다.
-  ssh -n -o BatchMode=yes "$SERVER" \
-    'cd ~/shade01-data/logs && b=$(ls *.ulg|wc -l) && n=0 && while read -r f; do [ -f "$f" ] && rm -f -- "$f" && n=$((n+1)); done < /tmp/shade_prune.txt; echo "  지움 $n개   $b -> $(ls *.ulg|wc -l)"; rm -f /tmp/shade_prune.txt' \
-    || { fail "삭제 실패"; exit 1; }
-
-  say "== 서버 반영 =="
-  ssh -n -o BatchMode=yes "$SERVER" "sudo systemctl restart $SERVER_UNIT" || fail "서비스 재시작 실패"
-  for _ in $(seq 1 12); do
-    h=$(curl -s --max-time 20 "$PUBLIC_URL/api/health" 2>/dev/null)
-    case "$h" in *'"ok":true'*) say "  $h"; break ;; esac
-    sleep 5
-  done
-  exit 0
-fi
-
+SSH=(ssh -n -o BatchMode=yes -o ConnectTimeout=30)
+SSHL=(ssh -n -o BatchMode=yes -o ConnectTimeout=60 -o ServerAliveInterval=30)
 
 # ── 브리지 ──────────────────────────────────────────────────────────
 # FC 시리얼 포트는 하나뿐이다. 브리지가 잡고 있으면 MAVFTP 가 못 붙는다.
 # 유닛이 --user 인지 시스템인지는 PC 마다 다르다 (rim3=user, raspb1=system).
-BRIDGE_SCOPE=""
+BRIDGE_SCOPE=""; BRIDGE_UNIT=""
 bridge_detect() {
-  if ssh -o BatchMode=yes -o ConnectTimeout=20 "$FC_HOST" \
-       'systemctl --user is-active shade-bridge.service >/dev/null 2>&1'; then
+  if "${SSH[@]}" "$FC_HOST" 'systemctl --user is-active shade-bridge.service >/dev/null 2>&1'; then
     BRIDGE_SCOPE="user"; BRIDGE_UNIT="shade-bridge.service"
-  elif ssh -o BatchMode=yes -o ConnectTimeout=20 "$FC_HOST" \
-       'systemctl is-active mavlink-bridge.service >/dev/null 2>&1'; then
+  elif "${SSH[@]}" "$FC_HOST" 'systemctl is-active mavlink-bridge.service >/dev/null 2>&1'; then
     BRIDGE_SCOPE="system"; BRIDGE_UNIT="mavlink-bridge.service"
   else
     BRIDGE_SCOPE="none"
   fi
 }
-bridge() {   # bridge start|stop
+bridge() {
   case "$BRIDGE_SCOPE" in
-    user)   ssh -o BatchMode=yes -o ConnectTimeout=30 "$FC_HOST" "systemctl --user $1 $BRIDGE_UNIT" ;;
-    system) ssh -o BatchMode=yes -o ConnectTimeout=30 "$FC_HOST" "sudo systemctl $1 $BRIDGE_UNIT" ;;
+    user)   "${SSH[@]}" "$FC_HOST" "systemctl --user $1 $BRIDGE_UNIT" ;;
+    system) "${SSH[@]}" "$FC_HOST" "sudo systemctl $1 $BRIDGE_UNIT" ;;
     *)      return 0 ;;
   esac
 }
 
-# 🔴 어떻게 끝나든 브리지를 되살린다. 이걸 빠뜨리면 QGC 무선 링크가 끊긴 채
-#    남고, 다음 사람이 원인을 모른 채 기체 앞에 선다.
 STOPPED=0
 restore() {
   [ "$STOPPED" = 1 ] || return 0
-  # 🔴 **출력보다 먼저** 상태를 내린다. 아래 어느 줄에서 죽어도 두 번 돌지 않는다.
-  STOPPED=0
+  STOPPED=0                       # 출력보다 먼저 — 어디서 죽어도 두 번 안 돈다
   # 🔴 복구는 출력에 의존하면 안 된다. 파이프가 끊긴 상태(`| head`)에서 트랩이
-  #    돌면, 여기서 stdout 에 쓰는 순간 SIGPIPE 를 또 맞아 **ssh 를 부르기도 전에
-  #    죽는다** — 실측으로 물렸다. 그래서 신호를 막고, 쓰기 실패를 전부 삼킨다.
+  #    돌면 stdout 에 쓰는 순간 SIGPIPE 를 또 맞아 ssh 를 부르기도 전에 죽는다
+  #    — 실측으로 물렸다. 신호를 막고 쓰기 실패를 삼킨다.
   trap '' PIPE HUP
   bridge start >/dev/null 2>&1
   local ok=$?
   { [ "$ok" = 0 ] && printf '  ✅ 브리지 복구\n' \
-                  || printf '✗ 브리지 복구 실패 — 손으로: ssh %s '"'"'systemctl --user start shade-bridge.service'"'"'\n' "$FC_HOST"; } 2>/dev/null || true
+    || printf '✗ 브리지 복구 실패 — 손으로: ssh %s systemctl --user start shade-bridge.service\n' "$FC_HOST"; } 2>/dev/null || true
 }
-# 🔴 PIPE 를 빠뜨리면 안 된다. 출력을 `| head` 로 받는 순간 SIGPIPE 로 죽는데,
-#    그때 EXIT 트랩이 안 돌아 **브리지가 내려간 채 남는다** — 실측으로 물렸다.
-#    HUP 은 ssh 세션이 끊길 때 온다.
-# 🔴 정리는 restore 와 **따로** 둔다. restore 는 브리지를 멈췄을 때만 도는데,
-#    임시 디렉토리는 어느 경로로 끝나든 지워야 한다.
+# 정리는 restore 와 따로 둔다 — restore 는 브리지를 멈췄을 때만 돈다.
 cleanup() { restore; rm -rf "$SCRATCH" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM HUP PIPE
 
-# ── 1. FC 목록 ──────────────────────────────────────────────────────
-say "== FC 로그 목록 =="
+# ═══ 1. 브리지 정지 ═════════════════════════════════════════════════
+step "1/7 FC 준비"
 bridge_detect
 if [ "$BRIDGE_SCOPE" = "none" ]; then
-  say "  (브리지 유닛 없음 — 포트가 비어 있다고 보고 진행)"
+  say "  브리지 유닛 없음 — 포트가 비어 있다고 보고 진행"
 else
   bridge stop && STOPPED=1
   say "  브리지 정지 ($BRIDGE_SCOPE/$BRIDGE_UNIT) — QGC 링크가 잠시 끊긴다"
@@ -226,279 +152,262 @@ fi
 
 scp -q -o BatchMode=yes -o ConnectTimeout=60 \
     "$REPO/tools/qgclog/fcfetch.py" "$REPO/tools/qgclog/fcvote.py" \
-    "$REPO/tools/qgclog/fclist.py" "$REPO/tools/qgclog/lognum.py" "$FC_HOST:/tmp/" || {
-  fail "fcfetch.py 전송 실패"; exit 1; }
+    "$REPO/tools/qgclog/fclist.py" "$REPO/tools/qgclog/lognum.py" \
+    "$FC_HOST:/tmp/" || { fail "도구 전송 실패"; exit 1; }
 
-# ── 서버 기준 증분 ──────────────────────────────────────────────────
-# 정본 보관소가 가진 **마지막 로그의 UTC 시각**을 구한다. 그보다 뒤인 것만 받는다.
+# ═══ 2. FC 목록 ↔ 랩서버 대조 ═══════════════════════════════════════
+step "2/7 FC 목록 ↔ 랩서버 대조"
+
+# 🔴 여기도 재시도한다. pymavlink 2.4.49 는 인스턴스 필드가 있는 메시지에서
+#    간헐적으로 `TypeError: 'NoneType' object does not support item assignment`
+#    를 던진다 — 같은 명령이 한 번은 되고 한 번은 안 된다 (실측). 폴더 목록만
+#    재시도하고 루트를 빼 두었더니 여기서 걸렸다.
+root=""
+for attempt in 1 2 3; do
+  root=$("${SSHL[@]}" "$FC_HOST" "cd /tmp && $FC_VENV fcfetch.py ls" 2>&1)
+  grep -q 'err=0' <<< "$root" && break
+  [ "$attempt" -lt 3 ] && sleep 2
+done
+if ! grep -q 'err=0' <<< "$root"; then
+  fail "FC 폴더 목록을 못 읽었다 (3회 시도) — 로그가 없는 것과 다르다"
+  printf '%s\n' "$root" | tail -3 | sed 's/^/     /'
+  exit 1
+fi
+mapfile -t DIRS < <(printf '%s\n' "$root" | awk \
+  '/DIR /{ for(i=1;i<=NF;i++) if ($i ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) print $i }')
+say "  FC 폴더 ${#DIRS[@]}개"
+
+# 폴더마다 파일 목록. `이름<TAB>MB<TAB>UTC폴더`.
 #
-# ⚠️ 서버 API 의 `utc` 필드는 이름과 달리 **KST** 다. 그래서 API 가 아니라
-#    **파일명**으로 계산한다 — 파일명이 FC 경로와 같은 기준(UTC)이라 변환이
-#    한 번뿐이다. 두 이름 형식의 시간대가 다른 것은 since.py 가 다룬다.
-if [ -z "$DATE" ] && [ "$ALL" != 1 ]; then
-  srvnames=$(ssh -n -o BatchMode=yes -o ConnectTimeout=30 "$SERVER" \
-             "ls '$SERVER_LOGS'/*.ulg 2>/dev/null | xargs -rn1 basename" 2>/dev/null)
-  if [ -z "$srvnames" ]; then
-    say "  서버가 비어 있다 — FC 전체를 훑는다"
-  else
-    CUTOFF=$(printf '%s\n' "$srvnames" | python3 "$HERE/since.py" cutoff)
-    if [ -n "$CUTOFF" ]; then
-      # ⚠️ `date -d "<t> UTC +9 hours"` 는 오프셋을 두 번 먹어 9시간이 더 간다.
-      #    TZ 로 변환시킨다 — 실측으로 09-05 18:34 를 09-06 03:34 로 찍었다.
-      say "  서버 마지막 로그: $CUTOFF UTC (KST $(TZ=Asia/Seoul date -d "$CUTOFF UTC" '+%m-%d %H:%M' 2>/dev/null))"
-    fi
-  fi
-fi
-
-# 훑을 폴더를 정한다. 인자로 날짜를 줬으면 그것만, 아니면 FC 의 폴더 목록에서
-# cutoff 날짜 이후만 고른다 — 폴더 하나 훑는 데 왕복이 한 번씩 들기 때문이다.
-if [ ${#DIRS[@]} -eq 0 ]; then
-  root=$(ssh -n -o BatchMode=yes -o ConnectTimeout=60 "$FC_HOST" \
-         "cd /tmp && $FC_VENV fcfetch.py ls" 2>&1)
-  if ! grep -q 'err=0' <<< "$root"; then
-    fail "FC 폴더 목록을 못 읽었다"
-    printf '%s\n' "$root" | tail -3 | sed 's/^/     /'
-    exit 1
-  fi
-  # cutoff 의 **날짜**까지 포함한다 — 같은 날 안에서 시각으로 다시 자른다.
-  cutday="${CUTOFF%% *}"
-  mapfile -t DIRS < <(printf '%s\n' "$root" | awk -v c="$cutday" \
-    '/DIR /{ for(i=1;i<=NF;i++) if ($i ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) { if (c=="" || $i >= c) print $i } }')
-  say "  훑을 폴더 ${#DIRS[@]}개${CUTOFF:+ (${cutday} 이후)}"
-fi
-
-if [ ${#DIRS[@]} -eq 0 ]; then
-  say "  서버가 이미 최신이다 — 받을 폴더가 없다"
-  exit 0
-fi
-
-# 폴더별 목록을 모아 "이름<TAB>MB<TAB>UTC폴더" 로 만든다.
-#
-# 🔴 **조회 실패를 "로그 없음"으로 바꾸지 마라.** 이 도구의 가장 나쁜 실패는
-#    비행이 있었는데 없다고 보고하는 것이다. MAVFTP 는 간헐적으로 첫 시도가
-#    실패한다(pymavlink 2.4.49 의 인스턴스 필드 버그 · HEARTBEAT 놓침) —
-#    실측으로 물렸다. 폴더마다 두 번 시도하고, 그래도 안 되면 **시끄럽게 죽는다.**
-LIST=""
-listing_failed=0
+# 🔴 **조회 실패를 "로그 없음"으로 바꾸지 마라.** 비행이 있었는데 없다고
+#    보고하는 것이 이 도구의 가장 나쁜 실패다. MAVFTP 는 간헐적으로 첫 시도가
+#    실패한다 (pymavlink 2.4.49 인스턴스 필드 버그·HEARTBEAT 놓침) — 실측으로
+#    물렸다. 폴더마다 두 번 시도하고, 그래도 안 되면 시끄럽게 죽는다.
+LIST=""; listing_failed=0
 for d in "${DIRS[@]}"; do
   out=""; ok=0
-  for attempt in 1 2; do
-    out=$(ssh -n -o BatchMode=yes -o ConnectTimeout=60 "$FC_HOST" \
-          "cd /tmp && $FC_VENV fcfetch.py ls /fs/microsd/log/$d" 2>&1)
-    # "err=0" 이 나와야 진짜 성공이다. 디렉토리가 없으면 err 가 붙어 돌아온다.
-    if grep -q 'err=0' <<< "$out"; then ok=1; break; fi
-    # 폴더 자체가 없는 것은 정상이다 (인자 없이 부르면 어제 폴더도 훑는다).
-    if grep -qE 'err=(FileNotFound|[0-9]+)' <<< "$out"; then ok=1; break; fi
-    [ "$attempt" = 1 ] && sleep 2
+  for attempt in 1 2 3; do
+    out=$("${SSHL[@]}" "$FC_HOST" "cd /tmp && $FC_VENV fcfetch.py ls /fs/microsd/log/$d" 2>&1)
+    grep -qE 'err=' <<< "$out" && { ok=1; break; }
+    [ "$attempt" -lt 3 ] && sleep 2
   done
   if [ "$ok" = 0 ]; then
-    fail "$d 목록 조회 실패 (2회 시도)"
-    printf '%s\n' "$out" | tail -3 | sed 's/^/     /'
-    listing_failed=1
-    continue
+    fail "$d 목록 조회 실패 (3회 시도)"; listing_failed=1; continue
   fi
-  # 한 줄: "      09_24_04.ulg             22.41M"
-  add=$(printf '%s\n' "$out" | awk -v d="$d" '
-    /\.ulg/ { name=$1; mb=$2; gsub("M","",mb); printf "%s\t%s\t%s\n", name, mb, d }')
+  add=$(printf '%s\n' "$out" | awk -v d="$d" \
+    '/\.ulg/ { mb=$2; gsub("M","",mb); printf "%s\t%s\t%s\n", $1, mb, d }')
   [ -n "$add" ] && LIST="$LIST$add"$'\n'
 done
 LIST=$(printf '%s' "$LIST" | sed '/^$/d')
-
 if [ "$listing_failed" = 1 ] && [ -z "$LIST" ]; then
-  fail "FC 목록을 못 읽었다 — 로그가 없는 것과 다르다. 브리지·USB 를 확인하고 다시 돌려라."
-  exit 1
+  fail "FC 목록을 통째로 못 읽었다. 브리지·USB 확인 후 다시 돌려라."; exit 1
 fi
-if [ -z "$LIST" ]; then
-  say "  그 날짜에 FC 로그가 없다: ${DIRS[*]}"
-  exit 0
+nfc=$(printf '%s' "$LIST" | grep -c . || true)
+say "  FC 로그 ${nfc}개"
+
+# 랩서버가 이미 가진 것 + 판정에서 지운 것
+"${SSH[@]}" "$SERVER" "ls '$SERVER_LOGS'/*.ulg 2>/dev/null | xargs -rn1 basename" \
+  > "$SCRATCH/server.txt" 2>/dev/null || : > "$SCRATCH/server.txt"
+if [ "$ALL" = 1 ]; then
+  : > "$SCRATCH/pruned.txt"
+  say "  --all — 삭제 기록을 무시한다"
+else
+  "${SSH[@]}" "$SERVER" "cat '$PRUNED_FILE' 2>/dev/null | cut -f1" \
+    > "$SCRATCH/pruned.txt" 2>/dev/null || : > "$SCRATCH/pruned.txt"
 fi
-say "  FC 에 $(printf '%s\n' "$LIST" | wc -l)개"
+say "  랩서버 보유 $(grep -c . "$SCRATCH/server.txt" || true)개 · 판정 후 지운 것 $(grep -c . "$SCRATCH/pruned.txt" || true)개"
 
-# 같은 날 안에서 **시각**으로 다시 자른다. 폴더 단위로는 cutoff 당일이 통째로
-# 들어와 있기 때문이다.
-if [ -n "$CUTOFF" ]; then
-  before=$(printf '%s\n' "$LIST" | grep -c . || true)
-  LIST=$(printf '%s\n' "$LIST" | python3 "$HERE/since.py" pick "$CUTOFF")
-  after=$(printf '%s' "$LIST" | grep -c . || true)
-  say "  서버 이후만: ${after}개 (${before}개 중 $((before-after))개는 이미 반영됨)"
-  if [ "$after" = 0 ]; then
-    say "  ✅ 서버가 이미 최신이다 — 새 비행이 없다"
-    exit 0
-  fi
+# 🔴 "마지막 로그 이후" 가 아니라 **"서버에 없는 것"** 이다. 시각 cutoff 는
+#    중간의 구멍을 못 본다 (업로드 실패·손으로 지움). 집합 차이는 잡는다.
+MISSING=$(printf '%s\n' "$LIST" | "$PY" "$HERE/since.py" pick \
+          "$SCRATCH/server.txt" "$SCRATCH/pruned.txt")
+nmiss=$(printf '%s' "$MISSING" | grep -c . || true)
+say "  랩서버에 없는 것 ${nmiss}개"
+
+WANT=""; SKIP=""; nwant=0; nskip=0
+if [ "$nmiss" != 0 ]; then
+  WANT=$(printf '%s\n' "$MISSING" | awk -F'\t' -v m="$MIN_MB" '$2+0 >= m')
+  SKIP=$(printf '%s\n' "$MISSING" | awk -F'\t' -v m="$MIN_MB" '$2+0 <  m')
+  nwant=$(printf '%s' "$WANT" | grep -c . || true)
+  nskip=$(printf '%s' "$SKIP" | grep -c . || true)
+  big=$(printf '%s\n' "$SKIP" | awk -F'\t' '{if($2+0>m)m=$2+0}END{printf "%.2f", m+0}')
+  say "  받을 것 ${nwant}개 / ${MIN_MB}MB 미만 ${nskip}개 건너뜀 (그중 최대 ${big}MB)"
+  # 경계에 붙은 파일이 있으면 눈에 띄게 말한다 — 실비행을 놓치는 유일한 경로다.
+  awk -v b="$big" -v m="$MIN_MB" 'BEGIN{ if (b+0 > m*0.8)
+    print "  ⚠️ 건너뛴 것 중 " b "MB 가 문턱에 가깝다 — 놓친 것 같으면 --min-size=0.5" }'
+else
+  say "  ✅ 랩서버가 이미 최신이다"
 fi
-
-# ── 2. 크기 게이트 ──────────────────────────────────────────────────
-WANT=$(printf '%s\n' "$LIST" | awk -F'\t' -v m="$MIN_MB" '$2+0 >= m')
-SKIP=$(printf '%s\n' "$LIST" | awk -F'\t' -v m="$MIN_MB" '$2+0 <  m')
-nwant=$(printf '%s' "$WANT" | grep -c . || true)
-nskip=$(printf '%s' "$SKIP" | grep -c . || true)
-biggest=$(printf '%s\n' "$SKIP" | awk -F'\t' '{if($2+0>m)m=$2+0}END{printf "%.2f", m+0}')
-
-say "  받을 것 ${nwant}개 / ${MIN_MB}MB 미만 ${nskip}개 건너뜀 (그중 최대 ${biggest}MB)"
-# 경계에 붙은 파일이 있으면 눈에 띄게 말한다 — 실비행을 놓치는 유일한 경로다.
-awk -v b="$biggest" -v m="$MIN_MB" 'BEGIN{ if (b+0 > m*0.8) print "  ⚠️ 건너뛴 것 중 " b "MB 가 문턱에 가깝다. 놓친 것 같으면: ./qgc sync --min-size=0.5" }'
-
-if [ "$nwant" = 0 ]; then say "  받을 것이 없다"; exit 0; fi
 
 if [ "$DRY" = 1 ]; then
-  say "== [dry] 받을 목록 =="
-  printf '%s\n' "$WANT" | awk -F'\t' '{printf "   %s  %sMB  (%s)\n",$1,$2,$3}'
+  step "[dry] 받을 목록"
+  printf '%s\n' "$WANT" | awk -F'\t' 'NF{printf "   %s  %sMB  (%s)\n",$1,$2,$3}'
+  say ""
+  say "[dry] 실제로는 아무것도 안 했다."
   exit 0
 fi
 
-# ── 3. 받기 ─────────────────────────────────────────────────────────
-say "== FC → $FC_HOST =="
-t0=$(date +%s)
-got=0
-FETCHED=()      # 이번에 실제로 받은 파일 이름 — 번호는 이것들에만 붙인다
-while IFS=$'\t' read -r name mb d; do
-  [ -n "$name" ] || continue
-  dest="${d}_${name}"                     # 저장 이름은 리포 규약 그대로
-  if [ -e "$LOCAL/$dest" ]; then
-    printf '   · %-26s 이미 있음\n' "$dest"; continue
-  fi
-  # 🔴 `-n` 이 없으면 ssh 가 **이 while 루프의 stdin 을 통째로 삼킨다.** 그러면
-  #    첫 파일만 받고 루프가 끝난다 — 실측으로 물렸다 (7개 중 1개만 받았다).
-  #    같은 이유로 아래 scp 에도 `-n` 을 준다.
-  if [ "$VOTE_N" -ge 3 ] 2>/dev/null; then
-    cmd="$FC_VENV fcvote.py /fs/microsd/log/$d/$name $FC_LOGDIR/$dest $VOTE_N"
-  else
-    cmd="$FC_VENV fcfetch.py get /fs/microsd/log/$d/$name $FC_LOGDIR/$dest"
-  fi
-  if out=$(ssh -n -o BatchMode=yes -o ConnectTimeout=60 -o ServerAliveInterval=30 \
-       "$FC_HOST" "cd /tmp && $cmd" 2>&1); then
-    printf '   ✅ %-26s %sMB\n' "$dest" "$mb"; got=$((got+1)); FETCHED+=("$dest")
-    # 다수결 통계는 눈에 보여야 한다 — 표차가 아슬아슬하면 횟수를 늘려야 한다.
-    if [ "$VOTE_N" -ge 3 ] 2>/dev/null; then
-      printf '%s\n' "$out" | grep -E '의견 갈린|leave-one-out|⚠️' | sed 's/^ */      /'
-    fi
-  else
-    # 🔴 실패 사유를 버리지 마라. 이걸 삼키면 "받기 실패" 다섯 글자만 남아
-    #    원인을 손으로 재현해야 한다 — 실측으로 겪었다.
-    printf '   ✗ %-26s 받기 실패\n' "$dest"
-    printf '%s\n' "$out" | tail -4 | sed 's/^/        /'
-  fi
-done <<< "$WANT"
-say "  ${got}개 받음 ($(( $(date +%s) - t0 ))초)"
-
-# ── 3b. 로그 번호 ───────────────────────────────────────────────────
-# MAVFTP 는 SD 디렉토리를 훑을 뿐이라 **엔트리 번호가 안 온다.** 번호는
-# `LOG_REQUEST_LIST` 라는 다른 프로토콜에 있고, 그것이 이 기체의 비행을 세는
-# 유일한 일련번호다 (QGC 가 `log_129_...` 이름을 만드는 근거).
-#
-# 🔴 FC 가 붙어 있는 지금(브리지 정지 중)만 물어볼 수 있다. 목록만 조회하고
-#    FC 상태는 바꾸지 않는다. 받아 둔 JSON 은 아래 회수 뒤에 적용한다.
-ENTRIES=""
-if [ "$got" -gt 0 ] 2>/dev/null; then
-  if ssh -n -o BatchMode=yes -o ConnectTimeout=60 "$FC_HOST" \
-       "cd /tmp && $FC_VENV fclist.py --save /tmp/fcentries.json >/dev/null 2>&1" \
-     && scp -q -o BatchMode=yes -o ConnectTimeout=60 \
-          "$FC_HOST:/tmp/fcentries.json" "$SCRATCH/fcentries.json" 2>/dev/null; then
-    ENTRIES="$SCRATCH/fcentries.json"
-    say "  FC 엔트리 목록 받음"
-  else
-    say "  ⚠️ 엔트리 번호를 못 받았다 — 파일명에 번호가 안 붙는다"
-  fi
-fi
-
-# 브리지를 **여기서** 되살린다. 아래 단계는 FC 와 무관하므로 링크를 더 붙들
-# 이유가 없다.
-restore
-
-# ── 4. 회수 ─────────────────────────────────────────────────────────
-say "== $FC_HOST → 이 PC =="
-mkdir -p "$LOCAL"
-before=$(ls "$LOCAL"/*.ulg 2>/dev/null | wc -l)
-while IFS=$'\t' read -r name mb d; do
-  [ -n "$name" ] || continue
-  dest="${d}_${name}"
-  [ -e "$LOCAL/$dest" ] && continue
-  scp -q -o BatchMode=yes -o ConnectTimeout=200 "$FC_HOST:$FC_LOGDIR/$dest" "$LOCAL/" </dev/null \
-    || printf '   ✗ %s 회수 실패\n' "$dest"
-done <<< "$WANT"
-say "  로컬 $(ls "$LOCAL"/*.ulg 2>/dev/null | wc -l)개 (이전 ${before}개)"
-
-# ── 4b. 번호 붙이기 ─────────────────────────────────────────────────
-# 받은 파일 이름을 `log_<번호>_<KST시각>.ulg` 로 바꾼다 — QGC 가 쓰는 형식이고,
-# **이 기체의 비행 일련번호**가 이름에 남는다.
-#
-# ⚠️ 이름이 바뀌어도 증분은 안 깨진다. `since.py` 가 두 형식의 시간대 차이
-#    (FC 이름=UTC, QGC 이름=KST)를 알고 전부 UTC 로 맞춘다.
-if [ -n "$ENTRIES" ] && [ ${#FETCHED[@]} -gt 0 ]; then
-  say "== 번호 붙이기 =="
-  # 🔴 **이번에 받은 것만** 건드린다. 디렉토리 전체를 개명하면 서버 이름과
-  #    어긋나고, 중복쌍에서 이름이 충돌해 fclist 가 전체를 취소한다
-  #    (실측: `log_108` 이 이미 있어 아무것도 안 바뀌었다).
-  "$PY_EARLY" "$HERE/number_new.py" --out "$SCRATCH/final.txt" \
-      "$ENTRIES" "$LOCAL" "${FETCHED[@]}" 2>&1 | sed 's/^/  /' || true
-  # 🔴 개명됐으면 **새 이름**으로 다시 잡는다. 옛 이름으로 찾으면 뒤의 판정이
-  #    "판정할 파일이 없다" 로 조용히 끝난다 — 실측으로 물렸다.
-  if [ -s "$SCRATCH/final.txt" ]; then
-    mapfile -t FETCHED < "$SCRATCH/final.txt"
-  fi
-fi
-
-# ── 5. 판정 ─────────────────────────────────────────────────────────
-# 인터프리터는 위에서 이미 골랐다 (번호 붙이기에도 필요하다).
-PY="$PY_EARLY"
-"$PY" -c "import pyulog,numpy" >/dev/null 2>&1 || {
-  fail "pyulog 를 가진 python 이 없다 — PROCEDURE.md 2-0"; exit 1; }
-
-say "== 판정 =="
-# 후보는 **이번에 받은 것**이다. 번호가 붙었으면 그 이름으로 들어와 있다.
-cand=()
-for b in "${FETCHED[@]:-}"; do
-  [ -n "$b" ] || continue
-  [ -e "$LOCAL/$b" ] && cand+=("$LOCAL/$b")
-done
-# 받은 것이 없으면(전부 이미 있었던 경우) 대상 목록에서 찾는다.
-if [ ${#cand[@]} -eq 0 ]; then
+# ═══ 3. 없는 것만 받기 ══════════════════════════════════════════════
+FETCHED=()
+if [ "$nwant" -gt 0 ]; then
+  step "3/7 FC → $FC_HOST"
+  t0=$(date +%s)
   while IFS=$'\t' read -r name mb d; do
     [ -n "$name" ] || continue
-    f="$LOCAL/${d}_${name}"
-    [ -e "$f" ] && cand+=("$f")
+    dest="${d}_${name}"
+    if [ -e "$LOCAL/$dest" ]; then
+      printf '   · %-26s 이미 있음\n' "$dest"; FETCHED+=("$dest"); continue
+    fi
+    if [ "$VOTE_N" -ge 3 ] 2>/dev/null; then
+      cmd="$FC_VENV fcvote.py /fs/microsd/log/$d/$name $FC_LOGDIR/$dest $VOTE_N"
+    else
+      cmd="$FC_VENV fcfetch.py get /fs/microsd/log/$d/$name $FC_LOGDIR/$dest"
+    fi
+    # 🔴 `-n` 없이 ssh 를 부르면 이 while 의 stdin 을 삼켜 **첫 파일만 받고
+    #    루프가 끝난다** — 실측으로 물렸다 (7개 중 1개).
+    # 🔴 받기도 재시도한다. pymavlink 2.4.49 의 인스턴스 필드 버그가 **받는
+    #    중에도** 난다 — 실측(2026-09-06): 35개 중 1개가 그것 하나로 통째로
+    #    빠졌다. 목록에만 재시도를 걸어 두었던 것이 구멍이었다.
+    ok=0
+    for attempt in 1 2 3; do
+      if out=$("${SSHL[@]}" "$FC_HOST" "cd /tmp && $cmd" 2>&1); then ok=1; break; fi
+      [ "$attempt" -lt 3 ] && sleep 2
+    done
+    if [ "$ok" = 1 ]; then
+      printf '   ✅ %-26s %sMB\n' "$dest" "$mb"; FETCHED+=("$dest")
+      [ "$VOTE_N" -ge 3 ] 2>/dev/null && \
+        printf '%s\n' "$out" | grep -E '의견 갈린|leave-one-out|⚠️' | sed 's/^ */      /'
+    else
+      printf '   ✗ %-26s 받기 실패 (3회 시도)\n' "$dest"
+      printf '%s\n' "$out" | tail -3 | sed 's/^/        /'
+    fi
   done <<< "$WANT"
-fi
+  say "  ${#FETCHED[@]}개 확보 ($(( $(date +%s) - t0 ))초)"
 
-[ ${#cand[@]} -gt 0 ] || { say "  판정할 파일이 없다"; exit 0; }
-
-send=()
-while IFS=$'\t' read -r v why p; do
-  [ -n "$v" ] || continue
-  b=$(basename "$p")
-  # uploadable.py 는 skip 사유를, keep 이면 배지를 준다. 여기서는 실제로 뜬
-  # 것만 올린다 — 지상 시험은 로컬과 FC 에 남아 있고 언제든 볼 수 있다.
-  if [ "$v" = "skip" ]; then
-    printf '   − %-30s %s\n' "$b" "$why"
-  elif grep -qw -- "$why" <<< "$UPLOAD_BADGES"; then
-    printf '   ✅ %-30s %s\n' "$b" "$why"; send+=("$p")
-  else
-    printf '   − %-30s %s (안 올림)\n' "$b" "$why"
+  # ── FC 엔트리 번호 ────────────────────────────────────────────────
+  # MAVFTP 는 SD 디렉토리를 훑을 뿐이라 **번호가 안 온다.** 번호는
+  # `LOG_REQUEST_LIST` 에 있고, 그것이 이 기체의 비행을 세는 유일한 일련번호다.
+  # 🔴 FC 가 붙어 있는 지금(브리지 정지 중)만 물어볼 수 있다. 목록 조회일 뿐
+  #    FC 상태는 바꾸지 않는다.
+  if [ ${#FETCHED[@]} -gt 0 ]; then
+    if "${SSHL[@]}" "$FC_HOST" "cd /tmp && $FC_VENV fclist.py --save /tmp/fcentries.json >/dev/null 2>&1" \
+       && scp -q -o BatchMode=yes "$FC_HOST:/tmp/fcentries.json" "$SCRATCH/entries.json" 2>/dev/null; then
+      say "  FC 엔트리 목록 받음"
+    else
+      say "  ⚠️ 엔트리 번호를 못 받았다 — 번호가 안 붙는다"
+    fi
   fi
-done < <("$PY" "$REPO/web/tools/uploadable.py" "${cand[@]}" 2>/dev/null)
-
-# ── 6. 업로드 ───────────────────────────────────────────────────────
-if [ ${#send[@]} -eq 0 ]; then
-  say "== 올릴 비행이 없다 =="
-  exit 0
 fi
 
-say "== 서버로 =="
-ssh -o BatchMode=yes "$SERVER" "mkdir -p '$SERVER_LOGS'" || { fail "서버 접속 실패"; exit 1; }
-if command -v rsync >/dev/null && ssh -o BatchMode=yes "$SERVER" 'command -v rsync' >/dev/null 2>&1; then
-  rsync -a --ignore-existing --info=stats1 "${send[@]}" "$SERVER:$SERVER_LOGS/" || { fail "업로드 실패"; exit 1; }
+# ═══ 4. 회수 ════════════════════════════════════════════════════════
+if [ ${#FETCHED[@]} -gt 0 ]; then
+  step "4/7 $FC_HOST → 이 PC"
+  mkdir -p "$LOCAL"
+  for dest in "${FETCHED[@]}"; do
+    [ -e "$LOCAL/$dest" ] && continue
+    scp -q -o BatchMode=yes -o ConnectTimeout=200 \
+        "$FC_HOST:$FC_LOGDIR/$dest" "$LOCAL/" </dev/null \
+      || printf '   ✗ %s 회수 실패\n' "$dest"
+  done
+  say "  로컬 $(ls "$LOCAL"/*.ulg 2>/dev/null | wc -l)개"
+fi
+
+# 브리지는 여기서 되살린다 — 아래는 FC 와 무관하다.
+restore
+
+# ═══ 5. 번호 라벨링 ═════════════════════════════════════════════════
+if [ ${#FETCHED[@]} -gt 0 ] && [ -f "$SCRATCH/entries.json" ]; then
+  step "5/7 번호 라벨링"
+  # 🔴 **이번에 받은 것만** 개명한다. 디렉토리 전체를 개명하면 랩서버 이름과
+  #    어긋나고, 중복쌍에서 이름이 충돌해 fclist 가 전체를 취소한다 (실측).
+  "$PY" "$HERE/number_new.py" --out "$SCRATCH/final.txt" \
+       "$SCRATCH/entries.json" "$LOCAL" "${FETCHED[@]}" 2>&1 | sed 's/^/  /' || true
+  # 개명됐으면 **새 이름**으로 다시 잡는다. 옛 이름으로 찾으면 아래 업로드가
+  # 조용히 아무것도 안 올린다 — 실측으로 물렸다.
+  [ -s "$SCRATCH/final.txt" ] && mapfile -t FETCHED < "$SCRATCH/final.txt"
+fi
+
+# ═══ 6. 랩서버로 업로드 ═════════════════════════════════════════════
+if [ ${#FETCHED[@]} -gt 0 ]; then
+  step "6/7 랩서버로 업로드"
+  up=()
+  for b in "${FETCHED[@]}"; do [ -e "$LOCAL/$b" ] && up+=("$LOCAL/$b"); done
+  if [ ${#up[@]} -eq 0 ]; then
+    say "  올릴 파일이 없다"
+  else
+    "${SSH[@]}" "$SERVER" "mkdir -p '$SERVER_LOGS'" || { fail "서버 접속 실패"; exit 1; }
+    # 🔴 --ignore-existing 은 최적화가 아니라 안전장치다. FC 읽기가 매번 달라
+    #    다시 받은 사본이 더 나쁠 수 있는데, 그것이 정본을 덮으면 안 된다.
+    if command -v rsync >/dev/null && "${SSH[@]}" "$SERVER" 'command -v rsync' >/dev/null 2>&1; then
+      rsync -a --ignore-existing --info=stats1 "${up[@]}" "$SERVER:$SERVER_LOGS/" \
+        || { fail "업로드 실패"; exit 1; }
+    else
+      for f in "${up[@]}"; do scp -q "$f" "$SERVER:$SERVER_LOGS/" || fail "업로드 실패: $f"; done
+    fi
+    say "  ${#up[@]}개 올렸다"
+  fi
+fi
+
+# ═══ 7. 랩서버에서 야외 판정 · 아니면 삭제 ══════════════════════════
+# 🔴 판정은 **랩서버 안에서** 돈다. 파일이 거기 있으니 옮길 필요가 없고, 이 PC
+#    에 사본이 없는 로그도 판정할 수 있다 (다른 PC 가 올린 것).
+step "7/7 랩서버에서 야외 판정"
+"${SSH[@]}" "$SERVER" "cd $SERVER_REPO && git pull -q >/dev/null 2>&1; true"
+
+verdicts=$("${SSHL[@]}" "$SERVER" "
+  cd '$SERVER_LOGS' 2>/dev/null || { echo '__EMPTY__'; exit 0; }
+  ls *.ulg >/dev/null 2>&1 || { echo '__EMPTY__'; exit 0; }
+  $SERVER_VENV $SERVER_REPO/web/tools/uploadable.py *.ulg 2>/dev/null
+" 2>&1)
+
+if grep -q '__EMPTY__' <<< "$verdicts"; then
+  say "  랩서버에 로그가 없다"
+elif ! grep -qE '^(keep|skip)' <<< "$verdicts"; then
+  fail "판정을 못 돌렸다 — 랩서버의 python·uploadable.py 를 확인하라"
+  printf '%s\n' "$verdicts" | tail -3 | sed 's/^/     /'
 else
-  for f in "${send[@]}"; do scp -q "$f" "$SERVER:$SERVER_LOGS/" || fail "업로드 실패: $f"; done
+  : > "$SCRATCH/del.txt"; keep=0
+  while IFS=$'\t' read -r v why pth; do
+    [ -n "$v" ] || continue
+    b=$(basename "$pth")
+    if [ "$v" = "keep" ] && grep -qw -- "$why" <<< "$KEEP_BADGES"; then
+      keep=$((keep+1))
+    else
+      printf '   − %-34s %s\n' "$b" "$why"
+      printf '%s\t%s\n' "$b" "$why" >> "$SCRATCH/del.txt"
+    fi
+  done <<< "$verdicts"
+  ndel=$(grep -c . "$SCRATCH/del.txt" || true)
+  say "  야외 비행 ${keep}개 유지 / ${ndel}개 삭제"
+
+  if [ "$ndel" -gt 0 ]; then
+    scp -q -o BatchMode=yes "$SCRATCH/del.txt" "$SERVER:/tmp/shade_del.txt" \
+      || { fail "삭제 목록 전송 실패"; exit 1; }
+    # 🔴 glob 을 쓰지 않는다 — 이름을 한 줄씩 받아 그것만 지운다.
+    # 🔴 지운 것은 **기록에 남긴다.** 안 남기면 다음 sync 가 다시 받아오고
+    #    판정이 다시 지우는 일이 무한히 반복된다. **번호는 그대로 두고 지운
+    #    자리를 메우지 않는다** — 번호는 FC 가 매기는 것이라 우리가 채울 수
+    #    있는 것도 아니고, 구멍이 있는 편이 정직하다.
+    "${SSHL[@]}" "$SERVER" "
+      cd '$SERVER_LOGS' && n=0
+      while IFS=\$'\t' read -r f why; do
+        [ -f \"\$f\" ] || continue
+        rm -f -- \"\$f\" && n=\$((n+1))
+        printf '%s\t%s\t%s\n' \"\$f\" \"\$why\" \"\$(date -Is)\" >> '$PRUNED_FILE'
+      done < /tmp/shade_del.txt
+      echo \"  지움 \$n개 — 기록: $PRUNED_FILE\"
+      rm -f /tmp/shade_del.txt" || fail "삭제 실패"
+  fi
 fi
 
-say "== 서버 반영 =="
-ssh -o BatchMode=yes "$SERVER" "sudo systemctl restart $SERVER_UNIT" || fail "서비스 재시작 실패"
-# 캐시를 굽는 동안 502 가 난다. 준비될 때까지 짧게 기다린다.
-for _ in $(seq 1 12); do
+# ── 반영 ────────────────────────────────────────────────────────────
+step "서버 반영"
+"${SSH[@]}" "$SERVER" "sudo systemctl restart $SERVER_UNIT" || fail "서비스 재시작 실패"
+for _ in $(seq 1 15); do
   h=$(curl -s --max-time 20 "$PUBLIC_URL/api/health" 2>/dev/null)
   case "$h" in *'"ok":true'*) say "  $h"; break ;; esac
-  sleep 5
+  sleep 4
 done
 
-say
-say "✅ ${#send[@]}편 올렸다 — $PUBLIC_URL"
+say ""
+say "✅ 끝 — $PUBLIC_URL"
