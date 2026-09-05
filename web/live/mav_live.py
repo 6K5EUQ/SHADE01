@@ -108,6 +108,32 @@ SEVERITY = ['EMERG', 'ALERT', 'CRIT', 'ERROR', 'WARN', 'NOTICE', 'INFO', 'DEBUG'
 MAX_MESSAGES = 200
 
 
+def _finite(o):
+    """NaN·Infinity 를 None 으로 바꾼다. 중첩 dict/list 까지 훑는다.
+
+    🔴 이것이 없으면 화면 전체가 죽는다. 파이썬 json 은 NaN 을 **그대로**
+       `NaN` 이라 적는데 그건 유효한 JSON 이 아니다. 브라우저의 JSON.parse 는
+       필드 하나 때문에 응답 전체를 거부하므로, EKF 비율 하나가 NaN 인 순간
+       고도·전압·모드까지 같이 사라지고 페이지는 "서버 없음" 을 띄운다.
+       (2026-09-05 실기에서 발생: ESTIMATOR_STATUS 의 vel/pos 비율이 NaN.
+        FC 가 EKF 를 아직 초기화하지 않았을 때 그렇게 온다.)
+
+       curl 로는 안 보인다 — 파싱을 안 하니까. 반드시 파서를 거쳐 확인하라.
+    """
+    if isinstance(o, float):
+        return None if o != o or o in (float('inf'), float('-inf')) else o
+    if isinstance(o, dict):
+        return {k: _finite(v) for k, v in o.items()}
+    if isinstance(o, list):
+        return [_finite(v) for v in o]
+    return o
+
+
+def dumps_json(obj):
+    """브라우저가 반드시 파싱할 수 있는 JSON. allow_nan=False 로 이중 방어한다."""
+    return json.dumps(_finite(obj), ensure_ascii=False, allow_nan=False)
+
+
 class State:
     """지금 기체 상태 하나. 락으로 감싼다 — 수신 스레드와 HTTP 스레드가 함께 본다."""
 
@@ -396,7 +422,7 @@ class Handler(BaseHTTPRequestHandler):
                         pass
                 elif kv == 'track=0':
                     want_track = False
-            body = json.dumps(self.st.snapshot(since, want_track), ensure_ascii=False)
+            body = dumps_json(self.st.snapshot(since, want_track))
             return self._send(200, body, 'application/json; charset=utf-8')
 
         if path == '/api/reset':
