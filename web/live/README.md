@@ -186,7 +186,8 @@ live               직접 실행 (포그라운드)
 shade-live.service systemd --user 유닛 — `./qgc live on` 이 설치한다
 ```
 
-`./qgc live` 의 본체는 [`tools/live/livectl`](../../tools/live/livectl) 이다.
+`./qgc live` 의 본체는 [`tools/live/livectl`](../../tools/live/livectl) 이고,
+Claude Code 용 절차는 [`skills/qgc-live`](../../skills/qgc-live/SKILL.md) 다.
 
 `chart.js` 와 `app.css` 는 **로그 뷰어의 것을 그대로 재사용**한다 (`web/public/`).
 없으면 차트가 안 그려지므로 이 폴더만 떼어 옮기지 마라.
