@@ -218,6 +218,21 @@ shade-live.service systemd --user 유닛 — `./qgc live on` 이 설치한다
 사라져** 끊긴 자국 없이 선이 이어진다 (실측: pollN 15 인데 trk.n 이 2 였다).
 링크가 죽으면 null 을 넣어 선을 끊는다 — 없는 데이터를 지어내지 않는다.
 
+🔴 **NaN 하나가 화면 전체를 끈다.** 파이썬 `json.dumps` 는 NaN 을 그대로
+`NaN` 이라 적는데 그건 유효한 JSON 이 아니다. 브라우저의 `JSON.parse` 는 필드
+하나 때문에 응답 전체를 거부하므로 고도·모드·전압까지 같이 사라지고 화면은
+「서버 없음」을 띄운다. 서버는 멀쩡한데 화면만 죽는다.
+
+실기에서 실제로 났다 (2026-09-05): `ESTIMATOR_STATUS` 의 vel·pos 비율이
+EKF 수렴 전에는 NaN 으로 온다. `dumps_json()` 이 NaN·±Inf 를 null 로 바꾼다.
+
+⚠️ **`curl` 로는 안 보인다 — 파싱을 안 하니까.** API 를 확인할 땐 반드시
+파서를 거쳐라:
+
+```bash
+curl -s "http://localhost:4400/api/state?track=0" | python3 -m json.tool >/dev/null && echo OK
+```
+
 🔴 **chart.js 에 색을 넘길 땐 `cssVar()` 를 거친다.** `stroke` 를 **SVG 속성**
 으로 쓰는데 속성값은 CSS 변수를 풀지 않는다. `var(--c-alt)` 를 그대로 넘기면
 선은 그려지는데 색이 없어 화면에서 사라진다.
@@ -237,3 +252,4 @@ shade-live.service systemd --user 유닛 — `./qgc live on` 이 설치한다
 | 값이 멈춤 | 헤더의 `pkt` 가 느나 | 안 늘면 링크가 끊긴 것. 늘면 FC 가 그 메시지를 안 보낸다 |
 | `on` 이 실패 | `./qgc live log` | 대개 포트 충돌이다. `./qgc live on 14551` |
 | 차트가 빈 채 | 헤더의 `pkt` 가 느나 | 표본은 링크와 무관하게 쌓인다. 아예 안 그려지면 `/chart.js` 404 를 의심한다 (web/public 폴백) |
+| **서비스는 ON 인데 화면이 「서버 없음」** | `curl … \| python3 -m json.tool` | 응답에 NaN 이 섞였다 → 위 「NaN 하나가」 |
