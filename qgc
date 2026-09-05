@@ -4,6 +4,7 @@
 #   ./qgc log 1         1번 로그 분석
 #   ./qgc log <path>    경로 직접 지정
 #   ./qgc live on|off   실시간 트래킹 페이지 (localhost:4400, 읽기 전용)
+#   ./qgc sync          비행 끝나고 한 줄 — FC → 이 PC → shade01.bewe.co.kr
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -18,6 +19,10 @@ usage() {
   ./qgc live on 14551   UDP 포트 지정 (QGC 와 14550 이 겹칠 때)
   ./qgc live off        끄기
   ./qgc live status     상태 + 링크 수신 여부
+
+  ./qgc sync            오늘 비행을 FC 에서 받아 shade01 에 올린다
+  ./qgc sync 2026-09-05 그날 것
+  ./qgc sync --dry      무엇을 받고 올릴지 보여주기만
 
 옵션은 그대로 전달된다:
   ./qgc log list -n 30
@@ -37,6 +42,10 @@ case "$1" in
   live)
     shift
     exec "$HERE/tools/live/livectl" "$@"
+    ;;
+  sync)
+    shift
+    exec "$HERE/tools/flightsync/flightsync" "$@"
     ;;
   -h|--help|help) usage ;;
   *)

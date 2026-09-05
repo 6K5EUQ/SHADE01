@@ -1,0 +1,255 @@
+#!/usr/bin/env bash
+# 비행 끝나고 한 줄. FC → 이 PC → shade01.bewe.co.kr.
+#
+#   ./qgc sync              오늘(KST) 비행을 받아 올린다
+#   ./qgc sync 2026-09-05   그날 것
+#   ./qgc sync --dry        무엇을 받고 올릴지 보여주기만
+#
+# 왜 이게 있나: 손으로 하면 브리지 정지 → fcfetch → 브리지 복구 → scp →
+# 판정 → 업로드 → 서비스 재시작이 일곱 단계다. 하나만 빠뜨려도(특히 **브리지
+# 복구**) QGC 링크가 끊긴 채 남는다. 여기서는 어떻게 끝나든 복구가 돈다.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="$(cd "$HERE/../.." && pwd)"
+LOCAL="$REPO/logs"
+
+# ── 설정 ────────────────────────────────────────────────────────────
+# 🔴 리포가 public 이라 주소를 여기 적지 않는다. web/tools/hosts.conf 에 적는다.
+CONF="$REPO/web/tools/hosts.conf"
+[ -f "$CONF" ] || { echo "설정이 없다: $CONF"; echo "  cp $REPO/web/tools/hosts.conf.example $CONF"; exit 1; }
+# shellcheck disable=SC1090
+. "$CONF"
+
+: "${SERVER:?hosts.conf 에 SERVER 가 없다}"
+FC_HOST="${FC_HOST:-rim3@rim3}"                 # FC 가 USB 로 붙어 있는 PC
+FC_VENV="${FC_VENV:-~/.venv-mav/bin/python}"    # 그 PC 의 pymavlink 인터프리터
+FC_LOGDIR="${FC_LOGDIR:-~/SHADE01/logs}"        # 그 PC 가 받아 둘 곳
+SERVER_LOGS="${SERVER_LOGS:-/home/ku/shade01-data/logs}"
+PUBLIC_URL="${PUBLIC_URL:-https://shade01.bewe.co.kr}"
+SERVER_UNIT="${SERVER_UNIT:-lab-shade01}"
+
+# 이 크기 미만은 **받지도 않는다.** 재연결이 파일당 7.7초라 총시간의 72% 를
+# 먹는 것이 실측이므로(2026-09-05: 49개 562초 중 377초), 받는 개수를 줄이는
+# 것이 유일하게 듣는 최적화다. FC 는 한 연결에 파일 하나만 내주므로 병렬은
+# 불가능하다 (PROCEDURE.md "FC 는 한 연결에 파일 하나만 내준다").
+#
+# ⚠️ 1.0MB 근거 — 2026-09-05 실측 49개:
+#      실비행·호버 8개  = 1.17 ~ 22.41 MB   (전부 위)
+#      지상·즉시disarm  = 0.19 ~ 0.95 MB    (하나 빼고 전부 아래)
+#    경계에 가장 가까운 것은 지상 로그 0.95MB 다. 호버 최소는 1.17MB 였다.
+#    아슬아슬하면 --min-size 로 낮춰라. 건너뛴 것 중 **가장 큰 크기를 항상
+#    출력**하므로, 경계에 붙은 파일이 있었는지 눈으로 확인할 수 있다.
+MIN_MB="${SYNC_MIN_MB:-1.0}"
+
+# 서버에 올릴 배지. 사용자가 보려는 것은 실제로 뜬 비행이다.
+UPLOAD_BADGES="${SYNC_BADGES:-flight hover}"
+
+DRY=0; DATE=""
+for a in "$@"; do
+  case "$a" in
+    --dry) DRY=1 ;;
+    --min-size=*) MIN_MB="${a#*=}" ;;
+    --all-badges) UPLOAD_BADGES="flight hover ground noarm unknown" ;;
+    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    -*) echo "모르는 옵션: $a"; exit 1 ;;
+    *) DATE="$a" ;;
+  esac
+done
+
+# 날짜는 **UTC** 다 — FC 의 폴더 이름이 UTC 이기 때문이다. 인자를 안 주면
+# 오늘(KST) 비행이 들어 있을 UTC 폴더를 고른다.
+# ⚠️ KST = UTC+9 라 KST 09시 이전 비행은 **어제 UTC 폴더**에 있다. 그래서
+#    인자 없이 부르면 두 폴더를 다 훑는다.
+if [ -n "$DATE" ]; then
+  DIRS=("$DATE")
+else
+  DIRS=("$(date -u +%F)" "$(date -u -d yesterday +%F)")
+fi
+
+say() { printf '%s\n' "$*"; }
+fail() { printf '✗ %s\n' "$*" >&2; }
+
+# ── 브리지 ──────────────────────────────────────────────────────────
+# FC 시리얼 포트는 하나뿐이다. 브리지가 잡고 있으면 MAVFTP 가 못 붙는다.
+# 유닛이 --user 인지 시스템인지는 PC 마다 다르다 (rim3=user, raspb1=system).
+BRIDGE_SCOPE=""
+bridge_detect() {
+  if ssh -o BatchMode=yes -o ConnectTimeout=20 "$FC_HOST" \
+       'systemctl --user is-active shade-bridge.service >/dev/null 2>&1'; then
+    BRIDGE_SCOPE="user"; BRIDGE_UNIT="shade-bridge.service"
+  elif ssh -o BatchMode=yes -o ConnectTimeout=20 "$FC_HOST" \
+       'systemctl is-active mavlink-bridge.service >/dev/null 2>&1'; then
+    BRIDGE_SCOPE="system"; BRIDGE_UNIT="mavlink-bridge.service"
+  else
+    BRIDGE_SCOPE="none"
+  fi
+}
+bridge() {   # bridge start|stop
+  case "$BRIDGE_SCOPE" in
+    user)   ssh -o BatchMode=yes -o ConnectTimeout=30 "$FC_HOST" "systemctl --user $1 $BRIDGE_UNIT" ;;
+    system) ssh -o BatchMode=yes -o ConnectTimeout=30 "$FC_HOST" "sudo systemctl $1 $BRIDGE_UNIT" ;;
+    *)      return 0 ;;
+  esac
+}
+
+# 🔴 어떻게 끝나든 브리지를 되살린다. 이걸 빠뜨리면 QGC 무선 링크가 끊긴 채
+#    남고, 다음 사람이 원인을 모른 채 기체 앞에 선다.
+STOPPED=0
+restore() {
+  if [ "$STOPPED" = 1 ]; then
+    say "브리지 복구 중…"
+    if bridge start; then say "  ✅ 브리지 복구"; else fail "브리지 복구 실패 — 손으로 확인하라: ssh $FC_HOST"; fi
+    STOPPED=0
+  fi
+}
+trap restore EXIT INT TERM
+
+# ── 1. FC 목록 ──────────────────────────────────────────────────────
+say "== FC 로그 목록 =="
+bridge_detect
+if [ "$BRIDGE_SCOPE" = "none" ]; then
+  say "  (브리지 유닛 없음 — 포트가 비어 있다고 보고 진행)"
+else
+  bridge stop && STOPPED=1
+  say "  브리지 정지 ($BRIDGE_SCOPE/$BRIDGE_UNIT) — QGC 링크가 잠시 끊긴다"
+fi
+
+scp -q -o BatchMode=yes -o ConnectTimeout=60 "$REPO/tools/qgclog/fcfetch.py" "$FC_HOST:/tmp/" || {
+  fail "fcfetch.py 전송 실패"; exit 1; }
+
+# 폴더별 목록을 모아 "이름<TAB>MB<TAB>UTC폴더" 로 만든다.
+LIST=""
+for d in "${DIRS[@]}"; do
+  out=$(ssh -o BatchMode=yes -o ConnectTimeout=60 "$FC_HOST" \
+        "cd /tmp && $FC_VENV fcfetch.py ls /fs/microsd/log/$d" 2>/dev/null) || continue
+  # 한 줄: "      09_24_04.ulg             22.41M"
+  add=$(printf '%s\n' "$out" | awk -v d="$d" '
+    /\.ulg/ { name=$1; mb=$2; gsub("M","",mb); printf "%s\t%s\t%s\n", name, mb, d }')
+  [ -n "$add" ] && LIST="$LIST$add"$'\n'
+done
+LIST=$(printf '%s' "$LIST" | sed '/^$/d')
+
+if [ -z "$LIST" ]; then
+  say "  그 날짜에 FC 로그가 없다: ${DIRS[*]}"
+  exit 0
+fi
+say "  FC 에 $(printf '%s\n' "$LIST" | wc -l)개"
+
+# ── 2. 크기 게이트 ──────────────────────────────────────────────────
+WANT=$(printf '%s\n' "$LIST" | awk -F'\t' -v m="$MIN_MB" '$2+0 >= m')
+SKIP=$(printf '%s\n' "$LIST" | awk -F'\t' -v m="$MIN_MB" '$2+0 <  m')
+nwant=$(printf '%s' "$WANT" | grep -c . || true)
+nskip=$(printf '%s' "$SKIP" | grep -c . || true)
+biggest=$(printf '%s\n' "$SKIP" | awk -F'\t' '{if($2+0>m)m=$2+0}END{printf "%.2f", m+0}')
+
+say "  받을 것 ${nwant}개 / ${MIN_MB}MB 미만 ${nskip}개 건너뜀 (그중 최대 ${biggest}MB)"
+# 경계에 붙은 파일이 있으면 눈에 띄게 말한다 — 실비행을 놓치는 유일한 경로다.
+awk -v b="$biggest" -v m="$MIN_MB" 'BEGIN{ if (b+0 > m*0.8) print "  ⚠️ 건너뛴 것 중 " b "MB 가 문턱에 가깝다. 놓친 것 같으면: ./qgc sync --min-size=0.5" }'
+
+if [ "$nwant" = 0 ]; then say "  받을 것이 없다"; exit 0; fi
+
+if [ "$DRY" = 1 ]; then
+  say "== [dry] 받을 목록 =="
+  printf '%s\n' "$WANT" | awk -F'\t' '{printf "   %s  %sMB  (%s)\n",$1,$2,$3}'
+  exit 0
+fi
+
+# ── 3. 받기 ─────────────────────────────────────────────────────────
+say "== FC → $FC_HOST =="
+t0=$(date +%s)
+got=0
+while IFS=$'\t' read -r name mb d; do
+  [ -n "$name" ] || continue
+  dest="${d}_${name}"                     # 저장 이름은 리포 규약 그대로
+  if [ -e "$LOCAL/$dest" ]; then
+    printf '   · %-26s 이미 있음\n' "$dest"; continue
+  fi
+  if ssh -o BatchMode=yes -o ConnectTimeout=60 -o ServerAliveInterval=30 "$FC_HOST" \
+       "cd /tmp && $FC_VENV fcfetch.py get /fs/microsd/log/$d/$name $FC_LOGDIR/$dest" \
+       >/dev/null 2>&1; then
+    printf '   ✅ %-26s %sMB\n' "$dest" "$mb"; got=$((got+1))
+  else
+    printf '   ✗ %-26s 받기 실패\n' "$dest"
+  fi
+done <<< "$WANT"
+say "  ${got}개 받음 ($(( $(date +%s) - t0 ))초)"
+
+# 브리지를 **여기서** 되살린다. 아래 단계는 FC 와 무관하므로 링크를 더 붙들
+# 이유가 없다.
+restore
+
+# ── 4. 회수 ─────────────────────────────────────────────────────────
+say "== $FC_HOST → 이 PC =="
+mkdir -p "$LOCAL"
+before=$(ls "$LOCAL"/*.ulg 2>/dev/null | wc -l)
+while IFS=$'\t' read -r name mb d; do
+  [ -n "$name" ] || continue
+  dest="${d}_${name}"
+  [ -e "$LOCAL/$dest" ] && continue
+  scp -q -o BatchMode=yes -o ConnectTimeout=200 "$FC_HOST:$FC_LOGDIR/$dest" "$LOCAL/" \
+    || printf '   ✗ %s 회수 실패\n' "$dest"
+done <<< "$WANT"
+say "  로컬 $(ls "$LOCAL"/*.ulg 2>/dev/null | wc -l)개 (이전 ${before}개)"
+
+# ── 5. 판정 ─────────────────────────────────────────────────────────
+pick_python() {
+  for c in "${QGCLOG_PYTHON:-}" "$REPO/.venv/bin/python" \
+           "$REPO/venv-ardupilot/bin/python" python3; do
+    [ -n "$c" ] || continue
+    command -v "$c" >/dev/null 2>&1 && "$c" -c "import pyulog,numpy" >/dev/null 2>&1 && { echo "$c"; return 0; }
+  done
+  return 1
+}
+PY="$(pick_python)" || { fail "pyulog 를 가진 python 이 없다 — PROCEDURE.md 2-0"; exit 1; }
+
+say "== 판정 =="
+cand=()
+while IFS=$'\t' read -r name mb d; do
+  [ -n "$name" ] || continue
+  f="$LOCAL/${d}_${name}"
+  [ -e "$f" ] && cand+=("$f")
+done <<< "$WANT"
+
+[ ${#cand[@]} -gt 0 ] || { say "  판정할 파일이 없다"; exit 0; }
+
+send=()
+while IFS=$'\t' read -r v why p; do
+  [ -n "$v" ] || continue
+  b=$(basename "$p")
+  # uploadable.py 는 skip 사유를, keep 이면 배지를 준다. 여기서는 실제로 뜬
+  # 것만 올린다 — 지상 시험은 로컬과 FC 에 남아 있고 언제든 볼 수 있다.
+  if [ "$v" = "skip" ]; then
+    printf '   − %-30s %s\n' "$b" "$why"
+  elif grep -qw -- "$why" <<< "$UPLOAD_BADGES"; then
+    printf '   ✅ %-30s %s\n' "$b" "$why"; send+=("$p")
+  else
+    printf '   − %-30s %s (안 올림)\n' "$b" "$why"
+  fi
+done < <("$PY" "$REPO/web/tools/uploadable.py" "${cand[@]}" 2>/dev/null)
+
+# ── 6. 업로드 ───────────────────────────────────────────────────────
+if [ ${#send[@]} -eq 0 ]; then
+  say "== 올릴 비행이 없다 =="
+  exit 0
+fi
+
+say "== 서버로 =="
+ssh -o BatchMode=yes "$SERVER" "mkdir -p '$SERVER_LOGS'" || { fail "서버 접속 실패"; exit 1; }
+if command -v rsync >/dev/null && ssh -o BatchMode=yes "$SERVER" 'command -v rsync' >/dev/null 2>&1; then
+  rsync -a --ignore-existing --info=stats1 "${send[@]}" "$SERVER:$SERVER_LOGS/" || { fail "업로드 실패"; exit 1; }
+else
+  for f in "${send[@]}"; do scp -q "$f" "$SERVER:$SERVER_LOGS/" || fail "업로드 실패: $f"; done
+fi
+
+say "== 서버 반영 =="
+ssh -o BatchMode=yes "$SERVER" "sudo systemctl restart $SERVER_UNIT" || fail "서비스 재시작 실패"
+# 캐시를 굽는 동안 502 가 난다. 준비될 때까지 짧게 기다린다.
+for _ in $(seq 1 12); do
+  h=$(curl -s --max-time 20 "$PUBLIC_URL/api/health" 2>/dev/null)
+  case "$h" in *'"ok":true'*) say "  $h"; break ;; esac
+  sleep 5
+done
+
+say
+say "✅ ${#send[@]}편 올렸다 — $PUBLIC_URL"

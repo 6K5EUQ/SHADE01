@@ -14,3 +14,9 @@ SOURCES=(
 SERVER="ku@ku-labserver"
 SERVER_LOGS="/home/ku/shade01-data/logs"
 PUBLIC_URL="https://shade01.bewe.co.kr"
+
+# FC 가 USB 로 붙어 있는 PC — ./qgc sync 가 여기서 MAVFTP 로 받는다.
+# FC 를 다른 PC 로 옮기면 이 줄만 바꾼다 (2026-09-04 에 raspb1 → rim3 로 옮겼다).
+FC_HOST="rim3@rim3"
+FC_VENV="~/.venv-mav/bin/python"   # 그 PC 의 pymavlink 인터프리터
+FC_LOGDIR="~/SHADE01/logs"         # 그 PC 가 받아 둘 곳
