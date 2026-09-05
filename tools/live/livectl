@@ -117,8 +117,12 @@ cmd_off() {
     echo "이미 꺼져 있다."
   fi
   # 부팅 시 자동 시작이 걸려 있으면 같이 뗀다 — off 는 off 여야 한다.
-  systemctl --user is-enabled --quiet "$UNIT" 2>/dev/null && \
+  # 다만 **말은 하고** 뗀다. 조용히 지우면 `always` 로 걸어 둔 PC 가 다음 부팅에
+  # 안 뜨는데 아무도 그 이유를 모른다 (ku 에서 실제로 그랬다).
+  if systemctl --user is-enabled --quiet "$UNIT" 2>/dev/null; then
     systemctl --user disable "$UNIT" >/dev/null 2>&1 || true
+    echo "   부팅 자동시작도 해제했다 — 다시 걸려면: ./qgc live always"
+  fi
 }
 
 cmd_status() {
