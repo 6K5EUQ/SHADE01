@@ -26,15 +26,18 @@ const POLL_MS = 200;
 // ── 계기 스케일 상수. 빌드와 layout() 이 같은 값을 읽는다 (두 벌이 되면 어긋난다) ──
 const PPD_PITCH = 6.0;                // 피치 px/도
 const PPU_SPD = 12;                   // 대지속도 px/(m/s)
-const PPU_ALT = 8;                    // 고도 px/m — alt=0 일 때 50m 펜스선이 창 위 가장자리
+const PPU_ALT = 8;                    // 고도 px/m — AH=807 이면 ±50m 가 보인다
 const PPD_HDG = 8.0;                  // 기수 px/도
 const PPU_VSI = 22;                   // 상승률 px/(m/s)
 const OVER = 2600;                    // 하늘/땅 오버스캔 반폭 (4K 반대각선의 1.7배)
 
-// 🔴 FC 파라미터를 여기 박아 둔 것이다. 서버는 이 값을 안 보낸다 —
-//    GF_MAX_HOR_DIST / GF_MAX_VER_DIST 와 조용히 어긋날 수 있으므로
-//    화면 라벨에 '설정값' 을 붙여 실측이 아님을 밝힌다. 근거: README '현재 상태' 표.
-const FENCE = { HOR: 150, VER: 50 };
+// 지오펜스 천장선은 없다 (2026-09-05 제거). FC 에서 펜스를 껐다 —
+// GF_ACTION 2→0, GF_MAX_HOR_DIST 150→0, GF_MAX_VER_DIST 50→0.
+// 근거는 FC_CHANGELOG.md 「2026-09-05 14:16」: GF_ACTION=2(Hold) 가 비행 #184
+// 조종 불능의 직접 원인이었고, 참조 함대 18대 전원이 펜스를 안 쓴다.
+// 🔴 다시 넣지 마라 — 서버가 GF_* 를 안 보내므로 여기 박은 숫자는 FC 와
+//    조용히 어긋난다. 실제로 그렇게 어긋나 없는 천장선을 빨갛게 그리고 있었다.
+//    펜스를 되살리려면 mav_live.py 가 GF_* 를 실기에서 읽어 보내야 한다.
 
 const HDG_H = 34;                     // 상단 기수 테이프 높이
 
@@ -202,16 +205,12 @@ function buildHUD() {
   //    피토관은 고장품이라 이 자리에 오면 안 된다. 그 근거는
   //    web/live/README.md 「고장 센서 격리」에 남아 있다.
 
-  // ④ 우측 테이프 — 고도 AGL + 지면대 + 펜스 천장선
+  // ④ 우측 테이프 — 고도 AGL + 지면대
   h.altBg = el('rect', { fill: 'rgba(13,17,23,.55)' }, svg);
   const altClip = el('g', { 'clip-path': 'url(#hudClipAlt)' }, svg);
   h.altSlide = el('g', {}, altClip);
   h.gndBand = el('rect', { y: 0, fill: 'var(--bad)', opacity: .10 }, h.altSlide);
   h.gndLine = el('line', { x1: 0, y1: 0, y2: 0, stroke: 'var(--dim)', 'stroke-width': 2 }, h.altSlide);
-  h.fenceLine = el('line', { x1: 0, y1: -FENCE.VER * PPU_ALT, y2: -FENCE.VER * PPU_ALT, stroke: 'var(--bad)', 'stroke-width': 2 }, h.altSlide);
-  // 펜스는 **선만** 그린다 (2026-09-05). 눈금 숫자와 겹쳐 둘 다 못 읽던 라벨을
-  // 뺐다 — 고도 테이프에서 빨간 가로선 하나면 '여기가 천장' 이라는 뜻이 통한다.
-  // 값(50m)은 테이프 눈금이 이미 말해 준다.
   for (let v = -10; v <= 120; v += 2) {
     const y = -v * PPU_ALT, ten = v % 10 === 0;
     el('line', { x1: 0, y1: y, x2: ten ? 14 : 8, y2: y, stroke: '#e6edf3', 'stroke-width': ten ? 1.6 : 1, opacity: ten ? 1 : .6 }, h.altSlide);
@@ -334,7 +333,6 @@ function layout(w, hh) {
   setAttr(h.altVal, 'x', W - TAPE_W + 6); setAttr(h.altVal, 'y', cy + 8);
   setAttr(h.gndBand, 'width', TAPE_W); setAttr(h.gndBand, 'height', 80);
   setAttr(h.gndLine, 'x2', TAPE_W);
-  setAttr(h.fenceLine, 'x2', TAPE_W);
 
   // VSI — 고도 테이프 안쪽 모서리에 붙는다
   const vx = W - TAPE_W - 16;
@@ -1152,7 +1150,12 @@ addEventListener('keydown', (e) => {
   else if (e.code === 'ArrowRight') { ulpb.t = Math.min(ulpb.dur, ulpb.t + 5); pbRender(); }
 });
 
-poll();
+// 🔴 poll() 은 이 파일 **맨 끝**에서 부른다 — 여기서 부르면 안 된다.
+//    render() 가 첫 줄에서 renderPlay() 를 부르고, renderPlay() 는 아래
+//    `const pb` 를 읽는다. 그 선언보다 먼저 돌면 TDZ ReferenceError 가 나고,
+//    그 예외가 poll() 안에서 터지므로 **다음 setTimeout 이 안 걸린다** —
+//    화면이 통째로 빈 채 폴이 한 번 만에 영영 멈춘다 (실측: pollN 이 1 에서
+//    안 늘고 계기·차트가 전부 빔). 예외가 콘솔에 안 뜨는 것도 이 때문이다.
 
 // ── 재생 ────────────────────────────────────────────────────────────
 // 서버가 State 를 과거 프레임으로 채우므로, 이 코드는 **조작만** 한다.
@@ -1243,3 +1246,6 @@ function renderPlay(p) {
   pb.seek.dataset.dur = p.dur;
   if (!pb.dragging && p.dur > 0) pb.seek.value = Math.round(p.pos / p.dur * 1000);
 }
+
+// 기동은 마지막이다 — 위의 const 선언(pb 등)이 전부 초기화된 뒤라야 한다.
+poll();

@@ -9,9 +9,9 @@
 html { height: 100%; }
 body { height: 100%; overflow: hidden; display: flex; flex-direction: column; }
 
-/* 🔴 HUD 좌(크게) · 지도 우.
+/* 🔴 HUD 좌(크게) · 차트 우.
    minmax 하한 560px = 좌우 테이프(각 62~92px)가 중앙 피치 사다리 라벨을 안 먹는 최소.
-   minmax 하한 380px = 홈 중심 150m 펜스 원(지름 300m)이 지도에 들어가는 최소.
+   minmax 하한 380px = 차트 3단이 각자 최소 150px 를 갖고도 축 라벨이 읽히는 최소.
    min-width/min-height:0 이 없으면 그리드 자식의 기본 auto 최소크기 때문에
    숫자 스트립이 화면 밖으로 밀려 조용히 사라진다. */
 main {
