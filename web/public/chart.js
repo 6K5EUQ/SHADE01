@@ -343,7 +343,10 @@ function drawChart(el, trk, spec) {
 
 function fmtTick(v) {
   const a = Math.abs(v);
-  return a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2);
+  const s = a >= 100 ? v.toFixed(0) : a >= 10 ? v.toFixed(1) : v.toFixed(2);
+  // -0.00 / -0 은 값이 아니라 부동소수 찌꺼기다. 눈금에 뜨면 읽는 사람이
+  // 무슨 뜻인지 되짚게 된다 (실측: 상승률 축 가운데가 늘 '-0' 이었다).
+  return /^-0(\.0*)?$/.test(s) ? s.slice(1) : s;
 }
 
 // PX4 Flight Review 의 공식 색표 (config_tables.flight_modes_table) 를 그대로 쓴다.
