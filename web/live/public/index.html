@@ -51,7 +51,10 @@
     <div class="msgs">
       <div class="hd">
         <span id="dot" class="dot" title="링크 상태">●</span>
-        <span>FC 메시지</span><span class="cnt" id="msgCnt"></span>
+        <!-- 지금 데이터가 어느 경로로 오는지. ELRS(조종기 백팩) / USB(FC 직결).
+             둘은 갱신 주기가 3배 넘게 차이나므로 무엇을 보고 있는지 알아야 한다. -->
+        <span id="linkSrc" title="데이터 원천">—</span>
+        <span class="cnt" id="msgCnt"></span>
         <!-- 어느 단을 볼지. 차트 위에 떠 있던 것을 여기로 내렸다 —
              그림 위를 가리지 않고, 조작이 한 줄에 모인다. -->
         <div id="toc"></div>

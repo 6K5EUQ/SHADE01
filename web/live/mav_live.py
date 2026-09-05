@@ -190,6 +190,7 @@ class State:
                 'packets': self.packets,
                 'bytes': self.bytes,
                 'src': '%s:%d' % self.src if self.src else None,
+                'link': _link_kind(self.src),
                 'sysid': self.sysid,
                 'uptime': round(time.time() - self.boot),
                 'd': dict(self.d),
@@ -201,6 +202,25 @@ class State:
                 'track': self.track[start:] if want_track else [],
                 'messages': self.messages[-40:],
             }
+
+
+def _link_kind(src):
+    """이 프레임이 어느 경로로 왔나 — 'ELRS' 또는 'USB'.
+
+    보낸 쪽 주소로 가른다. 둘은 대역폭도 갱신 주기도 달라서(실측: 백팩
+    285 B/s·자세 1.6Hz vs USB 직결 28.4 KB/s) 지금 무엇을 보고 있는지가
+    화면에 드러나야 한다.
+
+      10.0.0.x   조종기 ELRS 백팩 AP → 'ELRS'
+      그 외      shade-bridge 가 FC USB 를 중계 → 'USB'
+
+    ⚠️ 브리지는 자기 Tailscale 주소(100.x)나 127.0.0.1 로 보낸다. 백팩만
+       10.0.0.0/24 를 쓰므로 그것만 보면 갈린다.
+    """
+    if not src:
+        return None
+    ip = src[0]
+    return 'ELRS' if ip.startswith('10.0.0.') else 'USB'
 
 
 def handle(msg, st):

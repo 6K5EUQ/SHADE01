@@ -199,6 +199,11 @@ a.btn { display: inline-block; text-decoration: none; }
   font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border);
 }
 .msgs .hd .cnt { color: var(--bad); font-weight: 700; }
+/* 데이터 원천 배지 — ELRS 는 느린 경로라 눈에 띄게, USB 는 평범하게. */
+#linkSrc { font-weight: 700; letter-spacing: .4px; padding: 0 5px;
+           border-radius: 4px; font-size: 11px; }
+#linkSrc.src-elrs { color: var(--warn); background: rgba(210,153,34,.14); }
+#linkSrc.src-usb  { color: var(--ok);   background: rgba(63,185,80,.14); }
 .msgs .hd .grow { flex: 1; }
 .msgs .hd button { padding: 0 6px; font-size: 11px; line-height: 1.6; }
 .msgs .hd select {

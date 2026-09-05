@@ -468,6 +468,7 @@ function buildCharts() {
       <!-- 계열 이름은 chart.js 가 축 머리말로 적고, 지금 값은 왼쪽 계기판이
            크게 말한다. 여기에 또 띄우면 같은 숫자가 화면에 두 번이다. -->
       <svg id="${c.id}"></svg>
+      <div class="tip" id="tip-${c.id}"></div>
     </div>`).join('');
   for (const c of want) bindHover(c);
   renderCharts();
@@ -496,6 +497,7 @@ function buildToc() {
  */
 function bindHover(c) {
   const el = $(c.id);
+  const tip = $('tip-' + c.id);
   if (!el || el._bound) return;
   el._bound = true;
 
@@ -512,9 +514,40 @@ function bindHover(c) {
       cur.style.display = '';
     }
     hoverT = t;                       // 흘러가는 것을 멈춘다 (renderCharts 가 읽는다)
+
+    // 그 시각의 값. 🔴 **값이 있는 계열만** 적는다 — 배터리를 안 물린
+    // 지상에서 `전류 –A` 같은 빈 줄이 뜨던 것을 고쳤다 (2026-09-05).
+    if (!tip) return;
+    const i = Math.max(0, Math.min(trk.n - 1, Math.round(t * trk.hz)));
+    const rows = [];
+    for (const sx of c.series) {
+      const arr = trk[sx.key];
+      const v = arr ? arr[i] : null;
+      if (v == null || !isFinite(v)) continue;          // 없는 값은 안 적는다
+      rows.push(`<div class="r"><span class="d" style="background:${sx.color}"></span>` +
+                `<span class="n">${sx.label}</span><b>${(+v).toFixed(2)}</b>` +
+                (sx.unit ? `<i>${sx.unit}</i>` : '') + '</div>');
+    }
+    if (!rows.length) { tip.style.opacity = '0'; return; }
+    const ago = trk.dur - t;
+    const md = modeAt(t);
+    tip.innerHTML = `<div class="t">${ago < 1 ? '지금' : '-' + ago.toFixed(1) + 's'}` +
+                    `${md ? ' · ' + md : ''}</div>` + rows.join('');
+    tip.style.opacity = '1';
+
+    // 커서 옆에 두되 단 밖으로 안 나가게 접는다.
+    const sec = el.parentElement.getBoundingClientRect();
+    const w = tip.offsetWidth, hh = tip.offsetHeight;
+    let x = e.clientX - sec.left + 14;
+    if (x + w > sec.width - 4) x = e.clientX - sec.left - 14 - w;
+    let y = e.clientY - sec.top - hh - 12;
+    if (y < 4) y = e.clientY - sec.top + 16;
+    tip.style.left = Math.max(4, x) + 'px';
+    tip.style.top = Math.max(4, Math.min(y, sec.height - hh - 4)) + 'px';
   };
 
   const hide = () => {
+    if (tip) tip.style.opacity = '0';
     const cur = el.querySelector('.cursor');
     if (cur) cur.style.display = 'none';
     hoverT = null;
@@ -594,6 +627,19 @@ function render(s) {
   show(h.freeze, !!frz);
   show(h.freezeTxt, !!frz);
   if (frz) setText(h.freezeTxt, frz);
+
+  // 데이터 원천. ELRS(조종기 백팩) 인지 USB(FC 직결) 인지 — 갱신 주기가
+  // 크게 달라서(실측 백팩 285 B/s vs USB 28.4 KB/s) 화면에 드러나야 한다.
+  const ls = $('linkSrc');
+  const kind = s.link || null;
+  if (ls.dataset.k !== String(kind)) {
+    ls.dataset.k = String(kind);
+    setText(ls, kind || '—');
+    ls.className = kind === 'ELRS' ? 'src-elrs' : kind === 'USB' ? 'src-usb' : '';
+    ls.title = kind === 'ELRS' ? '조종기 ELRS 백팩 경유 (느리다)'
+             : kind === 'USB' ? 'FC USB 직결 브리지 경유'
+             : '데이터 없음';
+  }
 
   // 하단 바는 좁다. 송신 주소는 title 로 밀고 숫자만 남긴다.
   const stEl = $('stats');
