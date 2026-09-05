@@ -171,6 +171,27 @@ a.btn { display: inline-block; text-decoration: none; }
    위쪽 18px 는 축 머리말·현재값 자리다. */
 .lchart svg { display: block; width: 100%; flex: 1 1 auto; min-height: 0;
               padding-top: 18px; }
+/* 커서를 올릴 수 있다는 신호 */
+.lchart svg { cursor: crosshair; }
+
+/* 호버 값 말풍선 — 로그 뷰어(log.html)의 .chart .tip 과 같은 규칙이다.
+   🔴 position:absolute 가 핵심이다. 이게 없으면 flex 자식으로 흘러 단
+   왼쪽 아래에 눌러앉고, JS 가 넣는 left/top 이 아무 효과가 없다.
+   부모 .lchart 에 position:relative 가 걸려 있어 그 기준으로 잡힌다. */
+.lchart .tip {
+  position: absolute; pointer-events: none; z-index: 6; opacity: 0;
+  transition: opacity .08s; background: var(--panel); color: var(--text);
+  border: 1px solid var(--border-2); border-radius: 6px; padding: 5px 8px;
+  font-size: 11px; white-space: nowrap; box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  font-variant-numeric: tabular-nums; font-family: var(--mono);
+}
+.lchart .tip .t { color: var(--muted); font-size: 10px; margin-bottom: 3px; }
+.lchart .tip .r { display: flex; align-items: baseline; gap: 8px; line-height: 1.5; }
+.lchart .tip .r .n { flex: 1; color: var(--dim); }
+.lchart .tip .r .d { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.lchart .tip .r b { font-weight: 600; }
+.lchart .tip .r i { font-style: normal; color: var(--muted); }
+
 #charts .empty { padding: 50px 20px; color: var(--muted); text-align: center; font-size: 13px; }
 
 /* 단 선택. 차트 위에 떠 있던 것을 하단 바 안으로 내렸다 (2026-09-05) —
