@@ -1,0 +1,171 @@
+checksum: 55900
+manuallyEdited: 0
+timezoneMinutes: 0
+ppmunit: 0
+semver: 2.12.2
+board: boxer
+calib: 
+   LH:
+      mid: 1042
+      spanNeg: 718
+      spanPos: 715
+   LV:
+      mid: 951
+      spanNeg: 638
+      spanPos: 706
+   RV:
+      mid: 1022
+      spanNeg: 692
+      spanPos: 710
+   RH:
+      mid: 963
+      spanNeg: 719
+      spanPos: 718
+   P1:
+      mid: 1016
+      spanNeg: 947
+      spanPos: 947
+   P2:
+      mid: 1009
+      spanNeg: 987
+      spanPos: 1015
+   P3:
+      mid: 1285
+      spanNeg: 5645
+      spanPos: 10271
+currModel: 0
+contrast: 18
+vBatWarn: 68
+txVoltageCalibration: -8
+backlightMode: backlight_mode_all
+antennaMode: MODE_PER_MODEL
+disableRtcWarning: 1
+keysBacklight: 0
+dontPlayHello: 0
+internalModule: TYPE_CROSSFIRE
+trainer: 
+   mix: 
+      0:
+         srcChn: 3
+         mode: REPL
+         studWeight: 100
+      1:
+         srcChn: 1
+         mode: REPL
+         studWeight: 100
+      2:
+         srcChn: 2
+         mode: REPL
+         studWeight: 100
+      3:
+         srcChn: 0
+         mode: REPL
+         studWeight: 100
+view: 0
+fai: 0
+beepMode: mode_nokeys
+alarmsFlash: 0
+disableMemoryWarning: 0
+disableAlarmWarning: 0
+stickMode: 1
+timezone: 0
+adjustRTC: 0
+inactivityTimer: 10
+internalModuleBaudrate: 2
+splashMode: 2
+hapticMode: mode_nokeys
+switchesDelay: 0
+lightAutoOff: 12
+templateSetup: 21
+PPM_Multiplier: 0
+hapticLength: 0
+beepLength: 1
+hapticStrength: 2
+gpsFormat: 0
+audioMuteEnable: 0
+speakerPitch: 0
+speakerVolume: 23
+vBatMin: 66
+vBatMax: 84
+backlightBright: 0
+globalTimer: 274821
+bluetoothBaudrate: 0
+bluetoothMode: OFF
+countryCode: 0
+pwrOnSpeed: 0
+pwrOffSpeed: 0
+noJitterFilter: 0
+imperial: 0
+disableRssiPoweroffAlarm: 0
+USBMode: 0
+jackMode: 0
+ttsLanguage: "en"
+uiLanguage: "en"
+beepVolume: 0
+wavVolume: 4
+varioVolume: 2
+backgroundVolume: 3
+varioPitch: 0
+varioRange: 0
+varioRepeat: 0
+serialPort: 
+   VCP:
+      mode: CLI
+      power: 0
+sticksConfig: 
+   3:
+      name: "---"
+      inv: 0
+potsConfig: 
+   P1:
+      type: with_detent
+      inv: 0
+      name: ""
+   P2:
+      type: with_detent
+      inv: 0
+      name: ""
+   P3:
+      type: multipos_switch
+      inv: 0
+      name: ""
+switchConfig: 
+   SA:
+      name: ""
+      type: 2POS
+   SB:
+      name: ""
+      type: 3POS
+   SC:
+      name: ""
+      type: 3POS
+   SD:
+      name: ""
+      type: 2POS
+   SE:
+      name: ""
+      type: 2POS
+   SF:
+      name: ""
+      type: TOGGLE
+backlightColor: 0
+bluetoothName: ""
+ownerRegistrationID: "6K5EUQ"
+rotEncMode: 0
+uartSampleMode: 0
+radioGFDisabled: 0
+radioTrainerDisabled: 0
+modelHeliDisabled: 0
+modelFMDisabled: 0
+modelCurvesDisabled: 0
+modelGVDisabled: 0
+modelLSDisabled: 0
+modelSFDisabled: 0
+modelCustomScriptsDisabled: 1
+modelTelemetryDisabled: 0
+disableTrainerPoweroffAlarm: 0
+disablePwrOnOffHaptic: 0
+modelQuickSelect: 0
+oneLogPerDay: 0
+invertLCD: 0
+pwrOffIfInactive: 0
