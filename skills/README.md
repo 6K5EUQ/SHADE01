@@ -6,17 +6,19 @@
 |---|---|
 | [qgc-log](qgc-log/SKILL.md) | **끝난 비행** — PX4 로그(.ulg) 목록·분석. `./qgc log list`, `./qgc log <번호>` |
 | [qgc-live](qgc-live/SKILL.md) | **지금 이 순간** — 실시간 트래킹 켜기·끄기·진단. `./qgc live on\|off\|status` |
+| [flight-sync](flight-sync/SKILL.md) | **비행 직후** — FC 로그를 받아 웹에 올린다. `./qgc sync` |
 
 ## 설치
 
 Claude Code 는 `~/.claude/skills/` 아래를 읽는다. 심볼릭으로 연결한다:
 
 ```bash
-ln -sfn "$(pwd)/skills/qgc-log"  ~/.claude/skills/qgc-log
-ln -sfn "$(pwd)/skills/qgc-live" ~/.claude/skills/qgc-live
+ln -sfn "$(pwd)/skills/qgc-log"     ~/.claude/skills/qgc-log
+ln -sfn "$(pwd)/skills/qgc-live"    ~/.claude/skills/qgc-live
+ln -sfn "$(pwd)/skills/flight-sync" ~/.claude/skills/flight-sync
 ```
 
-새 PC 에서는 위 두 줄을 한 번씩 돌린다. `~/.claude/skills/` 가 없으면
+새 PC 에서는 위 세 줄을 한 번씩 돌린다. `~/.claude/skills/` 가 없으면
 `mkdir -p ~/.claude/skills` 를 먼저.
 
 **정본은 이 리포다.** `~/.claude/skills/` 에 사본을 두면 두 곳이 갈라진다 —
@@ -30,3 +32,6 @@ ln -sfn "$(pwd)/skills/qgc-live" ~/.claude/skills/qgc-live
 
 `qgc-live` 도 마찬가지다 — PC 별 UDP 포트(`rim3`·`rim` 이 14551 인 이유), 상행이
 막혀 있다는 보장, NaN 함정이 전부 이 리포의 구현에 묶여 있다.
+
+`flight-sync` 의 1MB 크기 문턱과 재연결 7.7초는 **이 FC 의 MAVFTP 실측치**다
+([FLIGHT-SYNC.md](../FLIGHT-SYNC.md)). 브리지 유닛 이름도 이 기체의 PC 구성에서 온다.

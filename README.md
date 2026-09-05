@@ -14,10 +14,12 @@ Striver Mini VTOL(4+1) 기체 **한 대**의 운용 저장소. 부품 자료·�
 | [`web/`](web/) | [shade01.bewe.co.kr](https://shade01.bewe.co.kr) — 지도·시간축 재생 뷰어, 로그 정본 보관소 |
 | [`web/live/`](web/live/) | **실시간 트래킹** — 지도+계기를 localhost 로. 읽기 전용 |
 | `params/` `config/` | 파라미터 스냅샷, 조종기 설정 백업 · [**세팅 스냅샷 정리**](config/SETTINGS.md) |
-| [`PROCEDURE.md`](PROCEDURE.md) | 로그 수집 → 분석 → 기록 절차 |
+| ⚡ [`FLIGHT-SYNC.md`](FLIGHT-SYNC.md) | **비행 직후 한 줄** — `./qgc sync` 로 FC → 웹 |
+| [`PROCEDURE.md`](PROCEDURE.md) | 로그 수집 → 분석 → 기록 절차 (손으로 할 때) |
 | 🔴 [`FC_CHANGELOG.md`](FC_CHANGELOG.md) | **FC 변경 이력 — FC 를 만지기 전에 읽고, 만졌으면 적는다** |
 
 ```bash
+./qgc sync              # 비행 끝나고 한 줄 — FC → 웹 (실비행·호버만)
 ./qgc log list          # 최근 비행 나열
 ./qgc log 1             # 1번 분석
 ./qgc live on           # 실시간 트래킹 켜기 → http://localhost:4400
@@ -286,6 +288,9 @@ VTOL 이착륙으로 저장되지 않도록 주의하라 — 고정익을 푼 �
    까지 갔다 (`BAT1_V_EMPTY=3.6` 바로 위). 누적 10000 mAh 를 넘으면 새 편을 시작하지 마라.
 10. 🟡 **Kill 대신 정상 disarm** — 9/5 3편 전부 Kill 로 끝냈고 `Disarming denied: not landed`
     가 실제로 찍혔다. Kill 은 비상용이다.
+11. 🔴 **SD 카드 교체** — FC 가 같은 파일을 읽을 때마다 **다른 바이트**를 낸다
+    (700KB 당 1바이트꼴). 로그 손상·복구가 전부 여기서 온다. 갈고
+    `tools/qgclog/fccrc.py` 로 재검증하라 ([상세](FLIGHT-SYNC.md#-fc-의-sd-읽기가-매번-다른-데이터를-낸다-2026-09-06-발견))
 
 **해결됨** — 지오펜스 설정(150/50 + 폴리곤), `MAV_1_CONFIG` → 0, `COM_RC_LOSS_T` 1s,
 RTL 고도 25/10, 미션 고도 통일.
@@ -294,6 +299,8 @@ RTL 고도 25/10, 미션 고도 통일.
 
 | 날짜 | 사건 |
 |---|---|
+| 2026-09-06 | 🔴 **FC 의 SD 읽기가 비결정적임을 발견** — 같은 파일의 CRC 가 읽을 때마다 다르다(8회 8값). 로그의 "구독 섹션 유실"·"포맷 정의 유실"·깨진 float 이 전부 여기서 온다. SD 교체 필요 ([상세](FLIGHT-SYNC.md#-fc-의-sd-읽기가-매번-다른-데이터를-낸다-2026-09-06-발견)) |
+| 2026-09-06 | ✅ **`./qgc sync` — 비행 직후 한 줄로 FC → 웹.** 크기 게이트로 49개→10개(2.7배), 실비행·호버만 업로드 ([절차](FLIGHT-SYNC.md)) |
 | 2026-09-05 | 🔴 **야외 3편 (16.3분) — 전류 90.2A 최고기록, 배터리 77% DoD.** 로그 49개를 `rim3` USB 로 회수해 서버 반영(117개). 전부 수동 조종이라 RTL 20m 는 미검증 ([상세](flights/2026-09-05-outdoor-session.md)) |
 | 2026-09-05 | ✅ **미션 사전 검토 후 3개 적용** — `RTL_RETURN_ALT` 60→20, `RTL_DESCEND_ALT` 30→10, `MPC_THR_HOVER` 0.50→0.65 ([상세](flights/2026-09-05-mission-preflight-review.md)) |
 | 2026-09-04 | ✅ **고정익 사용 중지 — 쿼드 전용으로 제한.** `RC_MAP_TRANS_SW` 7→0 을 FC 에 쓰고 저장했다. 천이 진입 경로 4곳을 점검해 전부 닫힌 것을 확인 |
