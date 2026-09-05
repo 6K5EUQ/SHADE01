@@ -306,7 +306,11 @@ def handle(msg, st):
 
     elif t == 'RC_CHANNELS':
         d['rssi'] = msg.rssi if msg.rssi != 255 else None
-        d['rc_chan'] = [getattr(msg, 'chan%d_raw' % i) for i in range(1, 9)]
+        # 8 로 자르면 CH9(KILL)·CH10 이 화면에서 사라진다 — 링크는 16 까지 온다.
+        # chancount 가 실제로 몇 개가 유효한지 말해 준다.
+        n = min(getattr(msg, 'chancount', 8) or 8, 18)
+        d['rc_chan'] = [getattr(msg, 'chan%d_raw' % i) for i in range(1, n + 1)]
+        d['rc_count'] = n
 
     elif t == 'RADIO_STATUS':
         d['radio_rssi'] = msg.rssi

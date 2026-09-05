@@ -3,7 +3,8 @@
 #
 #   ./qgc live on          켠다 (기본 UDP 14550 / 웹 4400)
 #   ./qgc live on 14551    UDP 포트를 지정해 켠다
-#   ./qgc live off         끈다
+#   ./qgc live always      켜고 + 부팅 때도 자동으로 뜨게 (재부팅해도 산다)
+#   ./qgc live off         끈다 (부팅 자동시작도 같이 뗀다)
 #   ./qgc live status      상태
 #   ./qgc live log         최근 로그
 #   ./qgc live install     systemd --user 유닛 설치 (최초 1회, 자동으로도 된다)
@@ -46,8 +47,9 @@ port_taken_by_other() {
   ss -ulnp 2>/dev/null | grep -E "[:.]${port}\b" | grep -qv "pid=${own_pid:-0},"
 }
 
+# $2 가 'always' 면 부팅 자동시작까지 건다.
 cmd_on() {
-  local udp="${1:-}"
+  local udp="${1:-}" persist="${2:-}"
   have_systemd || die "systemd --user 를 쓸 수 없다. 직접 띄워라:  ./web/live/live ${udp:-}"
   install_unit
 
@@ -79,6 +81,28 @@ cmd_on() {
     exit 1
   fi
 
+  if [[ "$persist" == "always" ]]; then
+    # enable 만으로는 부족하다 — 로그인 세션이 없는 동안에도 유닛이 돌려면
+    # linger 가 켜져 있어야 한다. 둘 다 있어야 "재부팅해도 산다" 가 성립한다.
+    systemctl --user enable "$UNIT" >/dev/null 2>&1 || true
+    if ! loginctl show-user "$(whoami)" 2>/dev/null | grep -q 'Linger=yes'; then
+      loginctl enable-linger "$(whoami)" >/dev/null 2>&1 || true
+    fi
+    local ling
+    ling=$(loginctl show-user "$(whoami)" 2>/dev/null | grep -c 'Linger=yes' || true)
+    if [[ "$ling" == "1" ]]; then
+      echo "✅ 라이브 트래킹 ON (항상)   http://localhost:${HTTP_PORT}"
+      echo "   부팅해도 자동으로 뜬다 — enable + linger 둘 다 걸렸다"
+    else
+      echo "✅ 라이브 트래킹 ON   http://localhost:${HTTP_PORT}"
+      echo "   ⚠️  linger 를 못 켰다 — 로그아웃하면 죽는다. 직접 실행하라:"
+      echo "       sudo loginctl enable-linger $(whoami)"
+    fi
+    echo "   UDP ${want} 수신 · 읽기 전용 (FC 로 아무것도 안 보낸다)"
+    echo "   끄기: ./qgc live off  (부팅 자동시작도 같이 떼어진다)"
+    return
+  fi
+
   echo "✅ 라이브 트래킹 ON   http://localhost:${HTTP_PORT}"
   echo "   UDP ${want} 수신 · 읽기 전용 (FC 로 아무것도 안 보낸다)"
   echo "   끄기: ./qgc live off"
@@ -102,7 +126,9 @@ cmd_status() {
   if systemctl --user is-active --quiet "$UNIT"; then
     local udp=14550
     [[ -f "$ENV_FILE" ]] && udp="$(grep -oP '(?<=^LIVE_UDP=).*' "$ENV_FILE" 2>/dev/null || echo 14550)"
-    echo "● ON    http://localhost:${HTTP_PORT}   (UDP ${udp})"
+    local persist=""
+    systemctl --user is-enabled --quiet "$UNIT" 2>/dev/null && persist="  · 부팅 자동시작"
+    echo "● ON    http://localhost:${HTTP_PORT}   (UDP ${udp})${persist}"
     # 실제로 프레임이 들어오는지까지 본다. 켜져만 있고 링크가 없는 경우가 흔하다.
     if command -v curl >/dev/null 2>&1; then
       curl -s --max-time 2 "http://127.0.0.1:${HTTP_PORT}/api/state" 2>/dev/null \
@@ -132,6 +158,7 @@ if d:
 
 case "${1:-}" in
   on)      shift; cmd_on "${1:-}" ;;
+  always)  shift; cmd_on "${1:-}" always ;;
   off)     cmd_off ;;
   status)  cmd_status ;;
   log)     journalctl --user -u "$UNIT" -n "${2:-40}" --no-pager ;;
@@ -140,7 +167,8 @@ case "${1:-}" in
     cat >&2 <<'USAGE'
 사용법:
   ./qgc live on [UDP포트]   실시간 트래킹 켜기 (기본 14550, 웹 localhost:4400)
-  ./qgc live off            끄기
+  ./qgc live always [포트]  켜고 + 부팅 때도 자동으로 (재부팅해도 산다)
+  ./qgc live off            끄기 (부팅 자동시작도 같이 뗀다)
   ./qgc live status         상태 + 링크 수신 여부
   ./qgc live log [줄수]     로그
   ./qgc live install        systemd 유닛만 설치
@@ -148,5 +176,5 @@ case "${1:-}" in
 읽기 전용이다 — FC 로 아무것도 보내지 않는다. 조작은 QGC 로 한다.
 USAGE
     exit 1 ;;
-  *) die "알 수 없는 하위명령: $1  (on|off|status|log|install)" ;;
+  *) die "알 수 없는 하위명령: $1  (on|always|off|status|log|install)" ;;
 esac
