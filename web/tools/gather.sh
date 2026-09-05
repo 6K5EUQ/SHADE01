@@ -16,6 +16,21 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 LOCAL="$REPO/logs"
 
+# 업로드 판정에 쓸 인터프리터. tools/qgclog/qgclog 의 규칙과 같다 —
+# 두 곳이 다른 python 을 고르면 판정과 목록이 어긋난다.
+pick_python() {
+  for cand in "${QGCLOG_PYTHON:-}" "$REPO/.venv/bin/python" \
+              "$REPO/venv-ardupilot/bin/python" \
+              "$REPO/venv-ardupilot/bin/python3" python3 python; do
+    [ -n "$cand" ] || continue
+    if command -v "$cand" >/dev/null 2>&1 && \
+       "$cand" -c "import pyulog, numpy" >/dev/null 2>&1; then
+      echo "$cand"; return 0
+    fi
+  done
+  return 1
+}
+
 # 🔴 리포가 public 이라 호스트 주소를 여기 적지 않는다.
 #    `web/tools/hosts.conf` (gitignore 됨) 에 적는다 — hosts.conf.example 참고.
 #    Tailscale 이름을 쓰면 IP 없이도 된다.
@@ -82,17 +97,47 @@ dupname=$(ls "$LOCAL"/*.ulg 2>/dev/null | xargs -rn1 basename | sort | uniq -d |
 [ "$DRY" = 1 ] && exit 0
 
 echo "== 서버로 업로드 =="
-# rsync 가 있으면 그걸 쓴다(중복 전송 없음). 없으면 scp 로 없는 것만.
-if command -v rsync >/dev/null && timeout 20 ssh -o BatchMode=yes "$SERVER" 'command -v rsync' >/dev/null 2>&1; then
-  ssh -o BatchMode=yes "$SERVER" "mkdir -p '$SERVER_LOGS'"
-  rsync -a --ignore-existing --info=stats1 "$LOCAL"/*.ulg "$SERVER:$SERVER_LOGS/"
+# 🔴 서버에 없는 것만 판정한다. 이미 올라간 것은 건드리지 않는다 —
+#    판정 기준이 나중에 바뀌어도 서버의 기존 목록이 흔들리지 않아야 한다.
+remote=$(ssh -o BatchMode=yes "$SERVER" "mkdir -p '$SERVER_LOGS'; ls '$SERVER_LOGS' 2>/dev/null | sort")
+
+new=()
+for f in "$LOCAL"/*.ulg; do
+  [ -e "$f" ] || continue
+  grep -qxF "$(basename "$f")" <<< "$remote" || new+=("$f")
+done
+
+send=()
+if [ ${#new[@]} -gt 0 ]; then
+  # 올릴 값이 있는지 가른다 — 읽히지 않는 로그와 arm 하자마자 disarm 한 것은
+  # 서버 목록에 회색 줄만 남긴다. 판정은 web/extract.py 의 배지를 그대로 쓴다
+  # (기준을 두 곳에 두면 "목록엔 abort 인데 올라와 있는" 어긋남이 생긴다).
+  PY="$(pick_python)" || PY=""
+  if [ -z "$PY" ]; then
+    echo "⚠️  pyulog 를 가진 python 을 못 찾아 판정을 건너뛴다 — 전부 올린다"
+    send=("${new[@]}")
+  else
+    skipped=0
+    while IFS=$'\t' read -r v why p; do
+      [ -n "$v" ] || continue
+      if [ "$v" = "skip" ]; then
+        printf '   − %-34s %s\n' "$(basename "$p")" "$why"
+        skipped=$((skipped+1))
+      else
+        send+=("$p")
+      fi
+    done < <("$PY" "$(dirname "$0")/uploadable.py" "${new[@]}" 2>/dev/null)
+    [ "$skipped" = 0 ] || echo "   ($skipped개 제외 — 읽기 실패·즉시 disarm)"
+  fi
+fi
+
+if [ ${#send[@]} -eq 0 ]; then
+  echo "   올릴 새 로그가 없다"
+elif command -v rsync >/dev/null && timeout 20 ssh -o BatchMode=yes "$SERVER" 'command -v rsync' >/dev/null 2>&1; then
+  rsync -a --ignore-existing --info=stats1 "${send[@]}" "$SERVER:$SERVER_LOGS/"
 else
-  echo "rsync 없음 — scp 로 없는 것만 보낸다"
-  remote=$(ssh -o BatchMode=yes "$SERVER" "mkdir -p '$SERVER_LOGS'; ls '$SERVER_LOGS' 2>/dev/null | sort")
-  for f in "$LOCAL"/*.ulg; do
-    b=$(basename "$f")
-    grep -qxF "$b" <<< "$remote" || scp -q "$f" "$SERVER:$SERVER_LOGS/"
-  done
+  echo "rsync 없음 — scp 로 보낸다"
+  for f in "${send[@]}"; do scp -q "$f" "$SERVER:$SERVER_LOGS/"; done
 fi
 
 echo "== 서버 반영 =="
