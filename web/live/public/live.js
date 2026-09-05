@@ -622,7 +622,10 @@ function render(s) {
   // 색만으로는 색맹에게 안 보이니 title 에 같은 내용을 남긴다.
   const dot = $('dot');
   let lt, lc, frz = '';
-  if (!s.packets) { lt = '링크 없음'; lc = ''; }
+  // 🔴 재생 중에는 링크를 말하지 않는다. 계기가 라이브와 똑같이 생겼으므로
+  //    점이 초록으로 "링크 ON" 이라고 하면 지금 기체가 떠 있는 것으로 읽힌다.
+  if (s.playback) { lt = '로그 재생'; lc = ''; }
+  else if (!s.packets) { lt = '링크 없음'; lc = ''; }
   else if (!s.live) { lt = '링크 끊김'; lc = 'bad'; frz = `링크 끊김 · ${Math.round(s.age)}s`; }
   else if (stall >= 3) {
     lt = '데이터 정지'; lc = 'warn';
@@ -647,12 +650,17 @@ function render(s) {
     ls.className = kind === 'ELRS' ? 'src-elrs' : kind === 'USB' ? 'src-usb' : '';
     ls.title = kind === 'ELRS' ? '조종기 ELRS 백팩 경유 (느리다)'
              : kind === 'USB' ? 'FC USB 직결 브리지 경유'
+             // 🔴 재생은 실시간이 아니다. 같은 계기를 쓰므로 여기서 분명히 말한다.
+             : kind === 'LOG' ? '로그 재생 중 — 실시간이 아니다'
              : '데이터 없음';
   }
 
   // 하단 바는 좁다. 송신 주소는 title 로 밀고 숫자만 남긴다.
   const stEl = $('stats');
-  setText(stEl, s.packets
+  setText(stEl, s.playback
+    // 재생은 패킷 수·바이트가 의미 없다. 몇 번째 프레임인지가 그 자리를 대신한다.
+    ? `프레임 ${(s.i + 1).toLocaleString()}/${(s.n || 0).toLocaleString()}`
+    : s.packets
     ? `${s.packets.toLocaleString()}pkt · ${(s.bytes / 1024).toFixed(0)}KB`
     : 'MAVLink 대기 중…');
   if (s.src && stEl.dataset.src !== s.src) {
@@ -666,7 +674,10 @@ function render(s) {
   //    이어져 버린다 (실측: pollN 15 인데 trk.n 이 2 였다).
   //    값이 안 바뀐 폴은 같은 값이 한 칸 더 들어가고, 링크가 죽으면 아래
   //    pushSample 이 null 을 넣어 선이 끊긴다 — 둘 다 사실대로다.
-  pushSample(s.live ? d : {});
+  // 🔴 재생 중에는 한 칸씩 쌓지 않는다. pbFillCharts() 가 0..t 구간을 통째로
+  //    다시 만들어 두었으므로, 여기서 또 밀어 넣으면 프레임마다 격자가 하나씩
+  //    늘어 차트 시간축이 실제 로그의 두 배로 벌어진다.
+  if (!s.playback) pushSample(s.live ? d : {});
   // 5Hz 로 단 3개를 전부 다시 그리면 초당 15회 SVG 재생성이다. 2.5Hz 로
   // 줄여 HUD 에 CPU 를 남긴다. 처음 몇 칸만 매번 그려 첫 화면이 안 빈다.
   if (trk.n < 4 || pollN % 2 === 0) renderCharts();
@@ -894,12 +905,180 @@ function demoState(n) {
   };
 }
 
+// ── 로그 재생 ───────────────────────────────────────────────────────
+// 같은 계기·같은 차트로 지난 비행을 돌려 본다. 서버가 `.ulg` 를 라이브와
+// **같은 모양**(`d`)으로 구워 주므로, 여기서는 시각만 옮기면 된다.
+//
+// 🔴 재생 중에는 실시간 폴을 멈춘다. 같은 계기에 두 시각이 섞이면 그림이
+//    거짓말이 된다 — 로그의 고도와 지금 기체의 전압이 한 화면에 뜨는 식.
+const ulpb = {
+  on: false,          // 재생 모드인가
+  playing: false,
+  t: 0,               // 재생 시각 (초)
+  dur: 0,
+  rate: 1,
+  name: '',
+  series: null,       // 차트용 전량 시계열
+  msgs: [],
+  timer: null,
+  last: 0,            // 마지막 tick 의 벽시계 (performance.now)
+  seeking: false,     // 슬라이더를 잡고 있는 동안 자동 진행을 멈춘다
+};
+
+function mmss(s) {
+  s = Math.max(0, Math.round(s || 0));
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+}
+
+/** 차트 버퍼를 재생 시각까지 **다시 만든다**.
+ *
+ * 🔴 라이브는 폴 한 번이 격자 한 칸이라 앞으로만 쌓이지만, 재생은 되감을 수
+ *    있다. 커서를 뒤로 옮겼는데 차트가 그대로면 그림과 계기가 다른 시각을
+ *    가리킨다 — 그래서 매번 0..t 구간으로 잘라 새로 채운다. 서버가 전량을
+ *    한 번에 줬으므로 자르기만 하면 된다 (네트워크 왕복 없음).
+ */
+function pbFillCharts() {
+  const s = ulpb.series;
+  if (!s) return;
+  const upto = Math.max(1, Math.min(s.n, Math.round(ulpb.t * s.hz) + 1));
+  for (const k of Object.keys(trk)) {
+    if (Array.isArray(trk[k]) && k !== 'modes' && k !== 'events') delete trk[k];
+  }
+  for (const k in s.cols) trk[k] = s.cols[k].slice(0, upto);
+  trk.n = upto;
+  trk.dur = (upto - 1) / s.hz;
+  trk.hz = s.hz;
+  trk.modes = s.modes.filter((m) => m.t <= trk.dur)
+    .map((m) => ({ t: m.t, name: m.name }));
+  if (!trk.modes.length && s.modes.length) {
+    trk.modes = [{ t: 0, name: s.modes[0].name }];
+  }
+  trk.events = [];
+}
+
+async function pbRender() {
+  try {
+    const r = await fetch('/api/playback/state?t=' + ulpb.t.toFixed(2), { cache: 'no-store' });
+    if (!r.ok) return;
+    const s = await r.json();
+    pbFillCharts();
+    render(s);
+  } catch (e) { /* 서버가 죽으면 다음 tick 에서 다시 해 본다 */ }
+  $('pbTime').textContent = mmss(ulpb.t) + ' / ' + mmss(ulpb.dur);
+  if (!ulpb.seeking) {
+    $('pbSeek').value = String(ulpb.dur ? Math.round(ulpb.t / ulpb.dur * 1000) : 0);
+  }
+}
+
+function pbTick() {
+  const now = performance.now();
+  const dt = (now - ulpb.last) / 1000;
+  ulpb.last = now;
+  if (ulpb.playing && !ulpb.seeking) {
+    ulpb.t += dt * ulpb.rate;
+    if (ulpb.t >= ulpb.dur) { ulpb.t = ulpb.dur; pbPause(); }
+  }
+  pbRender();
+}
+
+function pbPlay() {
+  if (ulpb.t >= ulpb.dur) ulpb.t = 0;      // 끝에서 누르면 처음부터
+  ulpb.playing = true;
+  ulpb.last = performance.now();
+  $('pbPlay').textContent = '❚❚';
+}
+function pbPause() {
+  ulpb.playing = false;
+  $('pbPlay').textContent = '▶';
+}
+
+async function pbStart(name) {
+  $('pbList').innerHTML = '<div class="msg">' + name + ' 여는 중… (큰 로그는 수십 초)</div>';
+  const r = await fetch('/api/playback/open?name=' + encodeURIComponent(name), { cache: 'no-store' });
+  if (!r.ok) {
+    $('pbList').innerHTML = '<div class="msg">열지 못했다.</div>';
+    return;
+  }
+  // 굽는 동안 기다린다. 큰 로그는 수십 초 걸린다 — 진행을 글로 알린다.
+  for (;;) {
+    await new Promise((z) => setTimeout(z, 400));
+    const info = await (await fetch('/api/playback/info', { cache: 'no-store' })).json();
+    if (info.state === 'ready') {
+      ulpb.on = true; ulpb.t = 0; ulpb.dur = info.dur; ulpb.name = info.name;
+      ulpb.series = await (await fetch('/api/playback/series', { cache: 'no-store' })).json();
+      // 반대 방향도 막는다 — tlog 재생이 돌고 있으면 서버에서 내린다.
+      if (!pb.bar.hidden) { try { await pbApi('unload'); } catch (e) {} pb.bar.hidden = true; }
+      document.body.classList.add('playback');
+      $('pbBar').hidden = false;
+      $('pbPick').hidden = true;
+      $('pbName').textContent = info.name + (info.repaired ? ' (복구됨)' : '');
+      $('pbSeek').value = '0';
+      lastMode = null;
+      pbPlay();
+      if (ulpb.timer) clearInterval(ulpb.timer);
+      ulpb.timer = setInterval(pbTick, POLL_MS);
+      return;
+    }
+    if (info.state === 'error') {
+      $('pbList').innerHTML = '<div class="msg">읽을 수 없다: ' + (info.error || '') + '</div>';
+      return;
+    }
+  }
+}
+
+function pbExit() {
+  ulpb.on = false;
+  pbPause();
+  if (ulpb.timer) { clearInterval(ulpb.timer); ulpb.timer = null; }
+  fetch('/api/playback/close').catch(() => {});
+  document.body.classList.remove('playback');
+  $('pbBar').hidden = true;
+  // 차트를 비우고 실시간으로 돌아간다 — 로그의 꼬리가 남아 있으면
+  // 지금 비행의 그래프가 로그에서 이어진 것처럼 보인다.
+  for (const k of Object.keys(trk)) {
+    if (Array.isArray(trk[k]) && k !== 'modes' && k !== 'events') delete trk[k];
+  }
+  trk.n = 0; trk.dur = 0; trk.modes = []; trk.events = []; trk.hz = HZ;
+  lastMode = null;
+  poll();                    // 멈춰 있던 실시간 폴을 다시 돈다
+}
+
+async function pbShowPicker() {
+  $('pbPick').hidden = false;
+  $('pbList').innerHTML = '<div class="msg">불러오는 중…</div>';
+  let d;
+  try {
+    d = await (await fetch('/api/logs', { cache: 'no-store' })).json();
+  } catch (e) {
+    $('pbList').innerHTML = '<div class="msg">목록을 못 받았다.</div>';
+    return;
+  }
+  if (d.error || !d.logs || !d.logs.length) {
+    $('pbList').innerHTML = '<div class="msg">' + (d.error || '로그가 없다.') + '</div>';
+    return;
+  }
+  const box = document.createElement('div');
+  for (const e of d.logs) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<span class="nm"></span><span class="wh"></span><span class="sz"></span>';
+    row.querySelector('.nm').textContent = e.name;
+    row.querySelector('.wh').textContent = e.when || '';
+    row.querySelector('.sz').textContent = (e.size / 1e6).toFixed(1) + 'MB';
+    row.onclick = () => pbStart(e.name);
+    box.appendChild(row);
+  }
+  $('pbList').replaceChildren(box);
+}
+
 // ── 폴 루프 ─────────────────────────────────────────────────────────
 // setInterval 이 아니라 꼬리물기다. 서버가 느려도 요청이 쌓이지 않는다.
 const DEMO = new URLSearchParams(location.search).has('demo');
 let demoN = 0;
 
 async function poll() {
+  // 재생 중에는 실시간을 긁지 않는다. pbTick 이 화면을 그린다.
+  if (ulpb.on) return;
   if (DEMO) {
     render(demoState(demoN++));
     setTimeout(poll, POLL_MS);
@@ -946,6 +1125,33 @@ $('msgToggle').onclick = () => {
   const c = $('chartPane').classList.toggle('msgcollapsed');
   $('msgToggle').textContent = c ? '펴기' : '접기';
 };
+
+// ── 재생 조작 ───────────────────────────────────────────────────────
+$('pbOpen').onclick = pbShowPicker;
+$('pbPickClose').onclick = () => { $('pbPick').hidden = true; };
+$('pbPick').onclick = (e) => { if (e.target === $('pbPick')) $('pbPick').hidden = true; };
+$('pbPlay').onclick = () => (ulpb.playing ? pbPause() : pbPlay());
+$('pbExit').onclick = pbExit;
+$('pbRate').onchange = (e) => { ulpb.rate = +e.target.value; };
+
+// 슬라이더: 잡는 동안 자동 진행을 멈추고, 놓으면 그 지점부터 이어 간다.
+// 🔴 input 마다 서버를 때리면 드래그 중 요청이 쌓인다 — 좌표만 바꾸고
+//    그리기는 tick 에 맡긴다 (tick 이 200ms 마다 돈다).
+$('pbSeek').oninput = (e) => {
+  ulpb.seeking = true;
+  ulpb.t = ulpb.dur * (+e.target.value / 1000);
+  $('pbTime').textContent = mmss(ulpb.t) + ' / ' + mmss(ulpb.dur);
+};
+$('pbSeek').onchange = () => { ulpb.seeking = false; ulpb.last = performance.now(); };
+
+// space 로 재생/정지. 입력칸에 있을 때는 가로채지 않는다.
+addEventListener('keydown', (e) => {
+  if (!ulpb.on || e.target.matches('input,select,button,textarea')) return;
+  if (e.code === 'Space') { e.preventDefault(); ulpb.playing ? pbPause() : pbPlay(); }
+  else if (e.code === 'ArrowLeft') { ulpb.t = Math.max(0, ulpb.t - 5); pbRender(); }
+  else if (e.code === 'ArrowRight') { ulpb.t = Math.min(ulpb.dur, ulpb.t + 5); pbRender(); }
+});
+
 poll();
 
 // ── 재생 ────────────────────────────────────────────────────────────
@@ -959,10 +1165,8 @@ const pb = {
   dragging: false,
 };
 
-const mmss = (s) => {
-  s = Math.max(0, Math.round(s || 0));
-  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
-};
+// mmss() 는 위 로그 재생 절에 함수 선언으로 하나만 둔다 — 두 재생 기능이
+// 같은 이름을 각각 선언하면 SyntaxError 로 페이지가 통째로 죽는다.
 
 async function pbApi(path) {
   try {
@@ -997,6 +1201,10 @@ async function pbList() {
 pb.open.onclick = async () => {
   const showing = !pb.bar.hidden;
   if (showing) { pb.bar.hidden = true; return; }
+  // 🔴 두 재생을 동시에 켜지 않는다. ulg 재생은 폴을 멈추고 자기 타이머로
+  //    그리므로, tlog 재생(서버가 /api/state 로 흘린다)과 겹치면 한 계기에
+  //    두 시각이 섞인다. 나중에 누른 쪽이 이긴다.
+  if (ulpb.on) pbExit();
   await pbList();
   pb.bar.hidden = false;
   if (pb.pick.value) await pbApi('load?name=' + encodeURIComponent(pb.pick.value));

@@ -36,6 +36,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
+# playback.py 는 이 폴더에 있다. systemd 는 임의의 cwd 로 띄우므로 경로를 박는다.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 try:
     from pymavlink import mavutil
@@ -462,6 +464,17 @@ def dumps_json(obj):
     return json.dumps(_finite(obj), ensure_ascii=False, allow_nan=False)
 
 
+def _qs(query, key):
+    """쿼리스트링에서 값 하나.
+
+    ⚠️ parse_qs 가 이미 퍼센트 인코딩을 푼다. 여기서 또 unquote 하면
+       파일명에 '%' 나 '+' 가 든 로그를 못 연다.
+    """
+    from urllib.parse import parse_qs
+    vals = parse_qs(query).get(key)
+    return vals[0] if vals else None
+
+
 class State:
     """지금 기체 상태 하나. 락으로 감싼다 — 수신 스레드와 HTTP 스레드가 함께 본다."""
 
@@ -810,9 +823,153 @@ def receiver(sock, st):
                 st.rec.write(data)
 
 
+class Playback:
+    """열어 둔 로그 하나. 프레임은 미리 구워 두고 인덱스만 옮긴다.
+
+    🔴 재생은 **서버가 아니라 브라우저가** 시각을 정한다. 서버는 "이 시각의
+       프레임을 달라" 는 요청에 답할 뿐 스스로 시간을 흘리지 않는다 — 그래야
+       탭을 여러 개 열어도 서로 다른 지점을 볼 수 있고, 일시정지·스크럽이
+       서버 상태를 건드리지 않는다.
+
+    한 번에 하나만 연다. 40분 로그가 12000 프레임이라 여러 개를 물고 있으면
+    메모리가 는다.
+    """
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.fl = None            # load_flight() 결과
+        self.err = None
+        self.loading = None       # 로딩 중인 파일 이름
+
+    def open(self, path):
+        """로그를 연다. 오래 걸리므로(대형 로그 수십 초) 호출자가 스레드로 돌린다."""
+        import playback
+        with self.lock:
+            self.loading = os.path.basename(path)
+            self.err = None
+            self.fl = None
+        try:
+            fl = playback.load_flight(path)
+        except Exception as exc:
+            with self.lock:
+                self.err = str(exc)
+                self.loading = None
+            return
+        with self.lock:
+            self.fl = fl
+            self.loading = None
+
+    def close(self):
+        with self.lock:
+            self.fl = None
+            self.err = None
+            self.loading = None
+
+    def info(self):
+        """지금 무엇이 열려 있나. 프레임은 빼고 요약만."""
+        with self.lock:
+            if self.loading:
+                return {'state': 'loading', 'name': self.loading}
+            if self.err:
+                return {'state': 'error', 'error': self.err}
+            if not self.fl:
+                return {'state': 'idle'}
+            f = self.fl
+            return {'state': 'ready', 'name': f['name'], 'dur': f['dur'],
+                    'utc': f['utc'], 'hz': f['hz'], 'frames': len(f['frames']),
+                    'repaired': f['repaired'], 'home': f['home'],
+                    'track_n': len(f['track']), 'messages_n': len(f['messages'])}
+
+    def series(self):
+        """차트가 쓸 전량 시계열. 화면의 `trk` 와 **같은 채널 이름**으로 낸다.
+
+        라이브는 폴 한 번이 격자 한 칸이지만 재생은 되감을 수 있어야 하므로,
+        열 때 한 번 통째로 주고 브라우저는 커서만 옮긴다.
+        """
+        with self.lock:
+            if not self.fl:
+                return None
+            frames = self.fl['frames']
+            cols = {k: [] for k in ('alt', 'climb', 'spd', 'aspd', 'roll', 'pitch',
+                                    'cur', 'volt', 'sats', 'eph',
+                                    'ekf_vel', 'ekf_pos', 'ekf_alt', 'ekf_mag')}
+            modes = []
+            last_mode = None
+            for fr in frames:
+                d = fr['d']
+                cols['alt'].append(d.get('alt'))
+                cols['climb'].append(d.get('climb'))
+                cols['spd'].append(d.get('groundspeed'))
+                cols['aspd'].append(d.get('airspeed'))
+                cols['roll'].append(d.get('roll'))
+                cols['pitch'].append(d.get('pitch'))
+                cols['cur'].append(d.get('cur'))
+                cols['volt'].append(d.get('volt'))
+                cols['sats'].append(d.get('sats'))
+                cols['eph'].append(d.get('eph'))
+                r = d.get('ekf_ratio') or {}
+                cols['ekf_vel'].append(r.get('vel'))
+                cols['ekf_pos'].append(r.get('pos'))
+                cols['ekf_alt'].append(r.get('alt'))
+                cols['ekf_mag'].append(r.get('mag'))
+                m = d.get('mode')
+                if m and m != last_mode:
+                    modes.append({'t': fr['t'], 'name': m})
+                    last_mode = m
+            # 진동은 로그에 vibration 토픽이 없다 — 채널을 아예 안 만든다.
+            # 화면은 없는 채널을 비워 두는 쪽이 0 을 그리는 것보다 정직하다.
+            return {'hz': self.fl['hz'], 'n': len(frames),
+                    'dur': self.fl['dur'], 'cols': cols, 'modes': modes,
+                    'messages': self.fl['messages']}
+
+    def at(self, ts):
+        """재생 시각 ts(초) 의 상태를 라이브와 **같은 모양**으로 만든다.
+
+        화면 코드가 라이브인지 재생인지 몰라도 되게 하는 것이 요점이다 —
+        `d`·`messages`·`home` 이 전부 같은 자리에 온다.
+        """
+        with self.lock:
+            if not self.fl:
+                return None
+            f = self.fl
+            frames = f['frames']
+            if not frames:
+                return None
+            i = int(round(ts * f['hz']))
+            i = max(0, min(len(frames) - 1, i))
+            fr = frames[i]
+            # 지난 메시지만 보여준다 — 아직 안 온 경고를 미리 띄우면 재생이 아니다.
+            msgs = [m for m in f['messages'] if m['t'] <= fr['t']][-40:]
+            return {
+                'live': True,          # 화면의 프리즈 오버레이를 켜지 않는다
+                'playback': True,
+                'name': f['name'],
+                'dur': f['dur'],
+                'utc': f['utc'],
+                'pos': fr['t'],
+                'i': i,
+                'n': len(frames),
+                'seq': i,
+                'age': 0,
+                'packets': i,
+                'link': 'LOG',
+                'src': f['name'],
+                'sysid': 1,
+                'uptime': round(fr['t']),
+                'd': fr['d'],
+                'home': f['home'],
+                'mission': [],
+                'track_n': 0,
+                'track_from': 0,
+                'track': [],
+                'messages': msgs,
+            }
+
+
 class Handler(BaseHTTPRequestHandler):
     st = None
     rec_dir = None
+    pb = None
 
     def _send(self, code, body, ctype):
         if isinstance(body, str):
@@ -843,6 +1000,70 @@ class Handler(BaseHTTPRequestHandler):
                     want_track = False
             body = dumps_json(self.st.snapshot(since, want_track))
             return self._send(200, body, 'application/json; charset=utf-8')
+
+        # ── 로그 재생 ──────────────────────────────────────────────
+        # 🔴 전부 GET 이다. POST 를 열지 않는다 — "HTTP 는 do_GET 만 있다" 가
+        #    이 서버의 읽기 전용 보장 중 하나다 (README 「상행이 없다」).
+        #    재생은 로컬 파일을 읽을 뿐 FC 와 아무 관계가 없지만, 보장을
+        #    깨뜨리지 않는 편이 검증하기 쉽다.
+        if path == '/api/logs':
+            import playback
+            try:
+                items = playback.list_logs()
+            except SystemExit as exc:      # find_log_dir 이 못 찾으면 exit 한다
+                return self._send(200, dumps_json({'logs': [], 'error': str(exc)}),
+                                  'application/json; charset=utf-8')
+            return self._send(200, dumps_json({'logs': items}),
+                              'application/json; charset=utf-8')
+
+        if path == '/api/playback/open':
+            name = _qs(query, 'name')
+            if not name:
+                return self._send(400, '{"error":"name 이 없다"}', 'application/json')
+            import playback
+            # 🔴 목록에 있는 파일만 연다. 이름을 그대로 경로로 쓰면
+            #    ?name=../../etc/passwd 로 아무 파일이나 열린다.
+            try:
+                allowed = {e['name']: e['path'] for e in playback.list_logs()}
+            except SystemExit as exc:
+                return self._send(500, dumps_json({'error': str(exc)}), 'application/json')
+            full = allowed.get(name)
+            if not full:
+                return self._send(404, '{"error":"그런 로그가 없다"}', 'application/json')
+            threading.Thread(target=self.pb.open, args=(full,), daemon=True).start()
+            return self._send(200, dumps_json({'ok': True, 'name': name}),
+                              'application/json; charset=utf-8')
+
+        if path == '/api/playback/close':
+            self.pb.close()
+            return self._send(200, '{"ok":true}', 'application/json')
+
+        if path == '/api/playback/info':
+            return self._send(200, dumps_json(self.pb.info()),
+                              'application/json; charset=utf-8')
+
+        if path == '/api/playback/series':
+            # 차트용 전량 시계열. 재생은 되감기가 있으므로 폴마다 한 칸씩
+            # 쌓는 라이브 방식으로는 뒤로 감을 때 그림이 사라진다 — 열 때
+            # 한 번 통째로 받아 두고 커서만 옮긴다.
+            body = self.pb.series()
+            if body is None:
+                return self._send(409, dumps_json(self.pb.info()),
+                                  'application/json; charset=utf-8')
+            return self._send(200, dumps_json(body),
+                              'application/json; charset=utf-8')
+
+        if path == '/api/playback/state':
+            try:
+                ts = float(_qs(query, 't') or 0.0)
+            except ValueError:
+                ts = 0.0
+            snap = self.pb.at(ts)
+            if snap is None:
+                return self._send(409, dumps_json(self.pb.info()),
+                                  'application/json; charset=utf-8')
+            return self._send(200, dumps_json(snap),
+                              'application/json; charset=utf-8')
 
         # 화면에는 이걸 부르는 버튼이 없다 (지우기 버튼을 뺐다, 2026-09-05).
         # curl 로는 여전히 쓸 수 있어 남겨 둔다 — 긴 지상 테스트 뒤 차트를
@@ -980,6 +1201,7 @@ def main():
 
     Handler.st = st
     Handler.rec_dir = os.path.abspath(args.rec_dir)
+    Handler.pb = Playback()
     srv = ThreadingHTTPServer(('127.0.0.1', args.http), Handler)
     srv.daemon_threads = True
 

@@ -59,6 +59,10 @@
              그림 위를 가리지 않고, 조작이 한 줄에 모인다. -->
         <div id="toc"></div>
         <span class="grow"></span>
+        <!-- 로그 재생. 같은 화면에서 지난 비행을 돌려 본다 — 계기·차트가
+             전부 라이브와 같은 코드다. 재생 중에는 실시간 폴을 멈춘다
+             (같은 계기에 두 시각이 섞이면 그림이 거짓말이 된다). -->
+        <button id="pbOpen" title="로그를 골라 재생한다">로그 재생</button>
         <span class="stats" id="stats"></span>
         <select id="win" title="차트가 보여주는 시간 창">
           <option value="60">1분</option>
@@ -91,6 +95,37 @@
     </div>
   </section>
 </main>
+
+<!-- ── 로그 재생 ──────────────────────────────────────────────────
+     재생 바는 화면 맨 아래에 깔린다. 켜져 있는 동안에만 보인다 —
+     실시간으로 보고 있을 때 조작거리가 늘어나면 안 된다. -->
+<div id="pbBar" hidden>
+  <button id="pbPlay" title="재생/일시정지 (space)">▶</button>
+  <span id="pbName" title="열려 있는 로그"></span>
+  <input id="pbSeek" type="range" min="0" max="1000" value="0" step="1"
+         title="드래그해서 원하는 지점으로">
+  <span id="pbTime" class="mono">0:00 / 0:00</span>
+  <select id="pbRate" title="재생 속도">
+    <option value="0.5">0.5×</option>
+    <option value="1" selected>1×</option>
+    <option value="2">2×</option>
+    <option value="4">4×</option>
+    <option value="10">10×</option>
+  </select>
+  <button id="pbExit" title="재생을 끝내고 실시간으로 돌아간다">실시간</button>
+</div>
+
+<!-- 로그 고르기. 목록은 /api/logs 가 최신순으로 준다. -->
+<div id="pbPick" hidden>
+  <div class="box">
+    <div class="hd">
+      <b>비행 로그 재생</b>
+      <span class="grow"></span>
+      <button id="pbPickClose">닫기</button>
+    </div>
+    <div id="pbList">불러오는 중…</div>
+  </div>
+</div>
 
 <script src="/chart.js"></script>
 <script src="/live.js"></script>

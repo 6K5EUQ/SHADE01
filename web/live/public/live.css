@@ -298,3 +298,70 @@ a.btn { display: inline-block; text-decoration: none; }
    위험하다. 상단에 띠를 하나 두른다. */
 body.replaying #chartPane { box-shadow: inset 0 3px 0 var(--warn); }
 body.replaying #playToggle { color: var(--warn); font-weight: 700; }
+/* ── 로그 재생 ──────────────────────────────────────────────────────
+   같은 화면에서 지난 비행을 돌려 본다. 계기·차트는 라이브와 **같은 코드**라
+   여기서는 조작 줄과 고르기 창만 얹는다.
+
+   🔴 재생 바는 켜져 있을 때만 나타난다(`hidden`). 실시간으로 보는 동안
+      화면 아래를 한 줄이라도 뺏으면 안 된다 — 그때는 계기가 전부다. */
+#pbBar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  background: var(--panel-2); border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+#pbBar[hidden] { display: none; }
+#pbBar button, #pbBar select {
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 3px 8px; font-size: 12px; cursor: pointer;
+}
+#pbBar button:hover, #pbBar select:hover { background: var(--panel-2); }
+#pbPlay { min-width: 34px; font-size: 13px; }
+#pbName {
+  color: var(--dim); font-family: var(--mono); font-size: 11px;
+  max-width: 26ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* 시각은 폭이 흔들리면 눈이 따라가기 힘들다 — 고정폭. */
+#pbTime { font-family: var(--mono); color: var(--dim); min-width: 11ch; text-align: right; }
+#pbSeek { flex: 1; min-width: 120px; accent-color: var(--accent); cursor: pointer; }
+
+/* 재생 중임을 화면 전체가 말한다. 계기 숫자는 같은 모양이라, 이 테두리가
+   없으면 지금 보는 것이 실시간인지 로그인지 구분할 방법이 없다. */
+body.playback main { outline: 2px solid var(--accent); outline-offset: -2px; }
+body.playback { padding-bottom: 38px; }
+
+/* ── 로그 고르기 ─────────────────────────────────────────────────── */
+#pbPick {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(0, 0, 0, .55);
+  display: flex; align-items: center; justify-content: center;
+}
+#pbPick[hidden] { display: none; }
+#pbPick .box {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+  width: min(560px, 92vw); max-height: 76vh; display: flex; flex-direction: column;
+}
+#pbPick .hd {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-bottom: 1px solid var(--border);
+}
+#pbPick .hd .grow { flex: 1; }
+#pbPick .hd button {
+  background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 4px;
+  padding: 3px 8px; font-size: 12px; cursor: pointer;
+}
+#pbList { overflow-y: auto; padding: 4px 0; }
+#pbList .row {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 5px 12px; cursor: pointer; border-bottom: 1px solid var(--border);
+}
+#pbList .row:last-child { border-bottom: 0; }
+#pbList .row:hover { background: var(--panel-2); }
+#pbList .nm { font-family: var(--mono); font-size: 11px; flex: 1;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#pbList .wh { color: var(--dim); font-size: 11px; }
+#pbList .sz { color: var(--muted); font-size: 11px; min-width: 7ch; text-align: right; }
+#pbList .msg { padding: 10px 12px; color: var(--muted); font-size: 12px; }
