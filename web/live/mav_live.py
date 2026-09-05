@@ -304,6 +304,26 @@ def handle(msg, st):
         d['vtol'] = VTOL_STATE.get(msg.vtol_state, '')
         d['landed'] = msg.landed_state          # 1=지상 2=공중
 
+    elif t == 'SERVO_OUTPUT_RAW':
+        # 모터별 추력. PX4 는 PWM us 를 보낸다 — % 로 바꾼다.
+        #
+        # ⚠️ ACTUATOR_OUTPUT_STATUS 가 아니다. PX4 의 스트림 설정은
+        #    SERVO_OUTPUT_RAW_0 만 켠다 (mavlink_main.cpp) — 전자를 기다리면
+        #    영원히 안 온다 (실측 2026-09-05).
+        #
+        # 🔴 이 기체 배치에 묶인 값이다 (README 「출력 배치」):
+        #    MAIN3/4/6/7 = VTOL 우후/우전/좌후/좌전. 인덱스는 0부터라 2,3,5,6.
+        #    MAIN1/2 는 에일러론 서보(100Hz), MAIN8 은 크루즈, MAIN5 는 UBEC —
+        #    서보를 추력으로 그리면 거짓말이 된다.
+        # PWM 1000~2000us 를 0~100% 로 편다. 안 도는 채널(<900)은 None.
+        out = {}
+        for name, i in (('RB', 3), ('RF', 4), ('LB', 6), ('LF', 7)):
+            v = getattr(msg, 'servo%d_raw' % i, 0)
+            out[name] = None if (v is None or v < 900) else \
+                round(max(0.0, min(100.0, (v - 1000.0) / 10.0)), 1)
+        if any(v is not None for v in out.values()):
+            d['motors'] = out
+
     elif t == 'RC_CHANNELS':
         d['rssi'] = msg.rssi if msg.rssi != 255 else None
         # 8 로 자르면 CH9(KILL)·CH10 이 화면에서 사라진다 — 링크는 16 까지 온다.

@@ -22,6 +22,11 @@ UNIT_SRC="$HERE/web/live/shade-live.service"
 UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/shade-live.env"
 HTTP_PORT="${LIVE_HTTP:-4400}"
+POKE_UNIT=shade-backpack.service
+POKE_SRC="$HERE/web/live/shade-backpack.service"
+
+# 백팩 AP 주소. 붙어 있으면 이 IP 가 응답한다.
+BACKPACK_IP="${BACKPACK_IP:-10.0.0.1}"
 
 die() { echo "$*" >&2; exit 1; }
 
@@ -33,11 +38,35 @@ install_unit() {
   [[ -f "$UNIT_SRC" ]] || die "유닛 파일이 없다: $UNIT_SRC"
   mkdir -p "$UNIT_DIR"
   # 항상 리포의 것으로 덮는다. 유닛을 고쳤는데 옛것이 남아 있으면 헷갈린다.
+  local changed=0
   if ! cmp -s "$UNIT_SRC" "$UNIT_DIR/$UNIT"; then
-    cp "$UNIT_SRC" "$UNIT_DIR/$UNIT"
-    systemctl --user daemon-reload
+    cp "$UNIT_SRC" "$UNIT_DIR/$UNIT"; changed=1
     echo "유닛 설치: $UNIT_DIR/$UNIT"
   fi
+  if [[ -f "$POKE_SRC" ]] && ! cmp -s "$POKE_SRC" "$UNIT_DIR/$POKE_UNIT"; then
+    cp "$POKE_SRC" "$UNIT_DIR/$POKE_UNIT"; changed=1
+    echo "유닛 설치: $UNIT_DIR/$POKE_UNIT"
+  fi
+  [[ $changed -eq 1 ]] && systemctl --user daemon-reload || true
+}
+
+# 지금 어느 경로가 살아 있나. USB 직결(브리지)이 우선이다.
+#   usb      — FC 가 꽂혀 있거나 브리지가 밀어주고 있다
+#   backpack — 조종기 백팩 AP 에 붙어 있다 (10.0.0.1 이 응답)
+#   none     — 둘 다 아니다
+detect_path() {
+  # 1) USB/브리지 우선. FC 가 이 PC 에 꽂혀 있거나 브리지가 돌고 있으면 그 경로다.
+  if ls /dev/ttyACM* /dev/ttyUSB* >/dev/null 2>&1; then echo usb; return; fi
+  if pgrep -f mav_bridge.py >/dev/null 2>&1; then echo usb; return; fi
+  # 다른 PC 의 브리지가 밀어주는 경우 — 이미 프레임이 들어오고 있는지로 본다.
+  if systemctl --user is-active --quiet "$UNIT" 2>/dev/null && \
+     command -v curl >/dev/null 2>&1; then
+    if curl -s --max-time 2 "http://127.0.0.1:${HTTP_PORT}/api/state?track=0" 2>/dev/null \
+       | grep -q '"live": true'; then echo usb; return; fi
+  fi
+  # 2) 백팩. AP 에 붙어 있으면 10.0.0.1 이 ping 에 답한다.
+  if ping -c1 -W1 "$BACKPACK_IP" >/dev/null 2>&1; then echo backpack; return; fi
+  echo none
 }
 
 # 포트가 이미 쓰이고 있는지. 우리 유닛이 쥔 것은 제외한다.
@@ -81,10 +110,36 @@ cmd_on() {
     exit 1
   fi
 
+  # ── 경로 자동 감지. USB 직결이 우선, 없으면 백팩. ────────────────
+  # 백팩일 때만 poker 를 띄운다 — USB 경로에서는 필요도 없고, 괜히 띄우면
+  # 있지도 않은 10.0.0.1 로 하트비트를 계속 쏜다.
+  local path; path="$(detect_path)"
+  case "$path" in
+    usb)
+      systemctl --user stop "$POKE_UNIT" 2>/dev/null || true
+      echo "   경로: USB 직결/브리지" ;;
+    backpack)
+      systemctl --user reset-failed "$POKE_UNIT" 2>/dev/null || true
+      if systemctl --user restart "$POKE_UNIT" 2>/dev/null; then
+        echo "   경로: ELRS 백팩 (${BACKPACK_IP}) — 깨우기 시작"
+      else
+        echo "   ⚠️  백팩은 붙었는데 poker 를 못 띄웠다:  ./qgc live log" >&2
+      fi ;;
+    *)
+      systemctl --user stop "$POKE_UNIT" 2>/dev/null || true
+      echo "   ⚠️  경로를 못 찾았다 — FC USB 도 브리지도 없고 백팩 AP 에도 안 붙어 있다" ;;
+  esac
+
   if [[ "$persist" == "always" ]]; then
     # enable 만으로는 부족하다 — 로그인 세션이 없는 동안에도 유닛이 돌려면
     # linger 가 켜져 있어야 한다. 둘 다 있어야 "재부팅해도 산다" 가 성립한다.
     systemctl --user enable "$UNIT" >/dev/null 2>&1 || true
+    # poker 는 백팩일 때만 부팅에 건다. USB 경로 PC 에 걸면 없는 AP 로 계속 쏜다.
+    if [[ "$path" == "backpack" ]]; then
+      systemctl --user enable "$POKE_UNIT" >/dev/null 2>&1 || true
+    else
+      systemctl --user disable "$POKE_UNIT" >/dev/null 2>&1 || true
+    fi
     if ! loginctl show-user "$(whoami)" 2>/dev/null | grep -q 'Linger=yes'; then
       loginctl enable-linger "$(whoami)" >/dev/null 2>&1 || true
     fi
@@ -110,6 +165,8 @@ cmd_on() {
 
 cmd_off() {
   have_systemd || die "systemd --user 를 쓸 수 없다. 직접 띄운 프로세스는 Ctrl-C 로 끝내라."
+  systemctl --user stop "$POKE_UNIT" 2>/dev/null || true
+  systemctl --user disable "$POKE_UNIT" >/dev/null 2>&1 || true
   if systemctl --user is-active --quiet "$UNIT"; then
     systemctl --user stop "$UNIT"
     echo "⏹  라이브 트래킹 OFF"
@@ -132,7 +189,9 @@ cmd_status() {
     [[ -f "$ENV_FILE" ]] && udp="$(grep -oP '(?<=^LIVE_UDP=).*' "$ENV_FILE" 2>/dev/null || echo 14550)"
     local persist=""
     systemctl --user is-enabled --quiet "$UNIT" 2>/dev/null && persist="  · 부팅 자동시작"
-    echo "● ON    http://localhost:${HTTP_PORT}   (UDP ${udp})${persist}"
+    local via=""
+    systemctl --user is-active --quiet "$POKE_UNIT" 2>/dev/null && via="  · 백팩 깨우는 중"
+    echo "● ON    http://localhost:${HTTP_PORT}   (UDP ${udp})${persist}${via}"
     # 실제로 프레임이 들어오는지까지 본다. 켜져만 있고 링크가 없는 경우가 흔하다.
     if command -v curl >/dev/null 2>&1; then
       curl -s --max-time 2 "http://127.0.0.1:${HTTP_PORT}/api/state" 2>/dev/null \

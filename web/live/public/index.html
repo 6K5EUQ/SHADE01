@@ -14,17 +14,20 @@
       <svg id="hud" aria-label="HUD"></svg>
     </div>
 
-    <!-- HUD 아래 숫자 스트립. 계기가 그림으로 말하지 못하는 값만 여기 온다. -->
+    <!-- HUD 아래 한 줄. 3층(전류밴드·상태밴드·숫자스트립)을 통합했다
+         (2026-09-05). 비행 중 곁눈질로 읽는 값만 크게 남긴다 — 나머지는
+         차트에 있고, 위험한 값은 색으로 튄다. -->
     <div id="strip">
-      <div class="sc" id="sc-volt"><span class="k">전압</span><b id="st-volt">—</b><i id="st-cell">V</i></div>
-      <div class="sc" id="sc-mah"><span class="k">소모</span><b id="st-mah">—</b><i id="st-pct">mAh</i></div>
-      <div class="sc"><span class="k">스로틀</span><b id="st-thr">—</b><i>%</i></div>
-      <div class="sc"><span class="k">상승률</span><b id="st-climb">—</b><i>m/s</i></div>
-      <div class="sc" id="sc-home"><span class="k">홈거리</span><b id="st-home">—</b><i>/ 150 m 설정값</i></div>
-      <!-- AUTO.* 가 아니면 통째로 사라진다. 멈춘 wp_dist 는 없는 숫자보다 나쁘다. -->
-      <div class="sc" id="sc-wp" hidden><span class="k">WP</span><b id="st-wp">—</b><i id="st-xt"></i></div>
-      <!-- 진단 칸은 색이 절대 안 붙는다 — 비행 판단값이 아니라 정비 항목이다. -->
-      <div class="sc diag"><span class="k">진단</span><b id="st-air">—</b><i>대기속도 영점불량</i><b id="st-load">—</b><i>CPU%</i></div>
+      <div class="sc" id="sc-cur"><span class="k">전류</span><b id="st-cur">—</b><i>A</i></div>
+      <div class="sc" id="sc-batt"><span class="k">배터리</span><b id="st-batt">—</b><i>%</i></div>
+      <div class="sc" id="sc-spd"><span class="k">속도</span><b id="st-spd">—</b><i>m/s</i></div>
+      <div class="sc" id="sc-alt"><span class="k">고도</span><b id="st-alt">—</b><i>m</i></div>
+      <div class="sc" id="sc-sats"><span class="k">위성</span><b id="st-sats">—</b><i>기</i></div>
+      <!-- 모터 4개. 쿼드라 좌전/우전/좌후/우후가 한 칸에 나란히 선다.
+           한쪽만 튀면 프롭·모터 이상이라 서로 비교가 곧 판정이다. -->
+      <div class="sc mot" id="sc-mot"><span class="k">모터</span>
+        <span class="mv"><b id="st-mLF">—</b><b id="st-mRF">—</b><b id="st-mLB">—</b><b id="st-mRB">—</b></span>
+        <i>%</i></div>
     </div>
   </section>
 

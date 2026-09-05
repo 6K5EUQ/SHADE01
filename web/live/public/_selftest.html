@@ -108,9 +108,10 @@ const num = (e, a) => parseFloat(e.getAttribute(a));
   // ── 고장난 에어스피드 격리 ───────────────────────────────────────
   note('■ 고장 센서 격리 — 대기속도는 계기가 아니라 정비 항목이다');
   f = await load(''); D = f.contentDocument; W = f.contentWindow; svg = D.getElementById('hud');
-  const air = D.getElementById('st-air');
-  ok('대기속도가 진단 칸에만, 무채색', W.getComputedStyle(air).color === 'rgb(110, 118, 129)',
-     W.getComputedStyle(air).color + ' 값=' + air.textContent);
+  // 스트립을 한 줄로 줄이면서 진단 칸을 뺐다 (2026-09-05). 이제 확인할 것은
+  // '어디에도 안 나온다' 이다 — 고장 센서를 계기로 쓰지 않는 것이 핵심이다.
+  ok('대기속도가 스트립에 없다', !D.getElementById('st-air'),
+     D.getElementById('st-air') ? '아직 있다' : '없음');
   const heads = [...svg.querySelectorAll('text')].map(t => t.textContent);
   ok('좌측 테이프가 대지속도(GS)로 못박힘', heads.includes('대지속도') && heads.includes('GS m/s'));
 
@@ -130,19 +131,27 @@ const num = (e, a) => parseFloat(e.getAttribute(a));
     hot.push(e.tagName + ':' + (t || e.getAttribute('fill')));
   }
   ok('정상 상태(30A·24V)에 경고색 0건', hot.length === 0, hot.join(', ') || 'clean');
-  let bar = [...svg.querySelectorAll('rect')].find(e => num(e, 'height') === 14 && e.getAttribute('fill') !== 'var(--panel-2)');
-  ok('전류 30A 막대가 무채색', bar && bar.getAttribute('fill') === 'var(--dim)', bar && bar.getAttribute('fill'));
-  f = await load('cur=61'); svg = f.contentDocument.getElementById('hud');
-  ok('전류 61A → --bad',
-     [...svg.querySelectorAll('rect')].some(e => e.getAttribute('fill') === 'var(--bad)' && num(e, 'height') === 14));
+  // 전류는 이제 SVG 막대가 아니라 스트립 칸이다 (2026-09-05).
+  ok('전류 30A 칸이 무채색', D.getElementById('sc-cur').className === 'sc',
+     D.getElementById('sc-cur').className);
+  f = await load('cur=61'); D = f.contentDocument;
+  ok('전류 61A → .bad', /\bbad\b/.test(D.getElementById('sc-cur').className),
+     D.getElementById('sc-cur').className + ' 값=' + D.getElementById('st-cur').textContent);
+  f = await load('cur=50'); D = f.contentDocument;
+  ok('전류 50A → .warn', /\bwarn\b/.test(D.getElementById('sc-cur').className),
+     D.getElementById('sc-cur').className);
 
   // ── 조건부 표시 ─────────────────────────────────────────────────
   note('■ 조건부 표시 — 멈춘 숫자는 없는 숫자보다 나쁘다');
   f = await load(''); D = f.contentDocument; W = f.contentWindow;
-  ok('POSCTL 에서 WP 칸 숨김', W.getComputedStyle(D.getElementById('sc-wp')).display === 'none');
-  f = await load('auto=1'); D = f.contentDocument; W = f.contentWindow;
-  ok('AUTO.MISSION 에서 WP 칸 표시', W.getComputedStyle(D.getElementById('sc-wp')).display !== 'none',
-     D.getElementById('st-wp').textContent + ' ' + D.getElementById('st-xt').textContent);
+  // WP 칸은 통합하면서 뺐다. 대신 남긴 6칸이 전부 있는지 본다 —
+  // 하나라도 없으면 render 가 조용히 죽은 것이다.
+  const want = ['sc-cur', 'sc-batt', 'sc-spd', 'sc-alt', 'sc-sats', 'sc-mot'];
+  const missing = want.filter((id) => !D.getElementById(id));
+  ok('스트립 6칸이 전부 있다', missing.length === 0, missing.join(',') || 'ok');
+  const vals = ['st-cur', 'st-batt', 'st-spd', 'st-alt', 'st-sats']
+    .map((id) => (D.getElementById(id) || {}).textContent);
+  ok('스트립 값이 채워진다', vals.every((v) => v && v !== ''), vals.join(' / '));
 
   // ── 좁은 화면 ───────────────────────────────────────────────────
   note('■ 좁은 화면 — 계기가 사라지는 건 계기가 틀린 것 다음으로 나쁘다');
@@ -158,13 +167,13 @@ const num = (e, a) => parseFloat(e.getAttribute(a));
      `hudBox.bottom=${box.bottom.toFixed(0)} pane.bottom=${pane.bottom.toFixed(0)}`);
   ok('차트 패널이 스트립을 안 덮는다', mp.top >= strip.bottom - 1,
      `chart.top=${mp.top.toFixed(0)} strip.bottom=${strip.bottom.toFixed(0)}`);
-  const curBg = [...svg.querySelectorAll('rect')].find(e => e.getAttribute('fill') === 'rgba(13,17,23,.72)');
-  ok('전류 밴드가 viewBox 안', curBg && num(curBg, 'y') + 46 <= vb.height + .5,
-     curBg ? `y=${curBg.getAttribute('y')} vbH=${vb.height}` : 'none');
-  const gps = [...svg.querySelectorAll('text')].find(e => e.textContent === 'GPS');
-  ok('상태 밴드가 viewBox 안', gps && num(gps, 'y') <= vb.height, gps && `y=${gps.getAttribute('y')}`);
-  const gv = [...svg.querySelectorAll('text')].find(e => /^(DGPS|3D|2D|RTK)/.test(e.textContent || ''));
-  ok('좁으면 GPS 칸이 옆 칸을 안 침범 (eph 생략)', gv && !/m$/.test(gv.textContent), gv && gv.textContent);
+  // 전류·상태 밴드는 HUD 밖(HTML 스트립)으로 나갔다 (2026-09-05).
+  // 좁은 화면에서 스트립이 안 잘리는지가 그 자리를 대신하는 검사다.
+  const st = D.getElementById('strip').getBoundingClientRect();
+  ok('좁아도 스트립이 화면 안', st.bottom <= f.contentWindow.innerHeight + 1,
+     `strip.bottom=${st.bottom.toFixed(0)} win=${f.contentWindow.innerHeight}`);
+  const scs = [...D.querySelectorAll('#strip .sc')];
+  ok('좁아도 스트립 칸이 안 사라진다', scs.length >= 6, `칸 ${scs.length}개`);
 
   note('완료. FAIL 이 0 이어야 배포한다.');
 })().catch((e) => { ok('자체검사 자체가 죽었다', false, e.message); });

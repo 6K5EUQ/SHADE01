@@ -22,8 +22,6 @@
 'use strict';
 
 const POLL_MS = 200;
-const CHART_SEC = 60;                 // 전류 스파크가 보여주는 시간 창
-const CHART_N = CHART_SEC * 5;        // 5Hz 기준 점 개수
 
 // ── 계기 스케일 상수. 빌드와 layout() 이 같은 값을 읽는다 (두 벌이 되면 어긋난다) ──
 const PPD_PITCH = 6.0;                // 피치 px/도
@@ -39,20 +37,18 @@ const OVER = 2600;                    // 하늘/땅 오버스캔 반폭 (4K 반�
 const FENCE = { HOR: 150, VER: 50 };
 
 const HDG_H = 34;                     // 상단 기수 테이프 높이
-const CUR_H = 46;                     // 하단 전류 밴드 높이
-const BAND_H = 52;                    // 하단 상태 밴드 높이
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const $ = (id) => document.getElementById(id);
 
 // ── 레이아웃 변수. layout() 에서만 갱신, 매 프레임 transform 이 이걸 읽는다 ──
 let W = 0, H = 0, TAPE_W = 72, AY0 = HDG_H, AY1 = 0, AH = 0;
-let cx = 0, cy = 0, ARC_R = 0, CENTER_DY = 0, BAR_X0 = 140, BAR_W = 0;
-let NARROW = false;                   // 상태밴드 한 칸(W/4)이 글자를 못 담는 폭
+let cx = 0, cy = 0, ARC_R = 0, CENTER_DY = 0;
 
 const h = {};                         // HUD 노드 참조
 let havePos = false;
 let winSec = 180;                     // 차트가 보여주는 시간 창 (0 = 전체)
+let hoverT = null;                    // 커서가 붙잡고 있는 시각 (없으면 null)
 
 // ── 차트 버퍼 ───────────────────────────────────────────────────────
 // 로그 뷰어의 extract.py 가 만드는 trk 와 **같은 모양**이다: 균일 격자(hz, n)
@@ -65,7 +61,6 @@ const HZ = 1000 / POLL_MS;            // 5Hz
 const KEEP_N = 3600 * HZ;             // 1시간치까지 들고 있는다
 const trk = { hz: HZ, n: 0, dur: 0, modes: [], events: [] };
 let lastMode = null;
-const hist = { cur: [] };
 let lastSeq = -1, lastSeqPoll = 0, pollN = 0;
 let warnUntil = 0, warnText = '', lastMsgKey = '';
 
@@ -261,45 +256,6 @@ function buildHUD() {
   h.hdgVal = el('text', { 'text-anchor': 'middle', 'font-size': 17, fill: '#e6edf3' }, svg);
   h.hdgSrc = el('text', { 'font-size': 9, fill: 'var(--muted)' }, svg);
 
-  // ⑦ 하단 전류 밴드 — 이 기체 1위 위험이다 (8/31 최대 66.8A, 453초 중 270초가 45A 초과).
-  // 숫자만으로는 '58A' 가 위험인지 안 보이므로 위치 비교로 바꾼다.
-  h.curBg = el('rect', { fill: 'rgba(13,17,23,.72)' }, svg);
-  h.curTop = el('line', { stroke: 'var(--border-2)', 'stroke-width': 1 }, svg);
-  h.curSpark = el('path', { fill: 'none', stroke: 'var(--dim)', opacity: .45, 'stroke-width': 1.4 }, svg);
-  h.curTrack = el('rect', { fill: 'var(--panel-2)' }, svg);
-  h.curFill = el('rect', { fill: 'var(--c-cur)' }, svg);
-  h.ref45 = el('line', { stroke: 'var(--warn)', 'stroke-width': 2 }, svg);
-  h.ref45t = el('text', { 'font-size': 9, fill: 'var(--warn)', 'text-anchor': 'middle' }, svg);
-  h.ref45t.textContent = '45';
-  h.ref66 = el('line', { stroke: 'var(--bad)', 'stroke-width': 2 }, svg);
-  h.ref66t = el('text', { 'font-size': 9, fill: 'var(--bad)', 'text-anchor': 'middle' }, svg);
-  h.ref66t.textContent = '66.8';
-  h.curVal = el('text', { 'font-size': 30, 'text-anchor': 'start', fill: 'var(--c-cur)' }, svg);
-  h.curUnit = el('text', { 'font-size': 12, fill: 'var(--muted)' }, svg);
-  h.curUnit.textContent = 'A';
-
-  // ⑧ 하단 상태 밴드 — GPS / EKF / 진동 3축 / RC.
-  // 🔴 색 예산: 정상은 전부 무채색이다. 색이 보이는 것 자체가 신호라
-  //    조종자가 읽는 건 4개 값이 아니라 '색이 있나' 하나다.
-  h.cells = [];
-  const NAMES = ['GPS', 'EKF', '진동', 'RC'];
-  for (let i = 0; i < 4; i++) {
-    const c = {
-      bar: el('rect', { fill: 'var(--border-2)' }, svg),
-      lbl: el('text', { 'font-size': 10, fill: 'var(--muted)' }, svg),
-      val: el('text', { 'font-size': 14, fill: 'var(--dim)' }, svg),
-    };
-    c.lbl.textContent = NAMES[i];
-    h.cells.push(c);
-  }
-  // 진동은 max 로 안 뭉갠다 — 3m 낙하 이력 기체에서 '어느 축이 뛴다'가 정비 지시로 직결된다.
-  // 막대 뒤에 눈금 배경을 깐다. 평소 진동(실측 평균 2.5 → 26px 중 2px)은
-  // 배경 없이는 사실상 안 보여서 '데이터 없음'과 구분이 안 된다.
-  h.vibeTrack = [];
-  h.vibeBars = [];
-  for (let i = 0; i < 3; i++) h.vibeTrack.push(el('rect', { fill: 'var(--panel-2)' }, svg));
-  for (let i = 0; i < 3; i++) h.vibeBars.push(el('rect', { fill: 'var(--border-2)' }, svg));
-
   // ⑨ 프리즈 오버레이 — 얼어붙은 테이프는 정상 테이프와 겉모습이 같다.
   //    얼어붙은 계기는 자기가 얼었다고 온몸으로 말해야 한다.
   h.freeze = el('rect', { fill: '#0d1117', opacity: .55, class: 'off' }, svg);
@@ -312,14 +268,11 @@ function buildHUD() {
 function layout(w, hh) {
   W = w; H = hh;
   TAPE_W = clamp(W * 0.082, 62, 92);
-  AY0 = HDG_H; AY1 = H - CUR_H - BAND_H; AH = AY1 - AY0;
+  AY0 = HDG_H; AY1 = H; AH = AY1 - AY0;
   cx = W / 2; cy = AY0 + AH / 2;
   // min(W,AH) 가 핵심 — max 나 W 를 쓰면 세로가 짧은 패널에서 호가 잘린다.
   ARC_R = Math.min(W, AH) * 0.36;
   CENTER_DY = Math.min(AH * 0.17, 150);
-  BAR_X0 = 140; BAR_W = Math.max(40, W - 156);
-  // 칸 하나가 175px 밑이면 'DGPS · 27기 · 0.19m' 가 옆 칸을 침범한다.
-  NARROW = W / 4 < 175;
 
   const svg = $('hud');
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
@@ -394,40 +347,6 @@ function layout(w, hh) {
   setAttr(h.hdgSrc, 'x', cx + 40); setAttr(h.hdgSrc, 'y', HDG_H + 27);
   setAttr(h.bugL, 'points', `${TAPE_W + 2},${HDG_H + 4} ${TAPE_W + 12},${HDG_H - 2} ${TAPE_W + 12},${HDG_H + 10}`);
   setAttr(h.bugR, 'points', `${W - TAPE_W - 2},${HDG_H + 4} ${W - TAPE_W - 12},${HDG_H - 2} ${W - TAPE_W - 12},${HDG_H + 10}`);
-
-  // 전류 밴드
-  const cy0 = H - CUR_H - BAND_H;
-  box(h.curBg, 0, cy0, W, CUR_H);
-  setAttr(h.curTop, 'x1', 0); setAttr(h.curTop, 'y1', cy0);
-  setAttr(h.curTop, 'x2', W); setAttr(h.curTop, 'y2', cy0);
-  setAttr(h.curVal, 'x', 12); setAttr(h.curVal, 'y', cy0 + 34);
-  setAttr(h.curUnit, 'x', 100); setAttr(h.curUnit, 'y', cy0 + 34);
-  box(h.curTrack, BAR_X0, cy0 + 16, BAR_W, 14);
-  setAttr(h.curFill, 'x', BAR_X0); setAttr(h.curFill, 'y', cy0 + 16); setAttr(h.curFill, 'height', 14);
-  const refx = (a) => BAR_X0 + (a / 70) * BAR_W;
-  setAttr(h.ref45, 'x1', refx(45)); setAttr(h.ref45, 'x2', refx(45));
-  setAttr(h.ref45, 'y1', cy0 + 12); setAttr(h.ref45, 'y2', cy0 + 34);
-  setAttr(h.ref45t, 'x', refx(45)); setAttr(h.ref45t, 'y', cy0 + 44);
-  setAttr(h.ref66, 'x1', refx(66.8)); setAttr(h.ref66, 'x2', refx(66.8));
-  setAttr(h.ref66, 'y1', cy0 + 12); setAttr(h.ref66, 'y2', cy0 + 34);
-  setAttr(h.ref66t, 'x', refx(66.8)); setAttr(h.ref66t, 'y', cy0 + 44);
-
-  // 상태 밴드
-  const by = H - BAND_H, cw = W / 4;
-  h.cells.forEach((c, i) => {
-    const x = i * cw;
-    box(c.bar, x + 6, by + 8, 3, 30);
-    setAttr(c.lbl, 'x', x + 16); setAttr(c.lbl, 'y', by + 20);
-    setAttr(c.val, 'x', x + 16); setAttr(c.val, 'y', by + 40);
-    setAttr(c.val, 'font-size', NARROW ? 12 : 14);
-  });
-  h.vibeBars.forEach((b, i) => {
-    setAttr(b, 'x', 2 * cw + 58 + i * 10); setAttr(b, 'width', 6);
-  });
-  h.vibeTrack.forEach((t, i) => {
-    setAttr(t, 'x', 2 * cw + 58 + i * 10); setAttr(t, 'width', 6);
-    setAttr(t, 'y', H - 34); setAttr(t, 'height', 26);
-  });
 
   box(h.freeze, 0, 0, W, H);
   setAttr(h.freezeTxt, 'x', cx); setAttr(h.freezeTxt, 'y', cy);
@@ -539,7 +458,9 @@ function buildCharts() {
            여기서 또 적으면 같은 말이 두 번이다 — 그 자리는 현재값에 준다. -->
       <div class="now" id="n-${c.id}"></div>
       <svg id="${c.id}"></svg>
+      <div class="tip" id="tip-${c.id}"></div>
     </div>`).join('');
+  for (const c of want) bindHover(c);
   renderCharts();
 }
 
@@ -556,9 +477,86 @@ function buildToc() {
   });
 }
 
+/** 마우스를 올린 지점의 값을 읽어 준다 (로그 뷰어 log.html 과 같은 관용구).
+ *
+ * 흘러가는 화면이라 커서를 올린 동안에는 **그 시각을 붙잡아** 다시 그린다 —
+ * 안 그러면 읽는 사이에 그래프가 밀려 다른 값을 가리킨다.
+ */
+function bindHover(c) {
+  const el = $(c.id);
+  const tip = $('tip-' + c.id);
+  if (!el || !tip || el._bound) return;
+  el._bound = true;
+
+  const move = (e) => {
+    const g = el._geom;
+    if (!g || !trk.n) return;
+    const r = el.getBoundingClientRect();
+    // _geom.tAt 은 viewBox 좌표를 받는다. 화면 px → viewBox px 로 환산한다.
+    const vx = (e.clientX - r.left) * (g.W / r.width);
+    const t = g.tAt(vx);
+    if (t < g.v0 || t > g.v1) { hide(); return; }
+
+    const i = Math.max(0, Math.min(trk.n - 1, Math.round(t * trk.hz)));
+    const ago = trk.dur - t;
+    let html = `<div class="t">${ago < 1 ? '지금' : '-' + ago.toFixed(1) + 's'}` +
+               `${modeAt(t) ? ' · ' + modeAt(t) : ''}</div>`;
+    for (const sx of c.series) {
+      const arr = trk[sx.key];
+      const v = arr ? arr[i] : null;
+      html += `<div class="r"><span class="d" style="background:${sx.color}"></span>` +
+              `<span class="n">${sx.label}</span>` +
+              `<b>${v == null ? '–' : (+v).toFixed(2)}</b>` +
+              (sx.unit ? `<i>${sx.unit}</i>` : '') + '</div>';
+    }
+    tip.innerHTML = html;
+    tip.style.opacity = '1';
+
+    // 커서 옆에 두되 단 밖으로 안 나가게 접는다.
+    const sec = el.parentElement.getBoundingClientRect();
+    const w = tip.offsetWidth, hh = tip.offsetHeight;
+    let x = e.clientX - sec.left + 14;
+    if (x + w > sec.width - 4) x = e.clientX - sec.left - 14 - w;
+    if (x < 4) x = 4;
+    let y = e.clientY - sec.top - hh - 12;
+    if (y < 4) y = e.clientY - sec.top + 16;
+    if (y + hh > sec.height - 4) y = Math.max(4, sec.height - hh - 4);
+    tip.style.left = x + 'px';
+    tip.style.top = y + 'px';
+
+    // 커서 세로선. chart.js 가 만들어 둔 .cursor 를 그대로 쓴다.
+    const cur = el.querySelector('.cursor');
+    if (cur) {
+      cur.setAttribute('x1', g.x(t)); cur.setAttribute('x2', g.x(t));
+      cur.style.display = '';
+    }
+    hoverT = t;                       // 흘러가는 것을 멈춘다 (renderCharts 가 읽는다)
+  };
+
+  const hide = () => {
+    tip.style.opacity = '0';
+    const cur = el.querySelector('.cursor');
+    if (cur) cur.style.display = 'none';
+    hoverT = null;
+  };
+
+  el.addEventListener('pointermove', move);
+  el.addEventListener('pointerleave', hide);
+}
+
+/** 그 시각의 비행모드 이름. */
+function modeAt(t) {
+  let n = '';
+  for (const m of trk.modes) { if (m.t <= t) n = m.name; else break; }
+  return n;
+}
+
 function renderCharts() {
   if (!trk.n) return;
   // 보이는 구간 = 최근 winSec 초. 이 창이 오른쪽으로 밀리는 것이 곧 "흘러감" 이다.
+  // 🔴 커서를 올린 동안에는 안 민다. 흘러가면 읽으려던 지점이 옆으로 도망가
+  //    커서와 숫자가 서로 다른 시각을 가리킨다.
+  if (hoverT != null) return;
   const t1 = trk.dur;
   const t0 = winSec > 0 ? Math.max(0, t1 - winSec) : 0;
   for (const c of CHARTS) {
@@ -594,39 +592,10 @@ function bearing(from, to) {
   return wrap360(Math.atan2(y, x) * 180 / Math.PI);
 }
 
-// ── 전류 스파크 ─────────────────────────────────────────────────────
-// 🔴 기존 spark() 의 자동 스케일을 쓰지 않는다 — 정지 중 노이즈를 산맥처럼
-//    그리고 막대의 45/66.8 눈금과 축이 안 맞는다. 고정 0~70A 축이라
-//    순간 피크인지 지속 과전류인지가 이 한 겹으로 갈린다.
-function drawCurSpark() {
-  const v = hist.cur, n = v.length;
-  if (n < 2) { setAttr(h.curSpark, 'd', ''); return; }
-  const y0 = H - CUR_H - BAND_H;
-  const step = BAR_W / Math.max(n - 1, 1);
-  let d = '', pen = false;
-  for (let i = 0; i < n; i++) {
-    const x = BAR_X0 + i * step;
-    if (v[i] == null) { pen = false; continue; }
-    const y = y0 + 40 - clamp(v[i] / 70, 0, 1) * 36;
-    d += (pen ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
-    pen = true;
-  }
-  setAttr(h.curSpark, 'd', d);
-}
-function push(arr, v) {
-  arr.push(v == null || !isFinite(v) ? null : v);
-  if (arr.length > CHART_N) arr.shift();
-}
-
 // ── 렌더 ────────────────────────────────────────────────────────────
 function render(s) {
   pollN++;
   const d = s.d || {};
-
-  // ① hist 먼저. 🔴 조기반환 뒤에 두면 데이터가 안 오는 동안 시간축이 압축돼
-  //    전류 스파크가 거짓 추세를 그린다.
-  push(hist.cur, d.cur);
-  if (pollN % 5 === 0) drawCurSpark();
 
   // ② 링크·프리즈·경고 만료 — 조기반환과 무관하게 항상 돈다.
   const changed = s.seq !== lastSeq;
@@ -778,98 +747,42 @@ function render(s) {
   h.vtol.classList.toggle('blink', !!vtBad);
   h.warn.classList.toggle('blink', !vtBad && !!crit);
 
-  // ── 전류 밴드
-  setText(h.curVal, fmt(d.cur));
-  setAttr(h.curFill, 'width', (clamp((d.cur || 0) / 70, 0, 1) * BAR_W).toFixed(1));
-  // 🔴 정상 구간은 무채색이다. --c-cur 은 #f85149 로 --bad 와 **글자 그대로 같은 색**이라,
-  //    그걸 기본색으로 쓰면 30A 정상 비행 내내 새빨간 막대가 켜져 있고 진짜 60A 초과가
-  //    와도 안 튄다. 색이 보이는 것 자체가 신호여야 한다 (색 예산).
-  const curCol = d.cur > 60 ? 'var(--bad)' : d.cur > 45 ? 'var(--warn)' : 'var(--dim)';
-  setAttr(h.curFill, 'fill', curCol);
-  setAttr(h.curVal, 'fill', d.cur > 45 ? curCol : 'var(--text)');
-
-  // ── 상태 밴드
-  const cell = (i, cls, txt) => {
-    const c = h.cells[i];
-    const col = cls === 'ok' ? 'var(--ok)' : cls === 'warn' ? 'var(--warn)'
-      : cls === 'bad' ? 'var(--bad)' : 'var(--border-2)';
-    setAttr(c.bar, 'fill', col);
-    setAttr(c.val, 'fill', cls === 'none' ? 'var(--muted)' : cls === 'ok' ? 'var(--dim)' : col);
-    setText(c.val, txt);
-  };
-  const fixName = { 0: 'fix없음', 1: 'fix없음', 2: '2D', 3: '3D', 4: 'DGPS', 5: 'RTK-F', 6: 'RTK-X' };
-  if (d.fix != null) {
-    // eph 는 실측 0.15~0.23m 로 거의 상수라 평소엔 배경이지만, fix 가 3D 를
-    // 유지한 채 eph 가 먼저 부푸는 것이 열화의 첫 징후다.
-    // 좁으면 eph 를 뺀다 — fix·위성수가 먼저다. 넓어지면 되살아난다.
-    const e = (d.eph != null && !NARROW) ? ` · ${d.eph.toFixed(2)}m` : '';
-    cell(0, d.fix >= 3 ? 'ok' : 'bad', `${fixName[d.fix] || d.fix} · ${d.sats ?? '?'}기${e}`);
-  } else cell(0, 'none', '—');
-
-  if (d.ekf) {
-    const off = Object.entries(d.ekf).filter(([, v]) => !v).map(([k]) => k);
-    const rt2 = d.ekf_ratio || {};
-    const hot = Object.entries(rt2).filter(([, v]) => v > 1.0).map(([k]) => k);
-    const worst = Math.max(0, ...Object.values(rt2));
-    let cls = 'ok', txt = 'OK';
-    if (off.length) { cls = off.length > 1 ? 'bad' : 'warn'; txt = off.join(','); }
-    else if (hot.length) { cls = 'bad'; txt = hot.join(',') + ' ' + worst.toFixed(1); }
-    else if (worst > 0.5) { cls = 'warn'; txt = worst.toFixed(2); }
-    // eph_ekf 는 eph 와 단위·자릿수가 똑같아 나란히 두면 매번 되짚는다. 2m 초과일 때만.
-    if (d.eph_ekf > 2) txt += ` 추정±${d.eph_ekf.toFixed(1)}m`;
-    cell(1, cls, txt);
-  } else cell(1, 'none', '—');
-
-  if (d.vibe) {
-    const mx = Math.max(...d.vibe);
-    cell(2, mx > 30 ? 'bad' : mx > 15 ? 'warn' : 'ok', '');
-    const by = H - 8;
-    h.vibeBars.forEach((b, i) => {
-      const v = clamp((d.vibe[i] || 0) / 30, 0, 1) * 26;
-      setAttr(b, 'y', by - v); setAttr(b, 'height', v.toFixed(1));
-      setAttr(b, 'fill', mx > 30 ? 'var(--bad)' : mx > 15 ? 'var(--warn)' : 'var(--border-2)');
-    });
-  } else {
-    cell(2, 'none', '—');
-    h.vibeBars.forEach((b) => setAttr(b, 'height', 0));
-  }
-  for (const t of h.vibeTrack) show(t, !!d.vibe);
-
-  // RADIO_STATUS 는 SiK 관용구다. 이 기체 링크 3경로에 SiK 가 없어 영구 미수신이므로
-  // 상시 자리를 주지 않고, d.rssi 가 없을 때만 출처를 밝혀 대체한다.
-  if (d.rssi != null) cell(3, d.rssi < 60 ? 'bad' : d.rssi < 120 ? 'warn' : 'ok', String(d.rssi));
-  else if (d.radio_rssi != null) { cell(3, 'none', 'RF ' + d.radio_rssi); }
-  else cell(3, 'none', '—');
-
-  // ── 숫자 스트립
+  // ── HUD 아래 한 줄. 전류밴드·상태밴드·숫자스트립 3층을 통합했다.
+  //    비행 중 곁눈질로 읽는 값만 남긴다 — 나머지는 우측 차트에 있다.
+  //
+  // 🔴 색 예산은 그대로다: 평소엔 전부 무채색이고, 색이 보이는 것 자체가 신호다.
+  //    (--c-cur 이 --bad 와 같은 #f85149 라 그걸 기본색으로 쓰면 30A 정상
+  //     비행 내내 새빨갛고 정작 60A 초과가 안 튄다.)
   const sc = (id, cls) => { const e = $(id); if (e) e.className = 'sc' + (cls ? ' ' + cls : ''); };
-  setText($('st-volt'), fmt(d.volt, 2));
-  // PM08 DroneCAN 은 셀 전압을 안 준다 (d.cells 는 6 이 아니라 1). 6S 는
-  // 하드웨어 사실이므로 volt/6 을 직접 계산한다.
-  setText($('st-cell'), d.volt != null ? `V · ${(d.volt / 6).toFixed(2)}/셀` : 'V');
-  sc('sc-volt', d.volt && d.volt < 21.0 ? 'bad' : d.volt && d.volt < 22.2 ? 'warn' : '');
-  setText($('st-mah'), d.mah != null ? String(d.mah) : '—');
-  setText($('st-pct'), d.batt_pct != null ? `mAh · ${d.batt_pct}%` : 'mAh');
-  sc('sc-mah', d.batt_pct != null && d.batt_pct < 20 ? 'bad'
-    : d.batt_pct != null && d.batt_pct < 35 ? 'warn' : '');
-  setText($('st-thr'), d.throttle != null ? String(d.throttle) : '—');
-  setText($('st-climb'), fmt(d.climb));
-  setText($('st-home'), s.home && pos ? dist(s.home, pos).toFixed(0) : '—');
-  sc('sc-home', s.home && pos && dist(s.home, pos) > FENCE.HOR * 0.9 ? 'warn' : '');
 
-  // WP 칸은 AUTO.* 일 때만. 멈춘 wp_dist 는 없는 숫자보다 나쁘다.
-  const auto = /^AUTO\./.test(d.mode || '');
-  $('sc-wp').hidden = !auto;
-  if (auto) {
-    setText($('st-wp'), (d.wp_seq != null ? String(d.wp_seq) : '—')
-      + (d.wp_dist != null ? ` · ${d.wp_dist.toFixed(0)}m` : ''));
-    setText($('st-xt'), d.xtrack != null
-      ? (d.xtrack < 0 ? '←' : '→') + Math.abs(d.xtrack).toFixed(1) + 'm' : '');
+  setText($('st-cur'), fmt(d.cur));
+  sc('sc-cur', d.cur > 60 ? 'bad' : d.cur > 45 ? 'warn' : '');
+
+  setText($('st-batt'), d.batt_pct != null ? String(d.batt_pct) : '—');
+  sc('sc-batt', d.batt_pct != null && d.batt_pct < 20 ? 'bad'
+    : d.batt_pct != null && d.batt_pct < 35 ? 'warn' : '');
+
+  setText($('st-spd'), fmt(d.groundspeed));
+  setText($('st-alt'), fmt(d.alt));
+
+  // 위성은 개수와 fix 를 같이 본다 — 8기라도 fix 가 없으면 위치는 없다.
+  setText($('st-sats'), d.sats != null ? String(d.sats) : '—');
+  sc('sc-sats', d.fix != null && d.fix < 3 ? 'bad' : (d.sats != null && d.sats < 8) ? 'warn' : '');
+
+  // 모터 4개. 한쪽만 튀면 프롭·모터 이상이므로 서로 비교가 곧 판정이다.
+  const mt = d.motors || {};
+  let mmax = null, mmin = null;
+  for (const k of ['LF', 'RF', 'LB', 'RB']) {
+    const v = mt[k];
+    setText($('st-m' + k), v == null ? '—' : v.toFixed(0));
+    if (v != null) {
+      mmax = mmax == null ? v : Math.max(mmax, v);
+      mmin = mmin == null ? v : Math.min(mmin, v);
+    }
   }
-  // 🔴 대기속도는 여기에만 있다. 정지 시 −4.7~−5.0 m/s 를 읽는 고장 센서라
-  //    (SENS_DPRES_OFF=-4.52) 어떤 경고·색 판정에도 안 들어간다.
-  setText($('st-air'), fmt(d.airspeed));
-  setText($('st-load'), d.load != null ? d.load.toFixed(0) : '—');
+  // 네 모터가 20%p 넘게 벌어지면 기체가 한쪽을 억지로 붙들고 있다는 뜻이다.
+  // 무게중심·프롭 손상·모터 열화의 첫 신호라 그때만 색을 준다.
+  sc('sc-mot', (mmax != null && mmax - mmin > 20) ? 'warn' : '');
 
   renderMsgs(msgs);
 }
