@@ -143,8 +143,11 @@ class State:
             self.bytes += nbytes
             self.src = addr
 
-    def snapshot(self, since=None):
-        """HTTP 로 나갈 형태. since(총 개수 기준) 이후의 항적만 잘라 보낸다."""
+    def snapshot(self, since=None, want_track=True):
+        """HTTP 로 나갈 형태. since(총 개수 기준) 이후의 항적만 잘라 보낸다.
+
+        want_track=False 면 항적을 빼고 개수만 알린다.
+        """
         with self.lock:
             live = (time.monotonic() - self.seen) < LINK_TIMEOUT if self.seen else False
             n = len(self.track)
@@ -169,7 +172,7 @@ class State:
                 'track_n': self.track_total,
                 # 이 응답의 첫 점이 전체에서 몇 번째인가. 0 이면 "처음부터 다시".
                 'track_from': dropped + start,
-                'track': self.track[start:],
+                'track': self.track[start:] if want_track else [],
                 'messages': self.messages[-40:],
             }
 
@@ -382,13 +385,18 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == '/api/state':
             since = 0
+            # track=0 이면 항적을 아예 안 보낸다. 차트만 보는 화면(지금의
+            # 라이브 페이지)이 40분 비행에서 매 폴 수백 KB 를 받지 않게 한다.
+            want_track = True
             for kv in query.split('&'):
                 if kv.startswith('since='):
                     try:
                         since = int(kv[6:])
                     except ValueError:
                         pass
-            body = json.dumps(self.st.snapshot(since), ensure_ascii=False)
+                elif kv == 'track=0':
+                    want_track = False
+            body = json.dumps(self.st.snapshot(since, want_track), ensure_ascii=False)
             return self._send(200, body, 'application/json; charset=utf-8')
 
         if path == '/api/reset':

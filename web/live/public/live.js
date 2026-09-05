@@ -51,14 +51,20 @@ let cx = 0, cy = 0, ARC_R = 0, CENTER_DY = 0, BAR_X0 = 140, BAR_W = 0;
 let NARROW = false;                   // 상태밴드 한 칸(W/4)이 글자를 못 담는 폭
 
 const h = {};                         // HUD 노드 참조
-let map, trackLine, craft, homeMarker, fenceCircle;
-// 미션 폴리라인은 없다: mav_live.py 가 st.mission 을 [] 로 초기화한 뒤 채우는
-// MISSION_ITEM 핸들러가 없어 항상 빈 배열이다. 서버에 미션 다운로드를 구현하기
-// 전까지는 그릴 것이 없다 — 다음 사람이 다시 시도하지 않게 남긴다.
-let follow = true;
-let trackPts = [];                    // [lat, lon]
-let trackHave = 0;                    // 서버 기준 '받은 총 개수' (배열 길이가 아니다)
 let havePos = false;
+let winSec = 180;                     // 차트가 보여주는 시간 창 (0 = 전체)
+
+// ── 차트 버퍼 ───────────────────────────────────────────────────────
+// 로그 뷰어의 extract.py 가 만드는 trk 와 **같은 모양**이다: 균일 격자(hz, n)
+// 위에 채널별 배열. 그래야 web/public/chart.js 의 drawChart 를 고치지 않고
+// 그대로 쓸 수 있고, 지난 비행과 지금 비행이 같은 그림으로 나온다.
+//
+// 폴 한 번이 격자 한 칸이다. 값이 없으면 null 을 넣는다 — 건너뛰면 시간축이
+// 밀려 20분 뒤 그래프가 실제보다 짧아진다.
+const HZ = 1000 / POLL_MS;            // 5Hz
+const KEEP_N = 3600 * HZ;             // 1시간치까지 들고 있는다
+const trk = { hz: HZ, n: 0, dur: 0, modes: [], events: [] };
+let lastMode = null;
 const hist = { cur: [] };
 let lastSeq = -1, lastSeqPoll = 0, pollN = 0;
 let warnUntil = 0, warnText = '', lastMsgKey = '';
@@ -427,45 +433,152 @@ function layout(w, hh) {
   setAttr(h.freezeTxt, 'x', cx); setAttr(h.freezeTxt, 'y', cy);
 }
 
-// ── 지도 ────────────────────────────────────────────────────────────
-function initMap() {
-  map = L.map('map', { zoomControl: true, attributionControl: true }).setView([36.5, 127.8], 6);
+// ── 차트 ────────────────────────────────────────────────────────────
+// 단 구성·색은 로그 뷰어(log.html 의 CHARTS)와 맞춘다.
+const CHARTS = [
+  { id: 'k-alt', title: '고도', on: true, series: [
+      { key: 'alt', color: 'var(--c-alt)', label: '고도', axis: 'left', weight: 2, unit: 'm' },
+      { key: 'climb', color: 'var(--c-spd)', label: '상승률', axis: 'right', unit: 'm/s' }] },
+  { id: 'k-spd', title: '속도', on: true, series: [
+      { key: 'spd', color: 'var(--c-spd)', label: '수평속도', axis: 'left', weight: 2, unit: 'm/s' },
+      { key: 'aspd', color: '#a371f7', label: '대기속도', axis: 'left', unit: 'm/s' }] },
+  { id: 'k-pwr', title: '전력', on: true, series: [
+      { key: 'cur', color: 'var(--c-cur)', label: '전류', axis: 'left', weight: 2, unit: 'A' },
+      { key: 'volt', color: 'var(--c-volt)', label: '전압', axis: 'right', unit: 'V' }],
+    // 45A 는 8/31 비행에서 453초 중 270초를 넘긴 선이다 (README 「전류」).
+    thresholds: [{ v: 45, label: '45A', color: '#d29922' }] },
+  { id: 'k-att', title: '자세', on: false, series: [
+      { key: 'roll', color: '#d55e00', label: '롤', axis: 'left', weight: 2, unit: '°' },
+      { key: 'pitch', color: '#e69f00', label: '피치', axis: 'left', weight: 2, unit: '°' }] },
+  { id: 'k-vib', title: '진동', on: false, series: [
+      { key: 'vib', color: '#f0883e', label: '진동(최대축)', axis: 'left', weight: 2 }],
+    thresholds: [{ v: 30, label: '한계', color: '#d29922' }] },
+  { id: 'k-gps', title: 'GPS', on: false, series: [
+      { key: 'sats', color: '#3fb950', label: '위성 수', axis: 'left', weight: 2 },
+      { key: 'eph', color: '#f85149', label: '위치 오차', axis: 'right', unit: 'm' }] },
+  { id: 'k-ekf', title: 'EKF', on: false, series: [
+      { key: 'ekf_vel', color: '#58a6ff', label: '속도', axis: 'left' },
+      { key: 'ekf_pos', color: '#3fb950', label: '위치', axis: 'left' },
+      { key: 'ekf_alt', color: '#f0883e', label: '고도', axis: 'left' },
+      { key: 'ekf_mag', color: '#a371f7', label: '지자기', axis: 'left' }],
+    // 비율이다. 1 을 넘으면 그 센서의 혁신 검사가 깨지고 있다는 뜻.
+    thresholds: [{ v: 1, label: '한계', color: '#d29922' }] },
+];
+const shownIds = new Set(CHARTS.filter((c) => c.on).map((c) => c.id));
 
-  // 타일은 외부에서 온다 — 로그 뷰어(log.html)와 같은 소스다. 백팩 AP 에
-  // 붙어 있으면 인터넷이 없어 타일이 안 뜬다. 그래도 항적·계기는 다 돈다.
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19, attribution: '© OpenStreetMap',
-  }).addTo(map);
-
-  trackLine = L.polyline([], { color: '#58a6ff', weight: 3, opacity: .9 }).addTo(map);
-
-  // 기수 방향을 보여줘야 해서 원이 아니라 삼각형 아이콘이다.
-  craft = L.marker([0, 0], {
-    icon: L.divIcon({
-      className: 'craft-icon', iconSize: [28, 28], iconAnchor: [14, 14],
-      html: '<svg width="28" height="28" viewBox="0 0 28 28">' +
-        '<polygon points="14,2 21,24 14,19 7,24" fill="#f0883e" ' +
-        'stroke="#0d1117" stroke-width="1.5" stroke-linejoin="round"/></svg>',
-    }),
-    interactive: false, keyboard: false,
-  });
-
-  map.on('dragstart', () => setFollow(false));    // 손으로 끌면 추적을 끈다
-
-  // 🔴 pan:false 가 핵심이다 — 기본 인자로 부르면 재중심 팬이 일어나
-  //    follow 의 5Hz panTo 와 싸운다. 창 리사이즈·900px 경계·브라우저 줌·
-  //    메시지 서랍 토글을 이 하나가 다 커버한다.
-  let pend = false;
-  new ResizeObserver(() => {
-    if (pend) return;
-    pend = true;
-    requestAnimationFrame(() => { pend = false; map.invalidateSize({ animate: false, pan: false }); });
-  }).observe($('map'));
+// 🔴 chart.js 는 stroke 를 **SVG 속성**으로 쓴다 (stroke="..."). 속성값은 CSS
+//    변수를 풀지 않으므로 var(--c-alt) 를 그대로 넘기면 선이 그려지긴 해도
+//    색이 없어 화면에서 사라진다. log.html 이 cssVar() 를 거치는 이유가 이것이다.
+//    기동 시 한 번 실제 색으로 바꿔 둔다.
+function cssVar(v) {
+  return v && v.startsWith('var(')
+    ? getComputedStyle(document.documentElement).getPropertyValue(v.slice(4, -1)).trim() || v
+    : v;
+}
+function resolveColors() {
+  for (const c of CHARTS) for (const sx of c.series) sx.color = cssVar(sx.color);
 }
 
-function setFollow(on) {
-  follow = on;
-  $('followBtn').classList.toggle('on', on);
+/** 폴 한 번 = 격자 한 칸. */
+function pushSample(d) {
+  const put = (k, v) => {
+    // 뒤늦게 처음 등장한 채널은 앞을 null 로 채워 길이를 맞춘다.
+    if (!trk[k]) trk[k] = new Array(trk.n).fill(null);
+    trk[k].push(v == null || !isFinite(v) ? null : v);
+  };
+  put('alt', d.alt);
+  put('climb', d.climb);
+  put('spd', d.groundspeed);
+  put('aspd', d.airspeed);
+  put('roll', d.roll);
+  put('pitch', d.pitch);
+  put('cur', d.cur);
+  put('volt', d.volt);
+  put('vib', d.vibe ? Math.max(...d.vibe) : null);
+  put('sats', d.sats);
+  put('eph', d.eph);
+  const r = d.ekf_ratio || {};
+  put('ekf_vel', r.vel); put('ekf_pos', r.pos); put('ekf_alt', r.alt); put('ekf_mag', r.mag);
+
+  trk.n++;
+  trk.dur = (trk.n - 1) / trk.hz;
+
+  // 모드가 바뀌면 밴드를 연다 — 로그 뷰어와 같은 배경 띠가 된다.
+  if (d.mode && d.mode !== lastMode) {
+    trk.modes.push({ t: trk.dur, name: d.mode });
+    lastMode = d.mode;
+  }
+
+  // 오래된 것을 버린다. 모든 채널에서 **같은 개수**를 떨궈야 인덱스가 안 어긋난다.
+  if (trk.n > KEEP_N) {
+    const drop = trk.n - KEEP_N;
+    for (const k of Object.keys(trk)) {
+      if (Array.isArray(trk[k]) && k !== 'modes' && k !== 'events') trk[k].splice(0, drop);
+    }
+    trk.n -= drop;
+    const shift = drop / trk.hz;
+    trk.dur -= shift;
+    for (const m of trk.modes) m.t -= shift;
+    // 창 밖으로 나간 밴드는 접는다. 첫 밴드는 0 에 붙여 두어야 배경이 안 빈다.
+    while (trk.modes.length > 1 && trk.modes[1].t <= 0) trk.modes.shift();
+    if (trk.modes.length) trk.modes[0].t = Math.max(0, trk.modes[0].t);
+  }
+}
+
+/** 단 DOM 을 만든다. 그리기는 renderCharts() 가 매 폴마다 한다. */
+function buildCharts() {
+  const host = $('charts');
+  const want = CHARTS.filter((c) => shownIds.has(c.id));
+  if (!want.length) {
+    host.innerHTML = '<div class="empty">볼 단을 오른쪽 위에서 고른다.</div>';
+    return;
+  }
+  host.innerHTML = want.map((c) => `
+    <div class="lchart">
+      <!-- 계열 이름은 chart.js 가 축 머리말로 이미 적는다 (색까지 같이).
+           여기서 또 적으면 같은 말이 두 번이다 — 그 자리는 현재값에 준다. -->
+      <div class="now" id="n-${c.id}"></div>
+      <svg id="${c.id}"></svg>
+    </div>`).join('');
+  renderCharts();
+}
+
+function buildToc() {
+  $('toc').innerHTML = CHARTS.map((c) =>
+    `<label class="${shownIds.has(c.id) ? 'on' : ''}" data-id="${c.id}">
+       <input type="checkbox" ${shownIds.has(c.id) ? 'checked' : ''}>${c.title}</label>`).join('');
+  $('toc').querySelectorAll('label').forEach((el) => {
+    el.querySelector('input').onchange = (e) => {
+      if (e.target.checked) shownIds.add(el.dataset.id); else shownIds.delete(el.dataset.id);
+      el.classList.toggle('on', e.target.checked);
+      buildCharts();
+    };
+  });
+}
+
+function renderCharts() {
+  if (!trk.n) return;
+  // 보이는 구간 = 최근 winSec 초. 이 창이 오른쪽으로 밀리는 것이 곧 "흘러감" 이다.
+  const t1 = trk.dur;
+  const t0 = winSec > 0 ? Math.max(0, t1 - winSec) : 0;
+  for (const c of CHARTS) {
+    if (!shownIds.has(c.id)) continue;
+    const el = $(c.id);
+    if (!el) continue;
+    drawChart(el, trk, {
+      series: c.series, bands: true, thresholds: c.thresholds,
+      relTime: true,          // x축을 "몇 초 전" 으로
+      view: { t0, t1: Math.max(t1, t0 + 1e-3) },
+    });
+    const s0 = c.series[0];
+    const arr = trk[s0.key] || [];
+    const v = arr.length ? arr[arr.length - 1] : null;
+    const n = $('n-' + c.id);
+    if (n) {
+      setText(n, v == null ? '' : v.toFixed(1) + (s0.unit || ''));
+      n.style.color = s0.color;
+    }
+  }
 }
 
 function dist(a, b) {
@@ -537,6 +650,17 @@ function render(s) {
   setText($('stats'), s.src
     ? `${s.src} · ${s.packets.toLocaleString()}pkt · ${(s.bytes / 1024).toFixed(0)}KB`
     : 'MAVLink 대기 중…');
+
+  // ── 차트 표본. 🔴 조기반환보다 **위**에 있어야 한다.
+  //    시계열의 x축은 벽시계 시간이다 — 새 프레임이 없다고 표본을 건너뛰면
+  //    링크가 끊긴 20초가 그래프에서 통째로 사라져, 끊긴 자국 없이 선이
+  //    이어져 버린다 (실측: pollN 15 인데 trk.n 이 2 였다).
+  //    값이 안 바뀐 폴은 같은 값이 한 칸 더 들어가고, 링크가 죽으면 아래
+  //    pushSample 이 null 을 넣어 선이 끊긴다 — 둘 다 사실대로다.
+  pushSample(s.live ? d : {});
+  // 5Hz 로 단 3개를 전부 다시 그리면 초당 15회 SVG 재생성이다. 2.5Hz 로
+  // 줄여 HUD 에 CPU 를 남긴다. 처음 몇 칸만 매번 그려 첫 화면이 안 빈다.
+  if (trk.n < 4 || pollN % 2 === 0) renderCharts();
 
   // ③ 조기반환 — 여기부터는 새 데이터가 있을 때만.
   if (!changed) return;
@@ -735,56 +859,6 @@ function render(s) {
   setText($('st-air'), fmt(d.airspeed));
   setText($('st-load'), d.load != null ? d.load.toFixed(0) : '—');
 
-  // ── 지도. 항적은 증분으로 온다.
-  // track_from 은 이 응답의 첫 점이 **전체에서** 몇 번째인가다 (리스트 인덱스가
-  // 아니다). 서버가 앞을 버렸거나 리셋됐으면 우리가 아는 개수보다 앞을 가리키므로
-  // 그때는 통째로 갈아끼운다. 안 그러면 항적이 겹치거나 빠진다.
-  if (s.track_from < trackHave) {
-    trackPts = s.track.map((p) => [p[0], p[1]]);
-  } else {
-    for (const p of s.track) trackPts.push([p[0], p[1]]);
-  }
-  trackHave = s.track_n;
-  if (s.track.length) trackLine.setLatLngs(trackPts);
-
-  if (pos) {
-    if (!havePos) { craft.addTo(map); map.setView(pos, 18); havePos = true; }
-    craft.setLatLng(pos);
-    // ⚠️ 마커의 style.transform 을 건드리면 안 된다 — Leaflet 이 거기에
-    //    translate3d 로 위치를 쓰므로, 회전을 덧붙이면 매 프레임 누적되고
-    //    (5Hz → 초당 5개씩 쌓인다) 다음 위치 갱신 때 지워진다.
-    //    안쪽 <svg> 를 따로 돌리면 둘이 안 부딪힌다.
-    const svg = craft.getElement() && craft.getElement().querySelector('svg');
-    if (svg && haveHdg) svg.style.transform = `rotate(${hh}deg)`;
-    if (follow) map.panTo(pos, { animate: false });
-    setText($('o-lat'), d.lat.toFixed(7));
-    setText($('o-lon'), d.lon.toFixed(7));
-  }
-  setText($('o-trk'), trackPts.length ? trackPts.length + ' pt' : '—');
-
-  if (s.home) {
-    if (!homeMarker) {
-      homeMarker = L.marker(s.home, {
-        icon: L.divIcon({
-          className: '', iconSize: [20, 20], iconAnchor: [10, 10],
-          html: '<svg width="20" height="20" viewBox="0 0 20 20">' +
-            '<circle cx="10" cy="10" r="7" fill="none" stroke="#3fb950" stroke-width="2"/>' +
-            '<text x="10" y="14" text-anchor="middle" fill="#3fb950" ' +
-            'font-size="10" font-weight="700">H</text></svg>',
-        }),
-        interactive: false,
-      }).addTo(map);
-      // 펜스는 홈 기준이다 — arm 한 자리가 원점이지 이륙 지점이 아니다.
-      fenceCircle = L.circle(s.home, {
-        radius: FENCE.HOR, color: '#f85149', weight: 1, opacity: .5,
-        fillOpacity: .04, dashArray: '6 6', interactive: false,
-      }).addTo(map);
-    } else {
-      homeMarker.setLatLng(s.home);
-      fenceCircle.setLatLng(s.home);
-    }
-  }
-
   renderMsgs(msgs);
 }
 
@@ -868,7 +942,9 @@ async function poll() {
     return;
   }
   try {
-    const r = await fetch('/api/state?since=' + trackHave, { cache: 'no-store' });
+    // track=0 — 지도를 뺐으므로 항적은 안 받는다. 긴 비행에서 폴마다 수백 KB 가
+    // 오가는 것을 막는다 (서버는 개수만 알려 준다).
+    const r = await fetch('/api/state?track=0', { cache: 'no-store' });
     if (r.ok) { render(await r.json()); $('link').title = ''; }
   } catch (e) {
     setText($('link'), '서버 없음');
@@ -880,7 +956,9 @@ async function poll() {
 
 // ── 기동 ────────────────────────────────────────────────────────────
 buildHUD();
-initMap();
+resolveColors();      // 반드시 buildCharts 앞에 — 범례·선이 같은 색을 쓴다
+buildToc();
+buildCharts();
 
 // 🔴 콜백에서 즉시 계산하지 말고 rAF 로 한 번만 예약 — 드래그 중 프레임마다
 //    콜백이 오고, 콜백이 관찰 대상 크기를 바꾸면 'ResizeObserver loop' 가 터진다.
@@ -896,17 +974,21 @@ new ResizeObserver(() => {
 }).observe($('hudBox'));
 doLayout();
 
-$('followBtn').onclick = () => setFollow(!follow);
+$('win').onchange = (e) => { winSec = +e.target.value; renderCharts(); };
 $('msgToggle').onclick = () => {
-  const c = $('mapPane').classList.toggle('msgcollapsed');
+  const c = $('chartPane').classList.toggle('msgcollapsed');
   $('msgToggle').textContent = c ? '펴기' : '접기';
 };
 $('clearBtn').onclick = async () => {
   if (!DEMO) await fetch('/api/reset');
-  trackPts = [];
-  trackHave = 0;
-  trackLine.setLatLngs([]);
+  // 차트 버퍼를 비운다. 채널 배열은 지우고 격자만 0 으로 되돌린다.
+  for (const k of Object.keys(trk)) {
+    if (Array.isArray(trk[k])) delete trk[k];
+  }
+  trk.n = 0; trk.dur = 0; trk.modes = []; trk.events = [];
+  lastMode = null;
   hist.cur.length = 0;
+  buildCharts();
   msgLastKey = ''; msgCrit = 0; lastMsgKey = ''; warnUntil = 0;
   $('msgs').innerHTML = ''; delete $('msgs').dataset.init;
 };

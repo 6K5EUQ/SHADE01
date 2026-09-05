@@ -2,7 +2,6 @@
 <meta charset="utf-8">
 <title>SHADE01 라이브</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/live.css">
 
@@ -14,8 +13,15 @@
   <span id="link" class="pill pill-off">링크 없음</span>
   <span class="grow"></span>
   <span class="muted" id="stats" style="font-size:12px"></span>
-  <button id="followBtn" class="on" title="기체를 화면 가운데 유지">추적</button>
-  <button id="clearBtn" title="항적·메시지 지우기">항적 지우기</button>
+  <label class="win" title="차트가 보여주는 시간 창">창
+    <select id="win">
+      <option value="60">1분</option>
+      <option value="180" selected>3분</option>
+      <option value="600">10분</option>
+      <option value="0">전체</option>
+    </select>
+  </label>
+  <button id="clearBtn" title="차트·메시지 지우기">지우기</button>
   <a class="btn" href="http://localhost:4399/" target="_blank" title="지난 비행 로그 뷰어">로그</a>
 </header>
 
@@ -42,14 +48,13 @@
     </div>
   </section>
 
-  <!-- 우: 지도 + FC 메시지 서랍 -->
-  <section id="mapPane">
-    <div id="map"></div>
-    <div id="mapInfo" class="overlay">
-      <div><span class="k">위도</span><span class="v" id="o-lat">—</span></div>
-      <div><span class="k">경도</span><span class="v" id="o-lon">—</span></div>
-      <div><span class="k">항적</span><span class="v" id="o-trk">—</span></div>
-    </div>
+  <!-- 우: 흘러가는 차트 + FC 메시지 서랍.
+       로그 뷰어(log.html)와 같은 배치·같은 chart.js 를 쓴다 — 지난 비행과
+       지금 비행을 같은 그림으로 읽어야 눈이 안 흔들린다. -->
+  <section id="chartPane">
+    <div id="charts"></div>
+    <!-- 어느 단을 볼지. 켠 단이 곧 목차다 (로그 뷰어의 좌측 목차와 같은 구실). -->
+    <div id="toc" class="overlay"></div>
     <div class="msgs">
       <div class="hd">
         <span>FC 메시지</span><span class="cnt" id="msgCnt"></span>
@@ -60,5 +65,5 @@
   </section>
 </main>
 
-<script src="/vendor/leaflet/leaflet.js"></script>
+<script src="/chart.js"></script>
 <script src="/live.js"></script>

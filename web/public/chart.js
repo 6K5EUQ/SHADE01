@@ -273,12 +273,28 @@ function drawChart(el, trk, spec) {
   svg += `<g clip-path="url(#${clipId})">${plot}</g>`;
 
   // ── x 눈금 ──────────────────────────────────────────────────────
+  // 기본은 로그 시각(0s = 로그 시작). spec.relTime 이면 **지금으로부터 얼마 전**
+  // 으로 적는다 — 라이브 화면은 "몇 초째" 보다 "몇 초 전" 이 읽는 값이다.
   const NX = W < 420 ? 3 : 4;
   for (let i = 0; i <= NX; i++) {
     const t = v0 + (i / NX) * span;
     const anchor = i === 0 ? 'start' : i === NX ? 'end' : 'middle';
+    let lbl;
+    if (spec.relTime) {
+      const ago = dur - t;
+      // 분 단위로 반올림하면 3분 창에서 -2m 이 두 번 나온다. 눈금이 서로
+      // 달라야 시간축 구실을 하므로 소수 한 자리를 남긴다.
+      if (ago < 1) lbl = '지금';
+      else if (ago < 90) lbl = '-' + ago.toFixed(0) + 's';
+      else {
+        const m = ago / 60;
+        lbl = '-' + (m < 10 ? m.toFixed(1) : m.toFixed(0)) + 'm';
+      }
+    } else {
+      lbl = t.toFixed(0) + 's';
+    }
     svg += `<text x="${x(t).toFixed(1)}" y="${H - 4}" fill="#6e7681" font-size="9"
-            text-anchor="${anchor}">${t.toFixed(0)}s</text>`;
+            text-anchor="${anchor}">${lbl}</text>`;
   }
 
   // ── 커서 (재생 위치) ────────────────────────────────────────────

@@ -18,7 +18,7 @@ main {
   grid-template-columns: minmax(560px, 1.32fr) minmax(380px, 1fr);
   flex: 1; min-height: 0;
 }
-#hudPane, #mapPane { min-width: 0; min-height: 0; }
+#hudPane, #chartPane { min-width: 0; min-height: 0; }
 
 /* HUD 가 남는 높이를 다 먹고(1fr), 스트립은 auto 라 자기 높이를 먼저 확보한다 */
 #hudPane {
@@ -87,33 +87,53 @@ main {
 button.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
 a.btn { display: inline-block; text-decoration: none; }
 
-/* ── 지도 단 ─────────────────────────────────────────────── */
-#mapPane { position: relative; display: grid; grid-template-rows: 1fr 124px; }
-#mapPane.msgcollapsed { grid-template-rows: 1fr 26px; }
-#map { width: 100%; height: 100%; background: var(--panel); min-height: 0; }
+/* ── 차트 단 ─────────────────────────────────────────────── */
+#chartPane { position: relative; display: grid; grid-template-rows: 1fr 124px; }
+#chartPane.msgcollapsed { grid-template-rows: 1fr 26px; }
+/* 켠 단이 세로를 나눠 갖는다 — 3단이면 한 화면에 딱 차고, 더 켜면 최소
+   높이(150px) 아래로는 안 줄어 스크롤이 생긴다. 고정 높이로 두면 단을
+   1~2개만 켰을 때 아래가 통째로 빈다. */
+#charts { overflow-y: auto; min-height: 0; background: var(--bg);
+          display: flex; flex-direction: column; }
 
-/* Leaflet 기본은 밝은 지도다. 어두운 UI 와 맞추려고 타일을 반전·감광한다. */
-.leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
-.leaflet-container { background: #0d1117; font: inherit; }
-.leaflet-control-attribution {
-  background: rgba(13,17,23,.8) !important; color: var(--muted) !important;
+/* 차트 한 단. 로그 뷰어(log.html)의 .chart 와 같은 뼈대다. */
+.lchart { position: relative; border-bottom: 1px solid var(--border);
+           flex: 1 1 0; min-height: 150px; display: flex; flex-direction: column; }
+/* 높이는 부모(.lchart)가 나눠 준 만큼 쓴다. drawChart 가 clientHeight 를
+   읽어 viewBox 를 잡으므로 CSS 높이가 곧 그림 해상도다.
+   위쪽 18px 는 축 머리말·현재값 자리다. */
+.lchart svg { display: block; width: 100%; flex: 1 1 auto; min-height: 0;
+              padding-top: 18px; }
+/* 지금 값 — 차트를 안 읽어도 숫자가 먼저 눈에 든다.
+   좌상단은 chart.js 의 좌축 머리말이 쓰므로 가운데 위에 놓는다. 우상단도
+   우축 머리말(전압·상승률) 자리라 피한다. */
+.lchart .now {
+  position: absolute; left: 50%; transform: translateX(-50%); top: 3px;
+  font-family: var(--mono); font-size: 17px; font-weight: 700;
+  font-variant-numeric: tabular-nums; pointer-events: none;
 }
-.leaflet-control-attribution a { color: var(--dim) !important; }
-.leaflet-bar a {
-  background: var(--panel-2) !important; color: var(--text) !important;
-  border-color: var(--border-2) !important;
-}
+/* 첫 단은 단 선택 오버레이가 우상단을 덮는다 — 현재값을 왼쪽으로 비켜 준다. */
+.lchart:first-child .now { left: 38%; }
+#charts .empty { padding: 50px 20px; color: var(--muted); text-align: center; font-size: 13px; }
 
-/* 우상단이다 — 좌상단은 Leaflet 줌 컨트롤, 우하단은 저작권 표시가 쓴다.
-   아래(예전 자리)는 이제 FC 메시지 서랍이 차지한다. */
+/* 단 선택. 우상단에 떠 있고, 켠 것이 곧 목차다. */
 .overlay {
-  position: absolute; right: 12px; top: 12px; z-index: 400;
-  background: rgba(13,17,23,.86); border: 1px solid var(--border-2);
-  border-radius: 8px; padding: 8px 12px; font-family: var(--mono); font-size: 12px;
-  display: grid; gap: 2px; pointer-events: none;
+  position: absolute; right: 12px; top: 8px; z-index: 400;
+  background: rgba(13,17,23,.92); border: 1px solid var(--border-2);
+  border-radius: 8px; padding: 5px 7px; font-size: 11px;
+  display: flex; flex-wrap: wrap; gap: 1px 4px; max-width: 62%;
 }
-.overlay .k { color: var(--muted); display: inline-block; width: 40px; }
-.overlay .v { color: var(--text); }
+.overlay label {
+  display: flex; align-items: center; gap: 5px; cursor: pointer;
+  color: var(--muted); padding: 2px 6px; border-radius: 5px; user-select: none;
+  white-space: nowrap;
+}
+.overlay label:hover { background: var(--panel-2); color: var(--text); }
+.overlay label.on { color: var(--accent); background: var(--panel-2); }
+.overlay input { accent-color: var(--accent); margin: 0; flex: 0 0 auto; }
+
+.win { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+.win select { padding: 3px 6px; font-size: 11px; }
 
 /* ── FC 메시지 서랍 ──────────────────────────────────────── */
 .msgs {
@@ -139,16 +159,16 @@ a.btn { display: inline-block; text-decoration: none; }
 #msgs .s-NOTICE { color: var(--accent); }
 #msgs .empty { color: var(--muted); border: 0; }
 
-/* 좁은 화면: HUD 위 · 지도 아래. DOM 순서가 이미 HUD 먼저라 order 속임수가 필요 없다. */
+/* 좁은 화면: HUD 위 · 차트 아래. DOM 순서가 이미 HUD 먼저라 order 속임수가 필요 없다. */
 @media (max-width: 900px) {
   html, body { overflow: auto; }
   body { display: block; }
   main { grid-template-columns: 1fr; }
   #hudPane { border-right: 0; border-bottom: 1px solid var(--border); }
   /* 🔴 높이는 자식(#hudBox)이 아니라 **행**에 준다. 자식에 56vh 를 주면
-     `1fr` 행이 그만큼 안 자라 hudBox 가 제 부모를 넘치고, 뒤따르는 지도
+     `1fr` 행이 그만큼 안 자라 hudBox 가 제 부모를 넘치고, 뒤따르는 차트
      패널이 그 위를 덮어 전류·상태 밴드와 숫자 스트립이 통째로 가려진다
      (실측: hudPane 447px 안에 hudBox 560px). 행을 키우면 자식은 따라온다. */
   #hudPane { grid-template-rows: minmax(360px, 56vh) auto; }
-  #mapPane { height: 46vh; grid-template-rows: 1fr 96px; }
+  #chartPane { height: 60vh; grid-template-rows: 1fr 96px; }
 }
