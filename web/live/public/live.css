@@ -79,8 +79,10 @@ main {
 #strip {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
-  gap: 1px;
-  background: var(--border); border-top: 1px solid var(--border);
+  /* 칸 사이 선을 안 넣는다 — gap 1px 로 --border 배경이 비치던 것이 그 선이었다.
+     격자 배경과 칸 배경을 같은 색으로 두면 한 판처럼 읽힌다. */
+  gap: 0;
+  background: var(--panel); border-top: 1px solid var(--border);
 }
 #sc-spd  { grid-area: 1 / 1 / 2 / 3; }
 #sc-alt  { grid-area: 1 / 3 / 2 / 5; }
@@ -93,28 +95,34 @@ main {
 #sc-mRB  { grid-area: 4 / 4 / 5 / 7; }
 #strip .sc {
   background: var(--panel);
-  padding: 8px 12px 10px;
-  display: grid; grid-template-columns: 1fr auto; align-items: baseline;
-  gap: 0 4px;
-  min-width: 0;
+  padding: 10px 12px 12px;
+  /* 라벨·값을 세로로 쌓고 전부 가운데. 값과 단위만 한 줄에 나란히 선다. */
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 2px; min-width: 0;
 }
+/* 값 + 단위 한 줄. 단위가 값 옆에 붙되 가운데 정렬을 안 깨뜨린다. */
+#strip .sc > b { display: inline-block; }
 #strip .sc[hidden] { display: none; }
-/* 라벨은 한 줄 전체를 먹고, 값과 단위가 그 아래 나란히 선다. */
-#strip .k { grid-column: 1 / -1; font-size: 11px; color: var(--muted);
-            letter-spacing: .3px; white-space: nowrap; }
+#strip .k { font-size: 11px; color: var(--muted);
+            letter-spacing: .3px; white-space: nowrap; text-align: center; }
 /* 곁눈질로 읽는 값이라 크게. tabular-nums 라 자릿수가 바뀌어도 안 흔들린다.
    칸이 세로로 커졌으니 글자도 같이 키운다 — 안 키우면 여백만 늘어난다. */
 #strip b {
   font-family: var(--mono); font-size: 34px; font-weight: 700; line-height: 1.05;
   font-variant-numeric: tabular-nums; color: var(--text);
-  min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  min-width: 0; text-align: center;
 }
-#strip i { font-style: normal; font-size: 11px; color: var(--border-2); }
+/* 단위는 값 아래 작게. 값 옆에 붙이면 값의 가운데가 단위 폭만큼 밀린다 —
+   자릿수가 바뀔 때마다 숫자가 좌우로 흔들려 읽기 나쁘다. */
+#strip i { font-style: normal; font-size: 10px; color: var(--border-2);
+           text-align: center; }
 
-/* 🔴 색 예산 — 평소엔 전부 무채색이다. 색이 보이는 것 자체가 신호다. */
+/* 🔴 색 예산 — 평소엔 전부 무채색이다. 색이 보이는 것 자체가 신호다.
+   구분선을 없앤 뒤로는 칸 배경을 칠하면 그 칸만 네모로 도드라져 격자가
+   되살아난 것처럼 보인다. 색은 **숫자에만** 준다. */
 #strip .sc.warn b { color: var(--warn); }
 #strip .sc.bad  b { color: var(--bad); }
-#strip .sc.bad { background: rgba(248,81,73,.07); }
 
 /* 모터는 기체에 붙은 자리 그대로 2×2 다 — 화면 좌상단 칸이 실제 좌전 모터.
    조금 작게 둔다: 절대값보다 **넷이 서로 비슷한가**가 판정이라 나란히
