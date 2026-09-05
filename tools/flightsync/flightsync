@@ -119,10 +119,30 @@ scp -q -o BatchMode=yes -o ConnectTimeout=60 "$REPO/tools/qgclog/fcfetch.py" "$F
   fail "fcfetch.py 전송 실패"; exit 1; }
 
 # 폴더별 목록을 모아 "이름<TAB>MB<TAB>UTC폴더" 로 만든다.
+#
+# 🔴 **조회 실패를 "로그 없음"으로 바꾸지 마라.** 이 도구의 가장 나쁜 실패는
+#    비행이 있었는데 없다고 보고하는 것이다. MAVFTP 는 간헐적으로 첫 시도가
+#    실패한다(pymavlink 2.4.49 의 인스턴스 필드 버그 · HEARTBEAT 놓침) —
+#    실측으로 물렸다. 폴더마다 두 번 시도하고, 그래도 안 되면 **시끄럽게 죽는다.**
 LIST=""
+listing_failed=0
 for d in "${DIRS[@]}"; do
-  out=$(ssh -o BatchMode=yes -o ConnectTimeout=60 "$FC_HOST" \
-        "cd /tmp && $FC_VENV fcfetch.py ls /fs/microsd/log/$d" 2>/dev/null) || continue
+  out=""; ok=0
+  for attempt in 1 2; do
+    out=$(ssh -n -o BatchMode=yes -o ConnectTimeout=60 "$FC_HOST" \
+          "cd /tmp && $FC_VENV fcfetch.py ls /fs/microsd/log/$d" 2>&1)
+    # "err=0" 이 나와야 진짜 성공이다. 디렉토리가 없으면 err 가 붙어 돌아온다.
+    if grep -q 'err=0' <<< "$out"; then ok=1; break; fi
+    # 폴더 자체가 없는 것은 정상이다 (인자 없이 부르면 어제 폴더도 훑는다).
+    if grep -qE 'err=(FileNotFound|[0-9]+)' <<< "$out"; then ok=1; break; fi
+    [ "$attempt" = 1 ] && sleep 2
+  done
+  if [ "$ok" = 0 ]; then
+    fail "$d 목록 조회 실패 (2회 시도)"
+    printf '%s\n' "$out" | tail -3 | sed 's/^/     /'
+    listing_failed=1
+    continue
+  fi
   # 한 줄: "      09_24_04.ulg             22.41M"
   add=$(printf '%s\n' "$out" | awk -v d="$d" '
     /\.ulg/ { name=$1; mb=$2; gsub("M","",mb); printf "%s\t%s\t%s\n", name, mb, d }')
@@ -130,6 +150,10 @@ for d in "${DIRS[@]}"; do
 done
 LIST=$(printf '%s' "$LIST" | sed '/^$/d')
 
+if [ "$listing_failed" = 1 ] && [ -z "$LIST" ]; then
+  fail "FC 목록을 못 읽었다 — 로그가 없는 것과 다르다. 브리지·USB 를 확인하고 다시 돌려라."
+  exit 1
+fi
 if [ -z "$LIST" ]; then
   say "  그 날짜에 FC 로그가 없다: ${DIRS[*]}"
   exit 0
@@ -165,7 +189,10 @@ while IFS=$'\t' read -r name mb d; do
   if [ -e "$LOCAL/$dest" ]; then
     printf '   · %-26s 이미 있음\n' "$dest"; continue
   fi
-  if ssh -o BatchMode=yes -o ConnectTimeout=60 -o ServerAliveInterval=30 "$FC_HOST" \
+  # 🔴 `-n` 이 없으면 ssh 가 **이 while 루프의 stdin 을 통째로 삼킨다.** 그러면
+  #    첫 파일만 받고 루프가 끝난다 — 실측으로 물렸다 (7개 중 1개만 받았다).
+  #    같은 이유로 아래 scp 에도 `-n` 을 준다.
+  if ssh -n -o BatchMode=yes -o ConnectTimeout=60 -o ServerAliveInterval=30 "$FC_HOST" \
        "cd /tmp && $FC_VENV fcfetch.py get /fs/microsd/log/$d/$name $FC_LOGDIR/$dest" \
        >/dev/null 2>&1; then
     printf '   ✅ %-26s %sMB\n' "$dest" "$mb"; got=$((got+1))
@@ -187,7 +214,7 @@ while IFS=$'\t' read -r name mb d; do
   [ -n "$name" ] || continue
   dest="${d}_${name}"
   [ -e "$LOCAL/$dest" ] && continue
-  scp -q -o BatchMode=yes -o ConnectTimeout=200 "$FC_HOST:$FC_LOGDIR/$dest" "$LOCAL/" \
+  scp -q -o BatchMode=yes -o ConnectTimeout=200 "$FC_HOST:$FC_LOGDIR/$dest" "$LOCAL/" </dev/null \
     || printf '   ✗ %s 회수 실패\n' "$dest"
 done <<< "$WANT"
 say "  로컬 $(ls "$LOCAL"/*.ulg 2>/dev/null | wc -l)개 (이전 ${before}개)"
