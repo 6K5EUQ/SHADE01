@@ -1188,8 +1188,9 @@ async function pbShowPicker() {
     $('pbList').innerHTML = '<div class="msg">' + err + '</div>';
     return;
   }
-  // 목록이 어디서 왔는지. labserver 가 죽으면 로컬 사본만 보이므로 말해야 한다.
-  if (logs && logs.source === 'local' && logs.error) {
+  // 목록이 어디서 왔는지. 🔴 목록은 **정본만** 따른다 — 정본에 못 붙으면
+  // 로컬 사본으로 대신하지 않고 비운다. 그래야 화면에 뜬 것이 곧 정본이다.
+  if (logs && logs.source === 'down' && logs.error) {
     const w = document.createElement('div');
     w.className = 'msg warn';
     w.textContent = '⚠️ ' + logs.error;

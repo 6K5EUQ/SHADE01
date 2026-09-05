@@ -103,12 +103,24 @@ def catalog(force=False):
 
     import lognames as L
 
+    # 🔴 **정본이 목록을 정한다.** 로컬 사본으로 물러서지 않는다.
+    #
+    #    예전에는 labserver 에 못 붙으면 로컬 `logs/` 를 대신 보여 줬다. 그것이
+    #    "정본에 없는 로그"를 목록에 올린다 — 9/6 에 정본이 비워졌을 때 웹과
+    #    라이브가 각각 유령 목록을 들고 있었고, 어느 쪽이 사실인지 화면만
+    #    봐서는 알 수 없었다.
+    #
+    #    labserver 가 조용하면 **목록을 비우고 그렇게 말한다.** 로컬 파일은
+    #    재생 캐시로만 쓴다 (`ensure_local`).
     err = None
     rows = _remote_list()
     source = 'labserver'
     if rows is None:
-        source, err = 'local', 'labserver 에 못 붙었다 — 이 PC 의 사본만 보인다'
-        rows = _local_list()
+        source = 'down'
+        err = ('정본(%s:%s)에 못 붙었다. 목록은 정본만 따르므로 비워 둔다 — '
+               '이 PC 의 사본은 재생 캐시일 뿐 정본이 아니다.'
+               % (REMOTE_HOST, REMOTE_DIR))
+        rows = []
 
     have = {n for n, _ in _local_list()}
     local_dir = os.path.abspath(LOCAL_DIR)
@@ -169,6 +181,9 @@ def ensure_local(name):
     p = os.path.join(d, name)
     if os.path.exists(p):
         return p
+    # 캐시에 없으면 정본에서 받는다. 정본에 없는 것은 열리지 않는다 —
+    # 목록이 정본만 따르므로 여기까지 올 일이 없지만, 오래된 탭이 사라진
+    # 로그를 요청할 수 있다.
     os.makedirs(d, exist_ok=True)
     # 받는 중에 죽으면 잘린 파일이 남는다 — 임시 이름으로 받고 다 되면 옮긴다.
     # `_repair()` 가 잘린 파일을 기증자로 삼으면 복구가 더 나빠진다.
