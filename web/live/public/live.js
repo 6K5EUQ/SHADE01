@@ -633,23 +633,35 @@ function render(s) {
   if (changed) { lastSeq = s.seq; lastSeqPoll = pollN; }
   const stall = (pollN - lastSeqPoll) * POLL_MS / 1000;
 
-  const link = $('link');
+  // 링크 상태는 점 하나로 말한다 (우하단 바). 자세한 사정은 HUD 의 프리즈
+  // 오버레이가 크게 적으므로 여기서 글자를 또 쓸 이유가 없다.
+  // 색만으로는 색맹에게 안 보이니 title 에 같은 내용을 남긴다.
+  const dot = $('dot');
   let lt, lc, frz = '';
-  if (!s.packets) { lt = '링크 없음'; lc = 'pill-off'; }
-  else if (!s.live) { lt = '링크 끊김'; lc = 'pill-bad'; frz = `링크 끊김 · ${Math.round(s.age)}s`; }
+  if (!s.packets) { lt = '링크 없음'; lc = ''; }
+  else if (!s.live) { lt = '링크 끊김'; lc = 'bad'; frz = `링크 끊김 · ${Math.round(s.age)}s`; }
   else if (stall >= 3) {
-    lt = '데이터 정지'; lc = 'pill-warn';
+    lt = '데이터 정지'; lc = 'warn';
     frz = `데이터 정지 · ${stall.toFixed(0)}s (링크는 살아 있음)`;
-  } else { lt = '링크 ON'; lc = 'pill-live'; }
-  setText(link, lt);
-  link.className = 'pill ' + lc;
+  } else { lt = '링크 ON'; lc = 'live'; }
+  if (dot.dataset.st !== lt) {          // 매 폴 DOM 을 건드리지 않는다
+    dot.dataset.st = lt;
+    dot.className = 'dot ' + lc;
+    dot.title = lt;
+  }
   show(h.freeze, !!frz);
   show(h.freezeTxt, !!frz);
   if (frz) setText(h.freezeTxt, frz);
 
-  setText($('stats'), s.src
-    ? `${s.src} · ${s.packets.toLocaleString()}pkt · ${(s.bytes / 1024).toFixed(0)}KB`
+  // 하단 바는 좁다. 송신 주소는 title 로 밀고 숫자만 남긴다.
+  const stEl = $('stats');
+  setText(stEl, s.packets
+    ? `${s.packets.toLocaleString()}pkt · ${(s.bytes / 1024).toFixed(0)}KB`
     : 'MAVLink 대기 중…');
+  if (s.src && stEl.dataset.src !== s.src) {
+    stEl.dataset.src = s.src;
+    stEl.title = s.src;
+  }
 
   // ── 차트 표본. 🔴 조기반환보다 **위**에 있어야 한다.
   //    시계열의 x축은 벽시계 시간이다 — 새 프레임이 없다고 표본을 건너뛰면
@@ -945,11 +957,14 @@ async function poll() {
     // track=0 — 지도를 뺐으므로 항적은 안 받는다. 긴 비행에서 폴마다 수백 KB 가
     // 오가는 것을 막는다 (서버는 개수만 알려 준다).
     const r = await fetch('/api/state?track=0', { cache: 'no-store' });
-    if (r.ok) { render(await r.json()); $('link').title = ''; }
+    if (r.ok) render(await r.json());
   } catch (e) {
-    setText($('link'), '서버 없음');
-    $('link').className = 'pill pill-off';
-    $('link').title = 'mav_live.py 가 안 떠 있다';
+    // 서버가 죽었을 때도 점으로 말한다 — 깜빡이는 빨강.
+    const dot = $('dot');
+    dot.dataset.st = '서버 없음';
+    dot.className = 'dot bad';
+    dot.title = '서버 없음 — mav_live.py 가 안 떠 있다';
+    setText($('stats'), '서버 없음');
   }
   setTimeout(poll, POLL_MS);
 }
@@ -979,18 +994,4 @@ $('msgToggle').onclick = () => {
   const c = $('chartPane').classList.toggle('msgcollapsed');
   $('msgToggle').textContent = c ? '펴기' : '접기';
 };
-$('clearBtn').onclick = async () => {
-  if (!DEMO) await fetch('/api/reset');
-  // 차트 버퍼를 비운다. 채널 배열은 지우고 격자만 0 으로 되돌린다.
-  for (const k of Object.keys(trk)) {
-    if (Array.isArray(trk[k])) delete trk[k];
-  }
-  trk.n = 0; trk.dur = 0; trk.modes = []; trk.events = [];
-  lastMode = null;
-  hist.cur.length = 0;
-  buildCharts();
-  msgLastKey = ''; msgCrit = 0; lastMsgKey = ''; warnUntil = 0;
-  $('msgs').innerHTML = ''; delete $('msgs').dataset.init;
-};
-
 poll();

@@ -1,10 +1,11 @@
 /* 라이브 트래킹 레이아웃. 팔레트·폰트는 /app.css (로그 뷰어와 공용) 를 쓴다.
    여기서는 배치와 라이브 전용 부품(HUD·스트립·상태밴드)만 정의한다. */
 
-/* 🔴 헤더 높이를 숫자로 박지 않는다. 이전에는 calc(100vh - 49px) 였는데
-   실제 헤더는 버튼 높이 때문에 약 55px 이라, main 이 6px 넘쳐 숫자 스트립이
-   overflow:hidden 밑으로 스크롤바도 없이 잘려 나갔다. body 를 세로 flex 로
-   두면 헤더가 제 높이를 먹고 main 이 나머지를 정확히 가져간다. */
+/* 🔴 헤더를 없앴다 (2026-09-05). 상단 한 줄이 통째로 계기 자리로 갔다 —
+   링크 상태·통계·시간창은 전부 우하단 바(.msgs .hd)로 내렸다.
+   body 는 여전히 세로 flex 다: main 이 화면 전체를 정확히 가져간다.
+   (예전에 calc(100vh - 49px) 로 박았다가 실제 헤더가 55px 이라 6px 넘쳐
+    숫자 스트립이 스크롤바도 없이 잘렸다. 숫자를 박지 마라.) */
 html { height: 100%; }
 body { height: 100%; overflow: hidden; display: flex; flex-direction: column; }
 
@@ -26,7 +27,12 @@ main {
   border-right: 1px solid var(--border);
   background: #05070a;
 }
-#hudBox { position: relative; min-height: 0; overflow: hidden; }
+/* 헤더를 없앤 뒤로 기수 테이프가 화면 맨 위 픽셀에 딱 붙는다. 잘리지는
+   않지만(라벨은 테이프 안에 중앙정렬) 숨 쉴 틈이 없어 답답하다. 4px 만 준다.
+   ⚠️ padding 이 아니라 border-top 이다 — padding 을 주면 hudBox 의 실측
+   높이(layout() 이 viewBox 로 쓰는 값)와 SVG 그리는 영역이 어긋난다. */
+#hudBox { position: relative; min-height: 0; overflow: hidden;
+          border-top: 4px solid #05070a; }
 /* SVG 는 CSS 로 100%/100%, viewBox 는 JS 가 실측 px 로 넣는다 → 배율 항상 1:1.
    preserveAspectRatio 를 아예 안 쓴다: none 이면 종횡비마다 가로/세로 배율이
    달라져 45° 뱅크가 30° 로 보이고, meet 는 레터박스, slice 는 테이프를 잘라 먹는다. */
@@ -145,7 +151,27 @@ a.btn { display: inline-block; text-decoration: none; }
   font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border);
 }
 .msgs .hd .cnt { color: var(--bad); font-weight: 700; }
-.msgs .hd button { margin-left: auto; padding: 0 6px; font-size: 11px; line-height: 1.6; }
+.msgs .hd .grow { flex: 1; }
+.msgs .hd button { padding: 0 6px; font-size: 11px; line-height: 1.6; }
+.msgs .hd select {
+  padding: 1px 4px; font-size: 11px; line-height: 1.5;
+  background: var(--bg); color: var(--dim);
+  border: 1px solid var(--border-2); border-radius: 5px;
+}
+.msgs .hd .stats {
+  font-family: var(--mono); font-size: 10px; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 42%;
+}
+
+/* 링크 상태 = 점 하나. 글자로 적으면 하단 바 폭을 먹는데, 조종자가 이 자리에서
+   알아야 할 것은 "붙었나 아닌가" 뿐이다. 색만으로 충분하다.
+   ⚠️ 색맹 대비로 title 에 글자를 남긴다 — 마우스를 올리면 상태가 나온다. */
+.dot { font-size: 13px; line-height: 1; flex: none; color: var(--muted); }
+.dot.live { color: var(--ok); }
+.dot.warn { color: var(--warn); }
+.dot.bad  { color: var(--bad); animation: dotBlink 1s step-end infinite; }
+@keyframes dotBlink { 50% { opacity: .25; } }
 #msgs { overflow-y: auto; padding: 4px 8px; min-height: 0; }
 #msgs div {
   font-family: var(--mono); font-size: 11px; line-height: 1.5;

@@ -150,12 +150,14 @@ const num = (e, a) => parseFloat(e.getAttribute(a));
   const pane = D.getElementById('hudPane').getBoundingClientRect();
   box = D.getElementById('hudBox').getBoundingClientRect();
   strip = D.getElementById('strip').getBoundingClientRect();
-  const mp = D.getElementById('mapPane').getBoundingClientRect();
+  // 지도를 뺀 뒤로 우측은 chartPane 이다 (2026-09-05). mapPane 을 계속 읽다가
+  // null.getBoundingClientRect() 로 자체검사가 통째로 죽어 있었다.
+  const mp = D.getElementById('chartPane').getBoundingClientRect();
   vb = svg.viewBox.baseVal;
   ok('HUD 가 제 부모 안에 담긴다', box.bottom <= pane.bottom + 1,
      `hudBox.bottom=${box.bottom.toFixed(0)} pane.bottom=${pane.bottom.toFixed(0)}`);
-  ok('지도가 스트립을 안 덮는다', mp.top >= strip.bottom - 1,
-     `map.top=${mp.top.toFixed(0)} strip.bottom=${strip.bottom.toFixed(0)}`);
+  ok('차트 패널이 스트립을 안 덮는다', mp.top >= strip.bottom - 1,
+     `chart.top=${mp.top.toFixed(0)} strip.bottom=${strip.bottom.toFixed(0)}`);
   const curBg = [...svg.querySelectorAll('rect')].find(e => e.getAttribute('fill') === 'rgba(13,17,23,.72)');
   ok('전류 밴드가 viewBox 안', curBg && num(curBg, 'y') + 46 <= vb.height + .5,
      curBg ? `y=${curBg.getAttribute('y')} vbH=${vb.height}` : 'none');

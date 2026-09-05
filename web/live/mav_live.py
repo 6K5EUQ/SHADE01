@@ -429,6 +429,9 @@ class Handler(BaseHTTPRequestHandler):
             body = dumps_json(self.st.snapshot(since, want_track))
             return self._send(200, body, 'application/json; charset=utf-8')
 
+        # 화면에는 이걸 부르는 버튼이 없다 (지우기 버튼을 뺐다, 2026-09-05).
+        # curl 로는 여전히 쓸 수 있어 남겨 둔다 — 긴 지상 테스트 뒤 차트를
+        # 비우고 싶을 때 편하다.
         if path == '/api/reset':
             # 항적만 지운다. 새 비행을 같은 창에서 볼 때 쓴다.
             with self.st.lock:
