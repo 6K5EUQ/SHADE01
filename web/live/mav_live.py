@@ -24,6 +24,7 @@ HTTP 로 내준다. 로그(.ulg) 재생이 아니라 **현재 프레임**이다.
 """
 
 import argparse
+import errno
 import json
 import math
 import os
@@ -527,11 +528,28 @@ def main():
     try:
         sock.bind((args.bind, args.port))
     except OSError as e:
-        print('UDP %s:%d 를 못 연다 (%s)' % (args.bind, args.port, e), file=sys.stderr)
-        print('이미 QGC 나 브리지가 쓰고 있다. 확인:  ss -ulnp | grep %d' % args.port,
-              file=sys.stderr)
-        print('다른 포트로 비켜라:  --port 14551', file=sys.stderr)
-        sys.exit(1)
+        # 🔴 주소가 사라졌으면 0.0.0.0 으로 물러선다. 죽으면 안 된다.
+        #    백팩 경로에서는 WiFi 주소(10.0.0.x)에 못박아 여는데, AP 를 떠나면
+        #    그 주소가 없어져 EADDRNOTAVAIL 로 시작조차 못 한다 — 다음 부팅에
+        #    화면이 통째로 안 뜬다 (실측 rim3 2026-09-05).
+        #    0.0.0.0 으로 열면 최소한 브리지 경로는 살아난다. 포트가 이미
+        #    잡혀 있으면 그때는 진짜로 죽는 게 맞다 (아래 EADDRINUSE).
+        if args.bind != '0.0.0.0' and e.errno == errno.EADDRNOTAVAIL:
+            print('%s 가 없다 — 0.0.0.0 으로 물러선다 (백팩 AP 를 떠났나?)'
+                  % args.bind, flush=True)
+            args.bind = '0.0.0.0'
+            try:
+                sock.bind((args.bind, args.port))
+            except OSError as e2:
+                e = e2
+            else:
+                e = None
+        if e is not None:
+            print('UDP %s:%d 를 못 연다 (%s)' % (args.bind, args.port, e), file=sys.stderr)
+            print('이미 QGC 나 브리지가 쓰고 있다. 확인:  ss -ulnp | grep %d' % args.port,
+                  file=sys.stderr)
+            print('다른 포트로 비켜라:  --port 14551', file=sys.stderr)
+            sys.exit(1)
 
     threading.Thread(target=receiver, args=(sock, st), daemon=True).start()
 
