@@ -1086,7 +1086,11 @@ class Handler(BaseHTTPRequestHandler):
                                'items': list_recordings(self.rec_dir)})
             return self._send(200, body, 'application/json; charset=utf-8')
 
-        if path.startswith('/api/play'):
+        # ⚠️ `/api/play` 로 시작만 보면 **`/api/playback/*` 까지 삼킨다.**
+        #    ulg 재생(위 /api/playback/…)과 tlog 재생이 한 서버에 같이 살므로
+        #    접두사를 `/api/play/` 로 못박는다. 위 라우트가 먼저라 지금도
+        #    동작은 하지만, 순서에 기대는 코드는 다음 편집에서 깨진다.
+        if path == '/api/play' or path.startswith('/api/play/'):
             pl = self.st.player
             q = dict(kv.split('=', 1) for kv in query.split('&') if '=' in kv)
             act = path[len('/api/play'):].lstrip('/')
