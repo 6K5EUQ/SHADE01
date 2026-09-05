@@ -4,38 +4,7 @@
     "groundStation": "QGroundControl",
     "geoFence": {
         "circles": [],
-        "polygons": [
-            {
-                "inclusion": true,
-                "polygon": [
-                    [
-                        35.1813273,
-                        128.5535243
-                    ],
-                    [
-                        35.1812423,
-                        128.5542367
-                    ],
-                    [
-                        35.1802373,
-                        128.5540374
-                    ],
-                    [
-                        35.180346,
-                        128.5534639
-                    ],
-                    [
-                        35.180524,
-                        128.5533912
-                    ],
-                    [
-                        35.1810344,
-                        128.5534745
-                    ]
-                ],
-                "version": 1
-            }
-        ],
+        "polygons": [],
         "version": 2
     },
     "mission": {
@@ -46,7 +15,7 @@
         "items": [
             {
                 "autoContinue": true,
-                "command": 84,
+                "command": 22,
                 "doJumpId": 1,
                 "frame": 6,
                 "params": [
@@ -126,7 +95,7 @@
             },
             {
                 "autoContinue": true,
-                "command": 85,
+                "command": 21,
                 "doJumpId": 6,
                 "frame": 6,
                 "params": [

@@ -225,7 +225,7 @@ Telem Ratio 는 **1:2 가 이미 최대**이므로, 더 늘리려면 Packet Rate
 | 🔴 전류 | 최대 **66.8A**, 453초 중 270초를 45A 위에서. XT90 교체 필요 |
 | 🟡 기압계 | GPS 대비 **−14m** 오차. 미션(홈 기준)엔 무관, GPS 없는 고도유지엔 영향 |
 | 🟡 `NAV_DLL_ACT` | `0` (동작 없음). RC 가 살아있는데 인터넷 링크만 끊겨도 발동하므로 `1`(Hold) 권장 |
-| ✅ 고정익 차단 | **쿼드 전용으로 제한했다** (2026-09-04). `RC_MAP_TRANS_SW` 7→**0** (FC 에 저장 완료) · `NAV_FORCE_VT=1` · `VT_ELEV_MC_LOCK=1` · 미션은 `VTOL_TAKEOFF`/`VTOL_LAND` · 비행모드 6슬롯에 고정익 모드 없음 |
+| ✅ 고정익 차단 | **쿼드 전용으로 제한했다** (2026-09-04). `RC_MAP_TRANS_SW` 7→**0** (FC 에 저장 완료) · `NAV_FORCE_VT=1` · `VT_ELEV_MC_LOCK=1` · 미션 이착륙은 `TAKEOFF`(22)/`LAND`(21) · 비행모드 6슬롯에 고정익 모드 없음 |
 | 🟡 CH9 RTL | `RC_MAP_RETURN_SW=9` 매핑됨. CH9 는 1500 고정이라 지금은 무해 (2026-09-02 실측) |
 
 ### 지오펜스는 홈 기준이다
@@ -245,13 +245,22 @@ Telem Ratio 는 **1:2 가 이미 최대**이므로, 더 늘리려면 Packet Rate
 | 경로 | 상태 | 값 |
 |---|---|---|
 | 조종기 SD 스위치 | ✅ 닫힘 | `RC_MAP_TRANS_SW=0` (7 이었다, FC 저장 완료) |
-| 미션 이착륙 | ✅ 닫힘 | `NAV_FORCE_VT=1` + `.plan` 이 `VTOL_TAKEOFF`/`VTOL_LAND` |
+| 미션 이착륙 | ✅ 닫힘 | `.plan`·FC 둘 다 `TAKEOFF`(22)/`LAND`(21) — 84/85 는 **전환을 건다**, 아래 참조 |
 | 비행모드 슬롯 | ✅ 없음 | 6슬롯 = STAB / ALT / POS / POS / Mission / RTL |
 | MC 제어면 | ✅ 잠김 | `VT_ELEV_MC_LOCK=1` |
 
-⚠️ **`.plan` 을 QGC 에서 다시 만들 때 주의하라.** 이착륙 항목이 `NAV_TAKEOFF`(22)·
-`NAV_LAND`(21) 로 저장되면 VTOL 명시가 풀린다. **84(`VTOL_TAKEOFF`)·85(`VTOL_LAND`)**
-여야 한다 — 실제로 한 번 22/21 로 바뀌어 있었다.
+🔴 **이 경고는 2026-09-05 에 뒤집혔다 — 방향이 반대였다.**
+`VTOL_TAKEOFF`(84) 는 "수직 이륙" 이 아니라 **"수직으로 떠서 → 고정익으로 전환하라"** 다.
+[mission.cpp:380](PX4-Autopilot/src/modules/navigator/mission.cpp#L380) 이 상승 후
+`set_vtol_transition_item(..., VEHICLE_VTOL_STATE_FW)` 를 부른다 — **스위치를 거치지 않으므로
+`RC_MAP_TRANS_SW=0` 으로도 막히지 않는다.**
+
+`NAV_FORCE_VT=1` 은 이 경로를 막지 못한다. `force_vtol()` 은
+[navigator_main.cpp:1311](PX4-Autopilot/src/modules/navigator/navigator_main.cpp#L1311)
+에서 **기체가 이미 고정익일 때만** true 이기 때문이다.
+
+**쿼드 전용인 동안은 `TAKEOFF`(22)·`LAND`(21) 여야 한다.** `.plan` 을 QGC 에서 다시 만들 때
+VTOL 이착륙으로 저장되지 않도록 주의하라 — 고정익을 푼 뒤에 84/85 로 되돌린다.
 
 **푸는 순서** — 아래 「다음 비행 전」 2번(에어스피드 영점)을 먼저 해결하고,
 그 다음에 `RC_MAP_TRANS_SW` 를 되돌린다. 순서를 바꾸지 마라.
