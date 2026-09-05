@@ -68,6 +68,7 @@ hostname
 
 | 일시 (KST) | PC | 경로 | 대상 | 변경 | 이유 |
 |---|---|---|---|---|---|
+| 2026-09-05 17:18 | `ku` | `ku` USB 직결 | `MAV_0_RATE` | `490` → **`300`** | "Sensor lost" 추적 중 대역폭 포화로 오진해 낮췄다. **근거 약함 — 되돌릴 것.** 아래 절 |
 | 2026-09-05 17:15 | `ku` | `ku` USB 직결 | `RTL_RETURN_ALT` `RTL_DESCEND_ALT` `MPC_THR_HOVER` | `60`→**`20`** / `30`→**`10`** / `0.50`→**`0.65`** | 순항 5 m 인데 RTL 이 60 m 로 솟았다. 호버추력은 FC 자체 추정과 30% 어긋나 있었다 |
 | 2026-09-05 16:45 | `ku` | `ku` USB 직결 | `NAV_ACC_RAD` · 미션 `.plan` | `10` → **`3`** / 이착륙 84·85 → **22·21** | RTK 실측 eph 0.14 m — 10 m 는 과했다. 미션이 고정익 전환을 걸고 있었다 |
 | 2026-09-05 15:50 | `ku` | rim3 USB 직결 | `PWM_AUX_TIM0~2` | `400` → **`100`** | AUX1~3 은 서보뿐 — 400Hz 는 아날로그 서보에 과하다 |
@@ -76,6 +77,117 @@ hostname
 | 2026-09-05 14:04 | `ku` | rim3 USB 직결 | 미션·RTL·failsafe 6개 | 아래 표 | 공개 로그 16대 대조에서 우리 값이 최저 이상치 |
 | 2026-09-04 16:37 | `ku` | rim3 USB 직결 | `RC_MAP_KILL_SW` `RC_MAP_RETURN_SW` `COM_FLTMODE1~6` | 아래 절 | 조종기 채널 재배치 (SB/SC/SF 구성) |
 | 2026-09-04 16:32 | `ku` | rim3 USB 직결 | `RC_MAP_TRANS_SW` | `7` → **`0`** | 고정익 사용 중지 — 쿼드 전용 제한 |
+
+### 2026-09-05 17:18 — `MAV_0_RATE` 490→300 (조종기 "Sensor lost" 추적)
+
+**작업**: `ku` USB 직결(`/dev/ttyACM0`). `PARAM_SET` → `PREFLIGHT_STORAGE` **ACCEPTED**
+→ 되읽기 `300` 확인. DISARM. 배터리 연결 상태(25.0 V).
+
+| 파라미터 | 이전 | 이후 |
+|---|---|---|
+| `MAV_0_RATE` | `490` | **`300`** |
+
+🔴 **이 변경은 근거가 약하다. 다음 작업 때 `490` 으로 되돌려라.**
+ELRS 하향을 "대역폭 포화"로 오진해 낮췄으나, 실측 결과 포화가 아니었다(아래).
+ELRS 실측 처리량이 ~400 B/s 인데 300 으로 묶어 오히려 조인 셈이다.
+
+#### 이번 세션에서 실측·규명한 것
+
+**증상**: 조종기에서 "Sensor lost" 음성이 불규칙(약 5 초)하게 반복.
+
+| 측정 | 값 | 방법 |
+|---|---|---|
+| ELRS 실제 처리량 | **282~419 B/s** | rim3 백팩 WiFi(`10.0.0.1:14555`) 카운터 |
+| 333 Hz Full 이론 상한 | 1470 B/s | ELRS 공식 문서 |
+| **실사용률** | **약 20~27%** | 포화 아님 |
+| 조종기 `cur` 갱신 | 최대 **51.8 s** 공백 | rim3 페이지 90 초 폴링 |
+
+**ELRS 가 CRSF 센서로 변환하는 MAVLink 메시지는 12 종뿐이다**
+(`ExpressLRS/src/lib/MAVLink/MAVLink.cpp` 의 `case` 문):
+`BATTERY_STATUS` `GPS_RAW_INT` `GLOBAL_POSITION_INT` `ATTITUDE` `HEARTBEAT`
+`STATUSTEXT` `VFR_HUD` `SYSTEM_TIME` `SCALED_PRESSURE` `HOME_POSITION`
+`ALTITUDE` `HIGH_LATENCY2`. **나머지 스트림은 조종기에 아무 영향이 없다.**
+
+| EdgeTX 센서 | 공급 MAVLink |
+|---|---|
+| `RxBt` `Curr` `Capa` `Bat%` | `BATTERY_STATUS` |
+| `GPS` `GSpd` `Hdg` `GAlt` `Sats` | `GPS_RAW_INT` |
+| `Ptch` `Roll` `Yaw` | `ATTITUDE` |
+| `Temp` | `SCALED_PRESSURE` |
+| `Date` | `SYSTEM_TIME` |
+| `VSpd` | `GLOBAL_POSITION_INT` |
+
+**경보는 전역이다.** EdgeTX `radio/src/telemetry/telemetry.cpp`:
+
+```c
+if (item.timeout == 0) { item.setOld(); sensorLost = true; }
+if (sensorLost && TELEMETRY_STREAMING() && !g_model.disableTelemetryWarning)
+    audioEvent(AU_SENSOR_LOST);
+```
+
+등록된 26 개 센서 중 **하나만 timeout 돼도** 소리가 난다.
+
+**유력 원인**: `SYSTEM_TIME`(=`Date` 센서)이 PX4 NORMAL 기본값에서 **0.2 Hz(5 초 간격)**.
+EdgeTX stale 판정을 매 주기 넘긴다. `Delete All` + `Discover` 를 반복해도
+`Date` 는 5 초에 한 번이라도 오므로 **다시 등록되고 다시 stale** — 그래서 삭제로
+안 없어졌다. "약 5 초 간격" 증상과 주기가 일치한다.
+**미검증**: 조종기에서 재발 여부를 확인해야 확정된다.
+
+**`VSpd` 는 실내에서 구조적으로 불가**: `GLOBAL_POSITION_INT` 은 EKF 전역 위치가
+유효할 때만 발행된다. 실측 `ekf.pos_abs=false` → 0 Hz. 야외에서 잡히더라도
+`shade.lua` 가 안 쓰므로 지우는 편이 안전하다.
+
+#### 🔴 스트림 레이트는 **MAVLink 인스턴스별**이다 — 이번 세션 최대 함정
+
+`SET_MESSAGE_INTERVAL` 은 **명령을 받은 인스턴스에만** 적용된다.
+`mavlink_receiver.h:129,252` (`MavlinkReceiver(Mavlink &parent)`, `Mavlink &_mavlink`)
+→ `mavlink_receiver.cpp:2249` 의 `_mavlink.configure_stream_threadsafe()`.
+
+**이번 세션의 스트림 조정은 전부 USB 인스턴스로 갔고, TELEM1(ELRS)에는
+한 번도 적용되지 않았다.** ku USB 직결도, rim3 브리지(rim3 의 `/dev/ttyACM0`)도
+모두 USB 인스턴스다. ELRS 처리량이 무엇을 하든 안 변한 이유가 이것이다.
+
+**TELEM1 을 바꾸려면 장치를 명시해야 한다** (TELEM1 = `/dev/ttyS5`, fmu-v6c):
+
+```
+mavlink stream -d /dev/ttyS5 -s BATTERY_STATUS -r 4
+```
+
+`SET_MESSAGE_INTERVAL` 로 하려면 **그 링크를 통해** 보내야 한다.
+
+⚠️ **`SET_MESSAGE_INTERVAL` 은 런타임 전용이다.** `mavlink_receiver.cpp:2249` 는
+`configure_stream_threadsafe()` 만 호출하고 저장 코드가 없다 —
+`PREFLIGHT_STORAGE` 로도 안 남고 **재부팅하면 사라진다.**
+영구화하려면 SD 카드 `/fs/microsd/etc/extras.txt` 뿐이다 (`rcS:599-603`).
+
+🔴 **`extras.txt` 에는 이미 내용이 있다. 덮어쓰지 마라:**
+
+```
+ms5525dso start -X -b 2 -a 0x76
+```
+
+에어스피드 센서 기동 줄이다(32 바이트). 지우면 에어스피드가 안 뜬다. **추가만 하라.**
+
+#### 다음 작업 때 할 일
+
+1. `MAV_0_RATE` 를 **490 으로 복구** (300 은 근거 없음)
+2. `extras.txt` 에 **추가**(기존 줄 보존) — TELEM1 명시:
+   `SYSTEM_TIME -r 2`(Sensor lost 대책), `BATTERY_STATUS -r 4`(전류 갱신),
+   `ODOMETRY`/`HIGHRES_IMU`/`ATTITUDE_QUATERNION`/`LOCAL_POSITION_NED` `-r 0`
+3. FC 재부팅 후 **rim3 백팩 페이지로 검증** (ELRS 경로가 유일한 실검증 경로)
+
+#### 참고 — 확인된 정상 동작 (오해하기 쉬움)
+
+- **PM08 전류 센서 정상.** DISARM 0.60 A → 모터 회전 시 **2.77 A** 로 반응.
+  `mah` 적산도 일치(6 mAh/34 s ≈ 0.635 A). 지상 정지 시 값이 안 변하는 것은
+  실제로 전류가 일정하기 때문이지 고장이 아니다.
+- 🔴 **지상 STABILIZED ARM 시 모터가 저절로 증가한다.** 실측: 스로틀 스틱을
+  1039 → 988(최저)로 **내렸는데** 출력은 6% → 8% 로 올랐고, 모터 편차가
+  34 → 142 로 4 배 벌어졌다. `MulticopterRateControl.cpp:220` 의 적분기는
+  `_maybe_landed || _landed` 일 때만 동결되므로, 스로틀을 올려 착륙 판정이
+  풀리면 지면이 자세 오차를 막는 동안 I-term 이 계속 쌓인다.
+  **지상 출력·전류 시험은 STABILIZED 로 하지 말고 QGC 모터 테스트를 쓸 것.**
+  프로펠러를 반드시 제거하고, KILL(SE)을 즉시 쓸 수 있게 둘 것.
 
 ### 2026-09-05 17:15 — RTL 고도 60→20 m, 호버추력 0.50→0.65
 
