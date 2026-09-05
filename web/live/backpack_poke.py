@@ -53,8 +53,16 @@ def main():
     ap = argparse.ArgumentParser(description='ELRS 백팩 깨우기 (빈 하트비트만 보낸다)')
     ap.add_argument('--backpack', default=os.environ.get('BACKPACK', '10.0.0.1:14550'),
                     help='백팩 주소 (기본 10.0.0.1:14550)')
-    ap.add_argument('--to', default=os.environ.get('POKE_TO', '127.0.0.1:14550'),
-                    help='받은 텔레메트리를 넘길 곳 = 트래커 (기본 127.0.0.1:14550)')
+    # 🔴 기본값은 트래커가 실제로 듣는 포트를 따라간다. 여기만 14550 으로
+    #    박아 두면 14551 로 비켜 앉은 PC(rim3·rim)에서는 poker 가 아무도 안
+    #    듣는 포트로 부어 넣어 패킷 0 이 된다 — 유닛이 EnvironmentFile 로
+    #    LIVE_UDP 를 이미 들고 있으므로 그것을 쓴다.
+    ap.add_argument('--to',
+                    default=os.environ.get(
+                        'POKE_TO',
+                        '127.0.0.1:' + os.environ.get('LIVE_UDP', '14550')),
+                    help='받은 텔레메트리를 넘길 곳 = 트래커 '
+                         '(기본 127.0.0.1:$LIVE_UDP, 없으면 14550)')
     args = ap.parse_args()
 
     bp = parse_hostport(args.backpack, 14550)
