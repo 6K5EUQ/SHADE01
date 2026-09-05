@@ -769,20 +769,21 @@ function render(s) {
   setText($('st-sats'), d.sats != null ? String(d.sats) : '—');
   sc('sc-sats', d.fix != null && d.fix < 3 ? 'bad' : (d.sats != null && d.sats < 8) ? 'warn' : '');
 
-  // 모터 4개. 한쪽만 튀면 프롭·모터 이상이므로 서로 비교가 곧 판정이다.
+  // 모터 4개. 기체에 붙은 자리 그대로 2×2 로 놓인다 — 절대값보다
+  // **넷이 서로 비슷한가**가 판정이다.
   const mt = d.motors || {};
-  let mmax = null, mmin = null;
+  const mv = ['LF', 'RF', 'LB', 'RB'].map((k) => mt[k]).filter((v) => v != null);
+  const mmax = mv.length ? Math.max(...mv) : null;
+  const mmin = mv.length ? Math.min(...mv) : null;
+  // 네 모터가 20%p 넘게 벌어지면 기체가 한쪽을 억지로 붙들고 있다는 뜻이다.
+  // 무게중심·프롭 손상·모터 열화의 첫 신호다. 그때 **튄 놈만** 색을 준다 —
+  // 넷 다 칠하면 어느 것이 문제인지 도로 못 읽는다.
+  const spread = (mmax != null && mmax - mmin > 20);
   for (const k of ['LF', 'RF', 'LB', 'RB']) {
     const v = mt[k];
     setText($('st-m' + k), v == null ? '—' : v.toFixed(0));
-    if (v != null) {
-      mmax = mmax == null ? v : Math.max(mmax, v);
-      mmin = mmin == null ? v : Math.min(mmin, v);
-    }
+    sc('sc-m' + k, spread && (v === mmax || v === mmin) ? 'warn' : '');
   }
-  // 네 모터가 20%p 넘게 벌어지면 기체가 한쪽을 억지로 붙들고 있다는 뜻이다.
-  // 무게중심·프롭 손상·모터 열화의 첫 신호라 그때만 색을 준다.
-  sc('sc-mot', (mmax != null && mmax - mmin > 20) ? 'warn' : '');
 
   renderMsgs(msgs);
 }

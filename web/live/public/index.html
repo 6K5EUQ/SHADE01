@@ -14,20 +14,27 @@
       <svg id="hud" aria-label="HUD"></svg>
     </div>
 
-    <!-- HUD 아래 한 줄. 3층(전류밴드·상태밴드·숫자스트립)을 통합했다
-         (2026-09-05). 비행 중 곁눈질로 읽는 값만 크게 남긴다 — 나머지는
-         차트에 있고, 위험한 값은 색으로 튄다. -->
+    <!-- HUD 아래 계기판. 우측 2번째 차트 아랫선까지 올라온다 (2026-09-05).
+         숫자만 보고 판단하는 자리라 크게 — 배치는 조종자가 부르는 순서다.
+           속도  고도  배터리
+           전류  위성
+           모터 좌전 / 우전
+           모터 좌후 / 우후
+         모터는 **기체에 붙은 자리 그대로** 2×2 로 놓는다. 화면 왼쪽 위 칸이
+         실제 좌전 모터다 — 어느 모터가 튀는지 눈이 바로 짚는다. -->
     <div id="strip">
-      <div class="sc" id="sc-cur"><span class="k">전류</span><b id="st-cur">—</b><i>A</i></div>
-      <div class="sc" id="sc-batt"><span class="k">배터리</span><b id="st-batt">—</b><i>%</i></div>
       <div class="sc" id="sc-spd"><span class="k">속도</span><b id="st-spd">—</b><i>m/s</i></div>
       <div class="sc" id="sc-alt"><span class="k">고도</span><b id="st-alt">—</b><i>m</i></div>
+      <div class="sc" id="sc-batt"><span class="k">배터리</span><b id="st-batt">—</b><i>%</i></div>
+
+      <div class="sc" id="sc-cur"><span class="k">전류</span><b id="st-cur">—</b><i>A</i></div>
       <div class="sc" id="sc-sats"><span class="k">위성</span><b id="st-sats">—</b><i>기</i></div>
-      <!-- 모터 4개. 쿼드라 좌전/우전/좌후/우후가 한 칸에 나란히 선다.
-           한쪽만 튀면 프롭·모터 이상이라 서로 비교가 곧 판정이다. -->
-      <div class="sc mot" id="sc-mot"><span class="k">모터</span>
-        <span class="mv"><b id="st-mLF">—</b><b id="st-mRF">—</b><b id="st-mLB">—</b><b id="st-mRB">—</b></span>
-        <i>%</i></div>
+
+      <div class="sc mot" id="sc-mLF"><span class="k">모터 좌전</span><b id="st-mLF">—</b><i>%</i></div>
+      <div class="sc mot" id="sc-mRF"><span class="k">모터 우전</span><b id="st-mRF">—</b><i>%</i></div>
+
+      <div class="sc mot" id="sc-mLB"><span class="k">모터 좌후</span><b id="st-mLB">—</b><i>%</i></div>
+      <div class="sc mot" id="sc-mRB"><span class="k">모터 우후</span><b id="st-mRB">—</b><i>%</i></div>
     </div>
   </section>
 

@@ -146,9 +146,15 @@ const num = (e, a) => parseFloat(e.getAttribute(a));
   f = await load(''); D = f.contentDocument; W = f.contentWindow;
   // WP 칸은 통합하면서 뺐다. 대신 남긴 6칸이 전부 있는지 본다 —
   // 하나라도 없으면 render 가 조용히 죽은 것이다.
-  const want = ['sc-cur', 'sc-batt', 'sc-spd', 'sc-alt', 'sc-sats', 'sc-mot'];
+  // 모터는 칸 하나가 아니라 기체 자리대로 넷이다 (2026-09-05).
+  const want = ['sc-spd', 'sc-alt', 'sc-batt', 'sc-cur', 'sc-sats',
+                'sc-mLF', 'sc-mRF', 'sc-mLB', 'sc-mRB'];
   const missing = want.filter((id) => !D.getElementById(id));
-  ok('스트립 6칸이 전부 있다', missing.length === 0, missing.join(',') || 'ok');
+  ok('계기판 9칸이 전부 있다', missing.length === 0, missing.join(',') || 'ok');
+  // 모터 2×2 가 실제 기체 배치와 같은 자리에 있는지 — 좌전이 좌상단이어야 한다.
+  const cellBox = (id) => D.getElementById(id).getBoundingClientRect();
+  ok('모터 좌전이 우전 왼쪽', cellBox('sc-mLF').left < cellBox('sc-mRF').left);
+  ok('모터 좌후가 좌전 아래', cellBox('sc-mLB').top > cellBox('sc-mLF').top);
   const vals = ['st-cur', 'st-batt', 'st-spd', 'st-alt', 'st-sats']
     .map((id) => (D.getElementById(id) || {}).textContent);
   ok('스트립 값이 채워진다', vals.every((v) => v && v !== ''), vals.join(' / '));
