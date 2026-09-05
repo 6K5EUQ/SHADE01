@@ -103,16 +103,30 @@ cmd_on() {
   have_systemd || die "systemd --user 를 쓸 수 없다. 직접 띄워라:  ./web/live/live ${udp:-}"
   install_unit
 
-  # 포트를 환경파일에 적는다. 유닛을 안 고치고 바꿀 수 있게.
-  mkdir -p "$(dirname "$ENV_FILE")"
-  if [[ -n "$udp" ]]; then
-    printf 'LIVE_UDP=%s\nLIVE_HTTP=%s\n' "$udp" "$HTTP_PORT" > "$ENV_FILE"
-  else
-    printf 'LIVE_HTTP=%s\n' "$HTTP_PORT" > "$ENV_FILE"
+  # 🔴 경로 감지를 **먼저** 한다. 포트·바인딩 주소가 경로에 따라 달라지므로,
+  #    env 를 쓰고 나서 감지하면 이미 틀린 포트로 뜬 뒤다 (rim3 에서 그랬다:
+  #    백팩인데 14550/0.0.0.0 으로 열려다 브리지와 충돌해 시작 실패).
+  local path; path="$(detect_path)"
+  local bind_addr=""
+
+  if [[ "$path" == "backpack" && -z "$udp" ]]; then
+    # 백팩이 보내는 포트를 백팩에게 묻고, WiFi 주소에만 못박는다 —
+    # shade-bridge 는 Tailscale 주소에만 있으므로 같은 포트를 나눠 쓴다.
+    udp="$(backpack_send_port)"
+    bind_addr="$(ip -4 -br addr show 2>/dev/null \
+                 | grep -oE '10\.0\.0\.[0-9]+' | head -1 || true)"
   fi
 
+  # 포트를 환경파일에 적는다. 유닛을 안 고치고 바꿀 수 있게.
+  mkdir -p "$(dirname "$ENV_FILE")"
+  {
+    [[ -n "$udp" ]] && printf 'LIVE_UDP=%s\n' "$udp"
+    printf 'LIVE_HTTP=%s\n' "$HTTP_PORT"
+    [[ -n "$bind_addr" ]] && printf 'LIVE_BIND=%s\n' "$bind_addr"
+  } > "$ENV_FILE"
+
   local want="${udp:-14550}"
-  if port_taken_by_other "$want"; then
+  if [[ -z "$bind_addr" ]] && port_taken_by_other "$want"; then
     echo "⚠️  UDP $want 를 이미 누가 쓰고 있다:"
     ss -ulnp 2>/dev/null | grep -E "[:.]${want}\b" | sed 's/^/    /'
     echo "    QGC 나 shade-bridge 다. 그쪽을 끄거나 다른 포트로 켜라:"
@@ -131,42 +145,18 @@ cmd_on() {
     exit 1
   fi
 
-  # ── 경로 자동 감지. USB 직결이 우선, 없으면 백팩. ────────────────
-  # 백팩일 때만 poker 를 띄운다 — USB 경로에서는 필요도 없고, 괜히 띄우면
-  # 있지도 않은 10.0.0.1 로 하트비트를 계속 쏜다.
-  local path; path="$(detect_path)"
+  # ── 경로별 뒤처리. poker 는 백팩일 때만 띄운다 — USB 경로에서는 필요도
+  #    없고, 괜히 띄우면 있지도 않은 10.0.0.1 로 하트비트를 계속 쏜다.
   case "$path" in
     usb)
       systemctl --user stop "$POKE_UNIT" 2>/dev/null || true
       echo "   경로: USB 직결/브리지" ;;
     backpack)
-      # 🔴 백팩은 **자기가 정한 포트로 먼저 밀어준다** (실측: 아무 말 안 걸어도
-      #    73패킷/8초). 그 포트를 안 들으면 텔레메트리가 커널에서 버려진다 —
-      #    rim3 에서 실제로 그랬다: 백팩은 10.0.0.100:14550 으로 보내는데
-      #    트래커는 14551 을 듣고 있어 packets_down 33743 이 통째로 사라졌다.
-      local bport; bport="$(backpack_send_port)"
-      # 🔴 포트가 겹쳐도 대개 **주소로 피할 수 있다.** shade-bridge 는
-      #    Tailscale 주소에만 바인딩하므로(100.x:14550) WiFi 쪽
-      #    10.0.0.x:14550 은 비어 있다 — 트래커를 그 주소에 못박으면 둘이
-      #    같은 포트를 쓰면서 안 부딪힌다 (실측 rim3 2026-09-05).
-      #    0.0.0.0 으로 열면 브리지와 충돌해 시작조차 못 한다.
-      local wifi_ip
-      wifi_ip="$(ip -4 -br addr show 2>/dev/null \
-                 | grep -oE '10\.0\.0\.[0-9]+' | head -1 || true)"
-      if [[ -n "$wifi_ip" ]]; then
-        printf 'LIVE_UDP=%s\nLIVE_HTTP=%s\nLIVE_BIND=%s\n' \
-               "$bport" "$HTTP_PORT" "$wifi_ip" > "$ENV_FILE"
-        want="$bport"
-        systemctl --user restart "$UNIT"; sleep 1.2
-        if ! systemctl --user is-active --quiet "$UNIT"; then
-          echo "   ❌ ${wifi_ip}:${bport} 를 못 열었다:  ./qgc live log" >&2
-        fi
-      fi
       # 백팩이 먼저 밀어주므로 poker 는 대개 필요 없다. 그래도 띄워 둔다 —
       # 펌웨어에 따라 GCS 가 먼저 말을 걸어야 하는 구현도 있다.
       systemctl --user reset-failed "$POKE_UNIT" 2>/dev/null || true
       systemctl --user restart "$POKE_UNIT" 2>/dev/null || true
-      echo "   경로: ELRS 백팩 (${BACKPACK_IP}) — 수신 포트 ${want}" ;;
+      echo "   경로: ELRS 백팩 — ${bind_addr:-0.0.0.0}:${want} 수신" ;;
     *)
       systemctl --user stop "$POKE_UNIT" 2>/dev/null || true
       echo "   ⚠️  경로를 못 찾았다 — FC USB 도 브리지도 없고 백팩 AP 에도 안 붙어 있다" ;;
