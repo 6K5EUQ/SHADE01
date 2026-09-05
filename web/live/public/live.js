@@ -163,10 +163,23 @@ function buildHUD() {
   h.center = el('g', {}, h.core);
   h.arm = el('text', { x: 0, y: 0, 'text-anchor': 'middle', class: 'armTxt' }, h.center);
   h.mode = el('text', { x: 0, y: 34, 'text-anchor': 'middle', class: 'modeTxt', fill: 'var(--text)' }, h.center);
+  // 🔴 경고는 피치 사다리와 안 겹치게 내리되, **HUD 밖으로 나가면 안 된다.**
+  //    처음엔 y=65·96 이라 −10°·−15° 가로대에 잘렸고, 그렇다고 y=186 까지
+  //    내리니 이번엔 짧아진 HUD 아래로 56px 넘쳐 통째로 안 보였다
+  //    (실측 2026-09-05: hudBot=439 인데 warnBot=495).
+  //    y=78·108 이면 −13°·−18° 자리다 — 그 구간 가로대는 짧은 대(30px)뿐이라
+  //    폭 400px 판이 통째로 덮는다. 판이 겹침을 해결하므로 y 를 더 내릴 이유가 없다.
   h.vtol = el('g', { class: 'off' }, h.center);
-  el('rect', { x: -190, y: 42, width: 380, height: 32, fill: 'none', stroke: 'var(--bad)', 'stroke-width': 2 }, h.vtol);
-  h.vtolTxt = el('text', { x: 0, y: 65, 'text-anchor': 'middle', class: 'vtolTxt', fill: 'var(--bad)' }, h.vtol);
-  h.warn = el('text', { x: 0, y: 96, 'text-anchor': 'middle', class: 'warnTxt', fill: 'var(--bad)' }, h.center);
+  el('rect', { x: -200, y: 56, width: 400, height: 32, rx: 4,
+               fill: '#0d1117', opacity: .92,
+               stroke: 'var(--bad)', 'stroke-width': 2 }, h.vtol);
+  h.vtolTxt = el('text', { x: 0, y: 78, 'text-anchor': 'middle', class: 'vtolTxt', fill: 'var(--bad)' }, h.vtol);
+
+  // 일반 경고도 글자 뒤에 판을 깐다. 사다리 위에 그냥 얹으면 헤일로만으로는
+  // 가로대를 못 이긴다.
+  h.warnBg = el('rect', { x: -200, y: 92, width: 400, height: 26, rx: 4,
+                          fill: '#0d1117', opacity: .92, class: 'off' }, h.center);
+  h.warn = el('text', { x: 0, y: 110, 'text-anchor': 'middle', class: 'warnTxt', fill: 'var(--bad)' }, h.center);
 
   // ③ 좌측 테이프 — 대지속도 (🔴 대기속도가 아니다)
   h.spdBg = el('rect', { fill: 'rgba(13,17,23,.55)' }, svg);
@@ -198,8 +211,13 @@ function buildHUD() {
   h.gndBand = el('rect', { y: 0, fill: 'var(--bad)', opacity: .10 }, h.altSlide);
   h.gndLine = el('line', { x1: 0, y1: 0, y2: 0, stroke: 'var(--dim)', 'stroke-width': 2 }, h.altSlide);
   h.fenceLine = el('line', { x1: 0, y1: -FENCE.VER * PPU_ALT, y2: -FENCE.VER * PPU_ALT, stroke: 'var(--bad)', 'stroke-width': 2 }, h.altSlide);
-  h.fenceTxt = el('text', { x: 4, y: -FENCE.VER * PPU_ALT - 4, 'font-size': 9, fill: 'var(--bad)' }, h.altSlide);
-  h.fenceTxt.textContent = '펜스 ' + FENCE.VER + ' 설정값';
+  // 🔴 펜스 라벨은 눈금 숫자와 **같은 높이에 두면 안 된다.** 50m 눈금 글자가
+  //    y=-400+4 인데 라벨을 y=-400-4 에 두면 8px 차이로 겹쳐 둘 다 못 읽는다
+  //    (실측 2026-09-05: 빨간 '펜스 50 설정값' 위에 흰 '50' 이 얹혔다).
+  //    선 위로 12px 띄우고, 글자도 '펜스'로 줄인다 — 무엇의 선인지만 알면 된다.
+  h.fenceTxt = el('text', { x: 4, y: -FENCE.VER * PPU_ALT - 12, 'font-size': 10,
+                            'font-weight': 700, fill: 'var(--bad)' }, h.altSlide);
+  h.fenceTxt.textContent = '펜스 ' + FENCE.VER;
   for (let v = -10; v <= 120; v += 2) {
     const y = -v * PPU_ALT, ten = v % 10 === 0;
     el('line', { x1: 0, y1: y, x2: ten ? 14 : 8, y2: y, stroke: '#e6edf3', 'stroke-width': ten ? 1.6 : 1, opacity: ten ? 1 : .6 }, h.altSlide);
@@ -718,7 +736,10 @@ function render(s) {
   //    매 비행마다 빨강을 보면 빨강의 의미가 닳는다 (색 예산).
   const tail = d.landed === 2 ? ' · 공중' : d.landed === 1 ? ' · 지상' : '';
   setText(h.arm, d.armed ? 'ARMED' + tail : 'DISARMED');
-  setAttr(h.arm, 'fill', d.armed ? 'var(--text)' : 'var(--muted)');
+  // 🔴 DISARMED 를 --muted(#6e7681) 로 두면 갈색 지면 위에서 거의 안 보인다.
+  //    ARM 여부는 이 화면에서 가장 먼저 읽어야 하는 값이다 — 흐리게 둘 값이
+  //    아니다. 대비는 글자색이 아니라 **굵기와 헤일로**로 준다.
+  setAttr(h.arm, 'fill', d.armed ? 'var(--text)' : 'var(--dim)');
   setText(h.mode, d.mode || '—');
 
   const vtBad = d.vtol && d.vtol !== 'MC';
@@ -742,7 +763,9 @@ function render(s) {
   }
   const crit = d.system_status === 6 ? 'FC 상태 CRITICAL'
     : d.system_status === 7 ? 'FC 상태 EMERGENCY' : '';
-  setText(h.warn, crit || (pollN < warnUntil ? warnText : ''));
+  const warnStr = crit || (pollN < warnUntil ? warnText : '');
+  setText(h.warn, warnStr);
+  show(h.warnBg, !!warnStr);          // 글자 없을 때 빈 판이 떠 있으면 안 된다
   // 점멸은 우선순위 상위 하나에만 — 동시에 여럿 깜빡이면 아무것도 안 튄다.
   h.vtol.classList.toggle('blink', !!vtBad);
   h.warn.classList.toggle('blink', !vtBad && !!crit);

@@ -52,12 +52,22 @@ main {
   font-family: var(--mono); font-variant-numeric: tabular-nums;
   paint-order: stroke; stroke: #0d1117; stroke-width: 3px; stroke-linejoin: round;
 }
-#hud .armTxt  { font-size: 34px; font-weight: 700; }
-#hud .modeTxt { font-size: 22px; }
+/* 🔴 ARM·모드는 하늘/땅 어느 배경 위에 올지 모른다. 헤일로를 두껍게 주고
+   글자를 키워 배경과 상관없이 읽히게 한다 — 갈색 지면 위에서 흐린 회색
+   DISARMED 가 사실상 안 보이던 것을 고쳤다 (2026-09-05). */
+#hud .armTxt  {
+  font-size: 40px; font-weight: 700;
+  stroke: #0d1117; stroke-width: 7px; paint-order: stroke;
+  letter-spacing: 1px;
+}
+#hud .modeTxt {
+  font-size: 26px; font-weight: 700;
+  stroke: #0d1117; stroke-width: 6px; paint-order: stroke;
+}
 #hud .vtolTxt { font-size: 20px; font-weight: 700; }
 #hud .warnTxt { font-size: 15px; }
-#hud.small .armTxt  { font-size: 24px; }
-#hud.small .modeTxt { font-size: 17px; }
+#hud.small .armTxt  { font-size: 28px; stroke-width: 6px; }
+#hud.small .modeTxt { font-size: 19px; stroke-width: 5px; }
 /* 점멸은 CSS 가 한다 — JS 가 프레임마다 색을 안 건드린다.
    동시 발생 시 우선순위 상위 하나에만 붙인다. */
 @keyframes hudBlink { 50% { opacity: .25; } }
@@ -189,21 +199,18 @@ a.btn { display: inline-block; text-decoration: none; }
 
 #charts .empty { padding: 50px 20px; color: var(--muted); text-align: center; font-size: 13px; }
 
-/* 단 선택. 우상단에 떠 있고, 켠 것이 곧 목차다. */
-.overlay {
-  position: absolute; right: 12px; top: 8px; z-index: 400;
-  background: rgba(13,17,23,.92); border: 1px solid var(--border-2);
-  border-radius: 8px; padding: 5px 7px; font-size: 11px;
-  display: flex; flex-wrap: wrap; gap: 1px 4px; max-width: 62%;
+/* 단 선택. 차트 위에 떠 있던 것을 하단 바 안으로 내렸다 (2026-09-05) —
+   그림을 가리지 않고 조작이 한 줄에 모인다. */
+#toc { display: flex; align-items: center; gap: 0 2px; margin-left: 6px; }
+#toc label {
+  display: flex; align-items: center; gap: 4px; cursor: pointer;
+  color: var(--muted); padding: 1px 5px; border-radius: 4px; user-select: none;
+  white-space: nowrap; font-size: 11px; line-height: 1.6;
 }
-.overlay label {
-  display: flex; align-items: center; gap: 5px; cursor: pointer;
-  color: var(--muted); padding: 2px 6px; border-radius: 5px; user-select: none;
-  white-space: nowrap;
-}
-.overlay label:hover { background: var(--panel-2); color: var(--text); }
-.overlay label.on { color: var(--accent); background: var(--panel-2); }
-.overlay input { accent-color: var(--accent); margin: 0; flex: 0 0 auto; }
+#toc label:hover { background: var(--panel-2); color: var(--text); }
+#toc label.on { color: var(--accent); background: var(--panel-2); }
+#toc input { accent-color: var(--accent); margin: 0; flex: 0 0 auto;
+             width: 11px; height: 11px; }
 
 .win { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
 .win select { padding: 3px 6px; font-size: 11px; }

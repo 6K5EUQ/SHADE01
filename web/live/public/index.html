@@ -43,14 +43,15 @@
        지금 비행을 같은 그림으로 읽어야 눈이 안 흔들린다. -->
   <section id="chartPane">
     <div id="charts"></div>
-    <!-- 어느 단을 볼지. 켠 단이 곧 목차다 (로그 뷰어의 좌측 목차와 같은 구실). -->
-    <div id="toc" class="overlay"></div>
     <!-- 하단 바. 화면 위를 한 줄도 안 쓰려고 여기 다 모았다.
          링크 상태는 글자가 아니라 점 하나다 — 초록/노랑/빨강. -->
     <div class="msgs">
       <div class="hd">
         <span id="dot" class="dot" title="링크 상태">●</span>
         <span>FC 메시지</span><span class="cnt" id="msgCnt"></span>
+        <!-- 어느 단을 볼지. 차트 위에 떠 있던 것을 여기로 내렸다 —
+             그림 위를 가리지 않고, 조작이 한 줄에 모인다. -->
+        <div id="toc"></div>
         <span class="grow"></span>
         <span class="stats" id="stats"></span>
         <select id="win" title="차트가 보여주는 시간 창">
