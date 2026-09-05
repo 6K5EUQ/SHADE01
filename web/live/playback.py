@@ -202,8 +202,17 @@ def load_flight(path):
                  {'RB': 'output[2]', 'RF': 'output[3]',
                   'LB': 'output[5]', 'LF': 'output[6]'}, t0)
 
-    # 진동은 로그에 vibration 토픽이 없다 — sensor_accel 로는 라이브와 같은
-    # 값을 만들 수 없다. 없는 값은 안 그린다 (화면이 알아서 흐린다).
+    # 진동. 라이브는 MAVLink `VIBRATION`(x/y/z) 을 받지만 로그에는 그 토픽이
+    # 없고 **`vehicle_imu_status`** 에 들어 있다 — `accel_vibration_metric`
+    # 하나로 온다 (축별이 아니다).
+    #
+    # ⚠️ 화면의 진동 차트는 `Math.max(...d.vibe)` 를 쓰므로 리스트여야 한다.
+    #    축별 값이 없으니 한 칸짜리 리스트로 넣는다 — 없는 축을 지어내지 않는다.
+    #    `qgclog.py` 의 진동 분석도 같은 필드를 쓴다 (VIB_WARN=10 / VIB_BAD=30).
+    imu = _track(ulog, 'vehicle_imu_status',
+                 {'vib': 'accel_vibration_metric', 'gvib': 'gyro_vibration_metric',
+                  'c0': 'accel_clipping[0]', 'c1': 'accel_clipping[1]',
+                  'c2': 'accel_clipping[2]'}, t0)
 
     # ── 홈 위치 ────────────────────────────────────────────────────
     home = None
@@ -368,6 +377,22 @@ def load_flight(path):
             a = _val(aspd, i, 'a')
             if a is not None:
                 d['airspeed'] = round(a, 2)
+
+        i = imu.at(ts) if imu else None
+        if i is not None:
+            v = _val(imu, i, 'vib')
+            if v is not None:
+                # 한 칸짜리 리스트 — 축별 값이 로그에 없다. 화면은 max() 를 쓴다.
+                d['vibe'] = [round(v, 2)]
+            g = _val(imu, i, 'gvib')
+            if g is not None:
+                d['gyro_vibe'] = round(g, 4)
+            clip = 0
+            for c in ('c0', 'c1', 'c2'):
+                cv = _val(imu, i, c)
+                if cv is not None:
+                    clip += int(cv)
+            d['clip'] = clip
 
         i = mot.at(ts) if mot else None
         if i is not None:

@@ -891,7 +891,7 @@ class Playback:
                 return None
             frames = self.fl['frames']
             cols = {k: [] for k in ('alt', 'climb', 'spd', 'aspd', 'roll', 'pitch',
-                                    'cur', 'volt', 'sats', 'eph',
+                                    'cur', 'volt', 'vib', 'sats', 'eph',
                                     'ekf_vel', 'ekf_pos', 'ekf_alt', 'ekf_mag')}
             modes = []
             last_mode = None
@@ -905,6 +905,9 @@ class Playback:
                 cols['pitch'].append(d.get('pitch'))
                 cols['cur'].append(d.get('cur'))
                 cols['volt'].append(d.get('volt'))
+                # 화면의 `vib` 채널은 축별 최대값이다 (pushSample 과 같은 식).
+                vb = d.get('vibe')
+                cols['vib'].append(max(vb) if vb else None)
                 cols['sats'].append(d.get('sats'))
                 cols['eph'].append(d.get('eph'))
                 r = d.get('ekf_ratio') or {}
@@ -916,8 +919,6 @@ class Playback:
                 if m and m != last_mode:
                     modes.append({'t': fr['t'], 'name': m})
                     last_mode = m
-            # 진동은 로그에 vibration 토픽이 없다 — 채널을 아예 안 만든다.
-            # 화면은 없는 채널을 비워 두는 쪽이 0 을 그리는 것보다 정직하다.
             return {'hz': self.fl['hz'], 'n': len(frames),
                     'dur': self.fl['dur'], 'cols': cols, 'modes': modes,
                     'messages': self.fl['messages']}
