@@ -27,6 +27,7 @@
 """
 
 import argparse
+import math
 import os
 import subprocess
 import sys
@@ -368,6 +369,13 @@ class Report:
         return 'NO-GO' if self.blk else ('확인 후 판단' if self.warn else 'GO')
 
 
+def isnan(v):
+    try:
+        return math.isnan(float(v))
+    except Exception:
+        return False
+
+
 def near(a, b, tol=1e-3):
     try:
         return abs(float(a) - float(b)) <= tol
@@ -530,7 +538,11 @@ def check_live(r, tel, msgs):
     if vibe:
         mx = max(vibe)
         d = 'x %.1f y %.1f z %.1f' % vibe
-        if mx > 30:
+        if mx == 0.0:
+            # 지상 정지에서도 완전한 0 은 잘 안 나온다. 값이 아니라 아직
+            # 안 채워진 것으로 보는 편이 안전하다.
+            r.add('warn', '진동', d, '전부 0 — 아직 값이 안 온 것일 수 있다. 모터를 돌려 다시 보라')
+        elif mx > 30:
             r.add('blk', '진동', d, '위험 수준')
         elif mx > 10:
             r.add('warn', '진동', d, '경고선 10 초과')
@@ -538,12 +550,22 @@ def check_live(r, tel, msgs):
             r.add('ok', '진동', d)
 
     # EKF 혁신비 — 1.0 을 넘으면 센서끼리 안 맞는다
+    # 🔴 NaN 을 그냥 지나치면 안 된다. `NaN > 1.0` 은 False 라 비교만으로는
+    #    조용히 '정상' 이 된다 — 모르는 것을 안전하다고 답하는 그 부류다.
+    #    실기에서 EKF 가 아직 안 선 동안 vel·pos 가 NaN 으로 나온다.
     ratios = {k[4:]: tel[k] for k in ('ekf_vel', 'ekf_pos', 'ekf_vrt', 'ekf_mag')
               if tel.get(k) is not None}
     if ratios:
-        worst = max(ratios.values())
-        d = ' '.join('%s %.2f' % (k, v) for k, v in ratios.items())
-        if worst > 1.0:
+        d = ' '.join('%s %s' % (k, 'nan' if isnan(v) else '%.2f' % v)
+                     for k, v in ratios.items())
+        nans = [k for k, v in ratios.items() if isnan(v)]
+        good = [v for v in ratios.values() if not isnan(v)]
+        worst = max(good) if good else None
+        if nans:
+            r.add('warn', 'EKF 혁신비', d,
+                  '%s 가 NaN — 추정기가 아직 안 섰다. GPS·자세가 잡히면 사라진다. '
+                  '이 상태로는 Position·Mission 이 안 선다' % ', '.join(nans))
+        elif worst > 1.0:
             r.add('blk', 'EKF 혁신비', d, '센서 불일치 — 뜨면 위치가 튄다')
         elif worst > 0.5:
             r.add('warn', 'EKF 혁신비', d, '여유가 적다')
