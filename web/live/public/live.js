@@ -1257,19 +1257,14 @@ async function poll() {
 // 웹(shade01.bewe.co.kr/live)에서는 로컬 전용 기능을 숨긴다. 재생·기록은 현장
 // 노트북(rim3)의 파일을 다루는 것이라 웹에는 그 파일이 없다 — 버튼만 남겨 두면
 // 눌렀을 때 조용히 아무 일도 안 일어난다.
-if (ON_WEB) {
-  document.documentElement.classList.add('on-web');
-  for (const id of ['pbOpen']) { const el = $(id); if (el) el.hidden = true; }
-  // 목록으로 돌아가는 길. 웹에서는 이 페이지가 사이트의 한 페이지다.
-  const back = document.createElement('a');
-  back.href = '/';
-  back.textContent = '← 로그 목록';
-  back.className = 'weblink';
-  back.title = 'shade01 비행로그 목록으로';
-  // 하단 바의 첫 칸(링크 점) 앞에 끼운다. 여기가 화면에서 유일한 조작 줄이다.
-  const bar = document.querySelector('#chartPane .msgs .hd');
-  if (bar) bar.insertBefore(back, bar.firstChild);
-}
+// 🔴 웹과 로컬은 **UI 가 완전히 같아야 한다.** 예전에는 웹에서 재생 버튼을
+//    숨기고 「← 로그 목록」 링크를 끼워 두 화면이 갈렸는데, 이제 랩서버도
+//    같은 mav_live.py 로 재생을 서비스하므로(server.js 가 /api/playback/* 을
+//    :4401 로 넘긴다) 웹에서도 그대로 재생된다. 분기를 없앤다.
+//
+//    남는 차이는 **목록에 뜨는 파일**뿐이다 — 웹은 랩서버의 .ulg, 로컬은
+//    그 PC 가 가진 것. 조작·배치·버튼은 한 벌이다.
+if (ON_WEB) document.documentElement.classList.add('on-web');
 
 buildHUD();
 resolveColors();      // 반드시 buildCharts 앞에 — 범례·선이 같은 색을 쓴다

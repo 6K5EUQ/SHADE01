@@ -1,0 +1,23 @@
+[Unit]
+# 웹(/live)의 재생 기능. server.js 가 /api/playback/* 을 이 포트로 넘긴다.
+# 🔴 로컬 화면(:4400)과 **같은 프로그램**이다 — 재생 로직을 두 벌로 만들지
+#    않으려고 그대로 띄운다. 라이브 텔레메트리는 안 받는다(--port 없음):
+#    이 기계는 FC 를 못 보고, 하는 일은 ~/shade01-data/logs 의 .ulg 를 열어
+#    되돌려 주는 것뿐이다.
+# 🔴 읽기 전용이다. mav_live.py 는 소켓에 쓰는 코드가 0줄이라 기체로 나가는
+#    길이 구조적으로 없다.
+Description=SHADE01 playback backend (/live 재생)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/SHADE01/web/live
+Environment=QGC_LOG_DIR=%h/shade01-data/logs
+# 목록도 이 기계의 것을 쓴다 — 자기 자신에게 ssh 하지 않게 한다.
+Environment=SHADE_LOG_HOST=
+ExecStart=%h/shade01-venv/bin/python %h/SHADE01/web/live/mav_live.py --http 4401 --bind 127.0.0.1
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

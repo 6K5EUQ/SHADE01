@@ -627,8 +627,45 @@ async function route(req, res) {
   // /live 는 실시간 화면. 로컬 트래커(:4400)와 **같은 파일**을 쓴다.
   if (p === '/live' || p === '/live/') return serveLiveAsset(req, res, '/live/index.html');
   if (LIVE_FILES.has(p)) return serveLiveAsset(req, res, p);
+  // 재생은 mav_live.py 가 다 구현해 뒀다 (.ulg 를 열어 HUD·차트로 되돌린다).
+  // 여기서 다시 짜지 않고 **그대로 넘긴다** — 두 화면이 같은 코드로 돌아야
+  // UI 가 갈리지 않는다. 랩서버는 ~/shade01-data/logs 를 그 자리에서 읽으므로
+  // 받아올 것도 없다.
+  if (p.startsWith('/api/playback/')) return proxyLive(req, res);
   if (/^\/compare\b/.test(p)) return serveStatic(req, res, '/compare.html');
   return serveStatic(req, res, p);
+}
+
+/** 재생 요청을 이 기계의 mav_live.py(:4401)로 넘긴다.
+ *
+ * 🔴 재생 로직을 node 로 옮겨 적지 않는다. mav_live.py 가 ULog 파싱·시계열
+ *    추출·커서 이동을 전부 갖고 있고, 로컬 화면(:4400)이 쓰는 것과 **같은
+ *    코드**여야 웹과 로컬의 동작이 갈리지 않는다. 옮겨 적으면 그 순간부터
+ *    두 벌이 따로 늙는다.
+ *
+ * 🔴 읽기 전용 경로만 넘긴다. mav_live.py 는 상행(기체로 나가는 길)이 0줄인
+ *    설계라 여기로 무엇이 들어와도 기체에 닿지 않는다.
+ */
+const PLAYBACK_PORT = Number(process.env.SHADE_PLAYBACK_PORT || 4401);
+function proxyLive(req, res) {
+  const r = http.request(
+    { host: '127.0.0.1', port: PLAYBACK_PORT, path: req.url, method: 'GET',
+      headers: { 'Accept-Encoding': 'identity' }, timeout: 120000 },
+    (up) => {
+      res.writeHead(up.statusCode || 502, {
+        'Content-Type': up.headers['content-type'] || 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+        'X-Robots-Tag': 'noindex, nofollow',
+      });
+      up.pipe(res);
+    });
+  // 재생 서버가 없어도 화면은 살아 있어야 한다 — 라이브는 별개 경로다.
+  r.on('error', () => {
+    if (res.headersSent) return res.end();
+    sendJson(req, res, 503, { error: '재생 서버가 없다 (shade-playback.service)' });
+  });
+  r.on('timeout', () => r.destroy());
+  r.end();
 }
 
 // ── 기동 ─────────────────────────────────────────────────────────────
