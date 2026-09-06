@@ -249,6 +249,63 @@ http://localhost:4400/?demo=1&cur=61              # 과전류 색
 http://localhost:4400/?demo=1&auto=1              # AUTO 일 때만 뜨는 WP 칸
 ```
 
+## 웹과 로컬은 한 벌이다 (2026-09-06)
+
+**`shade01.bewe.co.kr/live` 와 `localhost:4400` 은 UI·조작이 완전히 같다.**
+같은 `index.html`·`live.js`·`live.css` 를 쓰고, **재생도 같은 `mav_live.py` 가
+한다.**
+
+예전에는 웹에서 재생 버튼을 숨기고 「← 로그 목록」 링크를 끼워 두 화면이
+갈렸다. 지금은 분기가 `on-web` 클래스 한 줄뿐이다.
+
+```
+브라우저 → /live            → server.js → web/live/public/  (로컬과 같은 파일)
+         → /api/playback/*  → server.js → 127.0.0.1:4401 → mav_live.py
+         → /api/live        → server.js 자신 (rim3 가 밀어 올린 텔레메트리)
+```
+
+🔴 **재생 로직을 node 로 옮겨 적지 않았다.** `mav_live.py` 가 ULog 파싱·시계열
+추출·커서 이동을 전부 갖고 있다. 옮겨 적으면 그 순간부터 두 벌이 따로 늙어
+"웹에서만 되는" / "로컬에서만 되는" 것이 생긴다.
+
+| | 웹 | 로컬 |
+|---|---|---|
+| 화면 파일 | 같다 | 같다 |
+| 재생 백엔드 | `shade-playback.service` (:4401) | 자기 자신 (:4400) |
+| 목록에 뜨는 것 | 랩서버 `~/shade01-data/logs` 의 `.ulg` | 그 PC 가 정본에서 받은 것 |
+
+**남는 차이는 목록에 뜨는 파일뿐이다** — 조작·배치·버튼은 한 벌이다.
+
+### 랩서버 재생 서비스
+
+```bash
+systemctl --user status shade-playback     # 랩서버에서
+journalctl --user -u shade-playback -n 30
+```
+
+⚠️ **`shade01-venv` 에 `pymavlink` 이 필요하다.** 없으면 즉시 죽는다
+(`pymavlink 이 없다`). `~/shade01-venv/bin/pip install pymavlink`.
+
+⚠️ **`SHADE_LOG_HOST=` (빈 값)** 로 띄운다. "원격이 없다" 가 아니라 "내가
+정본이다" 라는 뜻이고, `logsource._remote_list()` 가 `REMOTE_DIR` 을 그 자리에서
+읽는다. 이걸 안 비우면 자기 자신에게 ssh 를 시도하고 목록이 통째로 비어
+재생이 `그런 로그가 없다` 로 죽는다.
+
+재생 서버가 죽어도 **라이브 화면은 살아 있다** — 별개 경로이고 프록시가 503 을
+JSON 으로 돌려준다.
+
+### 아직 안 되는 것 — ELRS `.tlog`
+
+목록 창은 `.ulg`(비행 로그)와 `.tlog`(현장 기록) 둘을 같이 읽지만, **랩서버에
+`.tlog` 이 0개다.** `./shade01 sync` 가 FC 의 `.ulg` 만 올리기 때문이다.
+`.tlog` 은 지금 rim3 의 `web/live/logs/live/` 에만 쌓인다.
+
+올리려면 **둘 다** 필요하다:
+
+1. `flightsync` 가 `.tlog` 도 랩서버로 보낸다
+2. `playback.py` 가 `.tlog` 을 읽는다 — 지금은 `.ulg`(ULog)만 판다.
+   `.tlog` 은 MAVLink 프레임 열이라 파서가 아예 다르다
+
 ## 🔴 화면을 고쳤으면 — 배포 절차 (2026-09-06 확립)
 
 **커밋만으로는 아무 화면도 안 바뀐다.** 뷰어를 띄우는 곳이 네 군데이고 각자
