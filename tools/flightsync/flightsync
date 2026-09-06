@@ -219,6 +219,10 @@ else
     > "$SCRATCH/pruned.txt" 2>/dev/null || : > "$SCRATCH/pruned.txt"
 fi
 say "  랩서버 보유 $(grep -c . "$SCRATCH/server.txt" || true)개 · 판정 후 지운 것 $(grep -c . "$SCRATCH/pruned.txt" || true)개"
+# 번호가 없는 로그가 서버에 남아 있으면, 받을 것이 없어도 7단계를 돌려야 한다.
+# (`REF_*` 는 웹 참조 로그라 번호가 없는 것이 정상이다.)
+NEEDNUM=$(cut -f1 "$SCRATCH/server.txt" 2>/dev/null | grep -v '^log_[0-9]' | grep -vc '^REF_' || true)
+[ "${NEEDNUM:-0}" -gt 0 ] && say "  번호 없는 로그 ${NEEDNUM}개 — 7단계에서 붙인다"
 
 # 🔴 "마지막 로그 이후" 가 아니라 **"서버에 없는 것"** 이다. 시각 cutoff 는
 #    중간의 구멍을 못 본다 (업로드 실패·손으로 지움). 집합 차이는 잡는다.
@@ -252,8 +256,8 @@ fi
 
 # ═══ 3. 없는 것만 받기 ══════════════════════════════════════════════
 FETCHED=()
-if [ "$nwant" -gt 0 ]; then
-  step "3/7 FC → $FC_HOST"
+if [ "$nwant" -gt 0 ] || [ "${NEEDNUM:-0}" -gt 0 ]; then
+  [ "$nwant" -gt 0 ] && step "3/7 FC → $FC_HOST"
   t0=$(date +%s)
   while IFS=$'\t' read -r name mb d; do
     [ -n "$name" ] || continue
@@ -285,7 +289,7 @@ if [ "$nwant" -gt 0 ]; then
       printf '%s\n' "$out" | tail -3 | sed 's/^/        /'
     fi
   done <<< "$WANT"
-  say "  ${#FETCHED[@]}개 확보 ($(( $(date +%s) - t0 ))초)"
+  [ "$nwant" -gt 0 ] && say "  ${#FETCHED[@]}개 확보 ($(( $(date +%s) - t0 ))초)"
 
   # ── FC 엔트리 번호 ────────────────────────────────────────────────
   # MAVFTP 는 SD 디렉토리를 훑을 뿐이라 **번호가 안 온다.** 번호는
@@ -293,7 +297,7 @@ if [ "$nwant" -gt 0 ]; then
   # 🔴 FC 가 붙어 있는 지금(브리지 정지 중)만 물어볼 수 있다. 목록 조회일 뿐
   #    FC 상태는 바꾸지 않는다. 실제로 이름을 붙이는 것은 **야외 판정이 끝난
   #    뒤 랩서버에서** 한다 — 지울 것에 번호를 붙일 이유가 없다.
-  if [ ${#FETCHED[@]} -gt 0 ]; then
+  if [ ${#FETCHED[@]} -gt 0 ] || [ "${NEEDNUM:-0}" -gt 0 ]; then
     if "${SSHL[@]}" "$FC_HOST" "cd /tmp && $FC_VENV fclist.py --save /tmp/fcentries.json >/dev/null 2>&1" \
        && scp -q -o BatchMode=yes "$FC_HOST:/tmp/fcentries.json" "$SCRATCH/entries.json" 2>/dev/null; then
       say "  FC 엔트리 목록 받음"

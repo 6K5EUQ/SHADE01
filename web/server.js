@@ -134,7 +134,11 @@ async function reconcile() {
     const rowPath = path.join(CACHE_DIR, `${id}.row.json`);
     try {
       const row = JSON.parse(await fsp.readFile(rowPath, 'utf8'));
-      catalog.set(id, { ...row, id, file });
+      // 🔴 이름은 **디스크가 정본이다.** 캐시 키가 내용 해시라 파일을 개명해도
+      //    같은 캐시를 쓰는데, 그 안에는 굽던 때의 옛 이름이 박혀 있다. 그대로
+      //    쓰면 파일은 log_246 인데 목록에는 2026-09-05_09_34_04 로 뜬다
+      //    (실측 2026-09-06: 번호를 붙였는데 웹에만 옛 이름이 남았다).
+      catalog.set(id, { ...row, name, id, file });
       continue;
     } catch { /* row 캐시 없음 */ }
 
@@ -147,7 +151,7 @@ async function reconcile() {
     try {
       const row = await ensureCached(id, file);
       const r = row || (await runExtract('row', file)).row;
-      catalog.set(id, { ...r, id, file });
+      catalog.set(id, { ...r, name, id, file });
       await fsp.writeFile(rowPath + '.tmp', JSON.stringify(r));
       await fsp.rename(rowPath + '.tmp', rowPath);
     } catch (e) {
