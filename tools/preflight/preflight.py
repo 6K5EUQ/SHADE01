@@ -160,11 +160,18 @@ def connect(explicit, verbose):
                               % (dev, busy[0], busy[1][:60])))
             else:
                 tries.append((dev, 'FC USB 직결'))
-        # 브리지 경유. 자기 Tailscale 주소로 보내야 브리지의 허용목록을 통과한다.
+        # 이 PC 에서 브리지가 돌 때 (자기 Tailscale 주소에 바인딩돼 있다).
         ts = tailscale_ip()
         if ts:
             tries.append(('udpout:%s:14550' % ts, '브리지 UDP 경유'))
         tries.append(('udpout:127.0.0.1:14550', '브리지 UDP (로컬)'))
+        # 🔴 FC 가 **다른 PC** 에 꽂혀 있어도 점검할 수 있다. 브리지는 상행을
+        #    Tailscale 로 흘리므로, 분석 PC(ku)에서 정비 PC(rim3)의 FC 를 그대로
+        #    읽는다 — 실측 3.8초, 값이 직접 실행과 같았다. 기체 옆으로 갈 필요가 없다.
+        for host, name in bridge_hosts():
+            if ts and host == ts:
+                continue
+            tries.append(('udpout:%s:14550' % host, '%s 의 브리지 경유' % name))
 
     notes = []
     for conn, why in tries:
@@ -182,16 +189,21 @@ def connect(explicit, verbose):
             continue
 
         # 🔴 udpout 은 우리가 먼저 말을 걸어야 브리지가 peer 로 등록한다.
-        #    안 그러면 하행이 영영 안 온다 (실측: 15초 기다려도 무응답).
+        #    안 그러면 하행이 영영 안 온다 (실측: 가만히 기다리면 무응답).
+        #
+        # 후보당 예산을 짧게 준다. 살아 있는 경로는 첫 왕복(<1초)에 답하므로,
+        # 오래 기다려서 얻는 것은 죽은 경로에서 버리는 시간뿐이다 — 후보를
+        # 넷 훑던 초기 판이 15.5초였고 대부분이 그 낭비였다.
         t0 = time.time()
         hb = None
-        for _ in range(6):
+        budget = 4.0 if conn.startswith('/dev/') else 1.8
+        while time.time() - t0 < budget:
             try:
                 m.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_GCS,
                                      mavutil.mavlink.MAV_AUTOPILOT_INVALID, 0, 0, 0)
             except Exception:
                 pass
-            hb = m.wait_heartbeat(timeout=1)
+            hb = m.wait_heartbeat(timeout=0.45)
             if hb:
                 break
         if hb:
@@ -202,6 +214,37 @@ def connect(explicit, verbose):
         except Exception:
             pass
     return None, None, 0, notes
+
+
+# 브리지가 돌 만한 PC. Tailscale 이름으로 찾는다 — IP 를 박으면 주소가 바뀔 때
+# 조용히 안 붙는다 (gcs/ACCESS.md 가 이름을 쓰라고 하는 것과 같은 이유).
+BRIDGE_HOSTS = ('rim3', 'raspb1-dgs3', 'ku-dgs1', 'rim')
+
+
+def bridge_hosts():
+    """Tailscale 에서 온라인인 후보를 (ip, 이름) 으로 준다."""
+    try:
+        out = subprocess.run(['tailscale', 'status'], capture_output=True,
+                             text=True, timeout=5).stdout
+    except Exception:
+        return []
+    found, seen = [], set()
+    for line in out.splitlines():
+        f = line.split()
+        if len(f) < 2:
+            continue
+        ip, name = f[0], f[1]
+        short = name.split('.')[0]
+        if 'offline' in line:
+            continue
+        for want in BRIDGE_HOSTS:
+            if short == want or short.startswith(want):
+                if ip not in seen:
+                    seen.add(ip)
+                    found.append((ip, short))
+    # BRIDGE_HOSTS 의 순서를 우선순위로 쓴다
+    return sorted(found, key=lambda x: next(
+        (i for i, w in enumerate(BRIDGE_HOSTS) if x[1].startswith(w)), 99))
 
 
 def tailscale_ip():
