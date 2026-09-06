@@ -417,7 +417,15 @@ async function serveLiveAsset(req, res, urlPath) {
   }
 
   const type = TYPES[path.extname(name).toLowerCase()] || 'application/octet-stream';
-  send(req, res, 200, buf, type, { 'Cache-Control': 'no-cache' });
+  // 🔴 HTML 은 `no-store` 다. `no-cache` 는 "쓰기 전에 물어봐라" 인데 CDN 이
+  //    ETag 를 떼어 가면 물어볼 지문이 없어 옛 사본이 그대로 쓰인다. HTML 이
+  //    낡으면 그 안의 ?v= 지문까지 옛것이라 자산 버전까지 통째로 굳는다 —
+  //    화면이 안 바뀌는 것처럼 보이는 마지막 고리다. HTML 은 8KB 라 매번
+  //    받아도 싸다. 자산(js/css)은 ?v= 가 지키므로 캐시해도 안전하다.
+  const cache = name.endsWith('.html')
+    ? 'no-store, no-cache, must-revalidate'
+    : 'public, max-age=31536000, immutable';
+  send(req, res, 200, buf, type, { 'Cache-Control': cache });
 }
 
 async function serveStatic(req, res, urlPath) {
