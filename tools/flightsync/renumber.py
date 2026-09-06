@@ -58,9 +58,19 @@ def main():
         if n.startswith('REF_'):
             continue                       # 웹 참조 로그 — 우리 기체가 아니다
         if n not in hit or not f['end']:
-            unmatched.append((n, '엔트리와 안 맞음'))
+            # 이미 번호가 붙어 있으면 문제가 아니다 — 크기가 어긋나는 것은
+            # 손으로 고친 사본(파싱을 다시 살린 것)이라 그렇다.
+            if not LN.QGC_NAME.match(n):
+                unmatched.append((n, '엔트리와 안 맞음'))
             continue
         num, why = hit[n]
+        # 🔴 번호가 이미 맞으면 그대로 둔다. 이름 속 시각이 1~2초 달라도
+        #    건드리지 않는다 — QGC 가 붙인 종료시각과 우리가 계산한 값이
+        #    반올림에서 갈리는데, 그것 때문에 매번 개명하면 파일 이름이
+        #    돌 때마다 흔들린다 (실측: 안정된 로그 9개가 매 실행 대상이 됐다).
+        m = LN.QGC_NAME.match(n)
+        if m and int(m.group(1)) == num:
+            continue
         if why != 'size':
             # 크기까지 안 맞으면 붙이지 않는다. 같은 크기의 다른 로그와 헷갈릴
             # 수 있고, 틀린 번호는 없는 번호보다 나쁘다.
