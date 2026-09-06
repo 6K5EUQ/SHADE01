@@ -55,11 +55,27 @@ install_unit() {
 #   backpack — 조종기 백팩 AP 에 붙어 있다 (10.0.0.1 이 응답)
 #   none     — 둘 다 아니다
 detect_path() {
-  # 1) 이미 프레임이 들어오는 중이면 그게 정답이다 — 어느 경로든 상관없다.
+  # 1) 이미 프레임이 들어오는 중이면 그게 정답이다. 다만 **어느 경로로** 들어오는
+  #    중인지까지 봐야 한다 — 트래커가 이미 보낸 쪽 주소로 갈라 `link` 에 넣어
+  #    준다 ('ELRS' = 백팩 10.0.0.x, 'USB' = 브리지).
+  #
+  # 🔴 예전에는 여기서 무조건 `usb` 를 뱉었다. 그래서 USB 를 뽑고 백팩으로
+  #    갈아탄 뒤 `./qgc live on` 을 하면, 백팩으로 프레임이 멀쩡히 들어오는데도
+  #    "경로: USB 직결/브리지" 로 잡히고 poker 가 꺼졌다. 백팩은 먼저 말을
+  #    걸어온 곳에만 보내므로, 남아 있던 세션이 끊기면 그대로 조용해졌다
+  #    (실측 rim3 2026-09-06). 트래커가 아는 답을 버리지 말고 그대로 쓴다.
   if systemctl --user is-active --quiet "$UNIT" 2>/dev/null && \
      command -v curl >/dev/null 2>&1; then
-    if curl -s --max-time 2 "http://127.0.0.1:${HTTP_PORT}/api/state?track=0" 2>/dev/null \
-       | grep -q '"live": true'; then echo usb; return; fi
+    local js kind
+    js="$(curl -s --max-time 2 "http://127.0.0.1:${HTTP_PORT}/api/state?track=0" 2>/dev/null || true)"
+    if printf '%s' "$js" | grep -q '"live": true'; then
+      kind="$(printf '%s' "$js" | grep -oE '"link"[[:space:]]*:[[:space:]]*"[A-Za-z]+"' \
+              | grep -oE '"[A-Za-z]+"$' | tr -d '"' || true)"
+      case "$kind" in
+        ELRS) echo backpack; return ;;
+        *)    echo usb; return ;;
+      esac
+    fi
   fi
 
   # 2) FC 가 이 PC 에 **실제로 꽂혀 있으면** USB 경로.
