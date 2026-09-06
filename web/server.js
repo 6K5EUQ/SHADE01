@@ -379,12 +379,43 @@ const LIVE_FILES = new Map([
   ['/live.js', 'live.js'],
 ]);
 
+/** 🔴 CDN 이 ETag 를 떼어 간다 — 그래서 URL 자체에 지문을 박는다.
+ *
+ *  원본은 `Cache-Control: no-cache` 와 ETag 를 정확히 내는데, Cloudflare 를
+ *  거치면 ETag 가 사라진다 (2026-09-06 실측: 원본 O, 엣지 X). 검증할 지문이
+ *  없으면 브라우저는 옛 사본을 그냥 쓴다 — 계기판이 안 바뀌던 원인이다.
+ *
+ *  그래서 HTML 을 내보낼 때 `/live.js` → `/live.js?v=<본문해시>` 로 바꾼다.
+ *  내용이 바뀌면 URL 이 바뀌므로 CDN·브라우저 어느 쪽도 옛것을 못 준다.
+ *  HTML 자체는 `no-cache` 로 매번 새로 오므로(엣지도 DYNAMIC 이다) 이
+ *  치환 결과가 곧바로 반영된다.
+ *
+ *  로컬호스트(mav_live.py)는 CDN 이 없어 원래 문제가 없다. 같은 파일을
+ *  쓰므로 화면은 양쪽이 동일하고, 여기서 붙는 쿼리는 무시해도 무해하다.
+ */
+const assetTag = (buf) =>
+  crypto.createHash('sha1').update(buf).digest('base64url').slice(0, 10);
+
 async function serveLiveAsset(req, res, urlPath) {
   const name = LIVE_FILES.get(urlPath);
   if (!name) return send(req, res, 404, '없다', 'text/plain; charset=utf-8');
   let buf;
   try { buf = await fsp.readFile(path.join(LIVE_PUBLIC, name)); }
   catch { return send(req, res, 404, '없다', 'text/plain; charset=utf-8'); }
+
+  if (name === 'index.html') {
+    // 같이 딸려 나가는 것들의 지문을 읽어 URL 에 박는다. 하나라도 못 읽으면
+    // 그 파일만 원래대로 둔다 — 화면이 안 뜨는 것보다 캐시가 낡는 편이 낫다.
+    let html = buf.toString('utf8');
+    for (const asset of ['live.js', 'live.css']) {
+      try {
+        const v = assetTag(await fsp.readFile(path.join(LIVE_PUBLIC, asset)));
+        html = html.split(`"/${asset}"`).join(`"/${asset}?v=${v}"`);
+      } catch { /* 그 파일은 그대로 둔다 */ }
+    }
+    buf = Buffer.from(html, 'utf8');
+  }
+
   const type = TYPES[path.extname(name).toLowerCase()] || 'application/octet-stream';
   send(req, res, 200, buf, type, { 'Cache-Control': 'no-cache' });
 }
