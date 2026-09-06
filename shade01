@@ -10,6 +10,8 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# 종료코드: 도움말을 **달라고 해서** 준 것은 성공(0), 잘못 써서 나온 것은 실패(1).
+# 스크립트가 ./shade01 help 로 존재 확인을 할 때 1 이면 없는 것으로 읽힌다.
 usage() {
   cat >&2 <<'USAGE'
 사용법:
@@ -32,7 +34,7 @@ usage() {
 
 절차 전문: FLIGHT-SYNC.md · 비행 전 점검: skills/preflight/SKILL.md
 USAGE
-  exit 1
+  exit "${1:-1}"
 }
 
 [ $# -ge 1 ] || usage
@@ -53,6 +55,6 @@ case "$1" in
   log)  shift; [ $# -ge 1 ] || set -- list
         exec "$HERE/tools/qgclog/qgclog" "$@" ;;
   live) shift; exec "$HERE/tools/live/livectl" "$@" ;;
-  -h|--help|help) usage ;;
+  -h|--help|help) usage 0 ;;
   *) echo "모르는 명령: $1" >&2; usage ;;
 esac
