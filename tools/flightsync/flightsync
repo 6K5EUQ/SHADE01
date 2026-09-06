@@ -123,6 +123,24 @@ bridge() {
   esac
 }
 
+# 브리지가 포트를 놓을 때까지 기다린다. 상한 15초.
+# 장치 경로는 fcfetch.py 의 기본값(`--device /dev/ttyACM0`)과 같은 것을 본다 —
+# flightsync 는 그 인자를 넘기지 않으므로 둘이 갈릴 일이 없다.
+FC_DEV="${FC_DEV:-/dev/ttyACM0}"
+wait_port_free() {
+  local waited=0 holder
+  while [ "$waited" -lt 15 ]; do
+    # fuser 는 점유자가 없으면 비어 있는 출력과 함께 1 을 낸다.
+    holder=$("${SSHL[@]}" "$FC_HOST" "fuser $FC_DEV 2>/dev/null" 2>/dev/null | tr -d ' \n')
+    [ -z "$holder" ] && { [ "$waited" -gt 0 ] && say "  포트 정리됨 (${waited}초)"; return 0; }
+    sleep 1; waited=$((waited + 1))
+  done
+  # 여기까지 왔으면 브리지가 아닌 무언가가 쥐고 있을 수 있다 (fcfetch·QGC).
+  # 막지는 않는다 — 2단계가 실패하면 거기서 시끄럽게 죽는다.
+  say "  ⚠️ ${FC_DEV} 가 15초째 점유 중 (PID $holder) — 그대로 진행한다"
+  return 1
+}
+
 STOPPED=0
 restore() {
   [ "$STOPPED" = 1 ] || return 0
@@ -148,6 +166,26 @@ if [ "$BRIDGE_SCOPE" = "none" ]; then
 else
   bridge stop && STOPPED=1
   say "  브리지 정지 ($BRIDGE_SCOPE/$BRIDGE_UNIT) — QGC 링크가 잠시 끊긴다"
+
+  # 🔴 `systemctl stop` 이 돌아왔다고 포트가 빈 것이 아니다. 유닛이 멈췄다고
+  #    보고한 뒤에도 커널이 fd 를 회수하고 CDC-ACM 을 정리하기까지 시간이 더
+  #    걸린다. 그 틈에 MAVFTP 를 열면 조회가 통째로 실패한다 —
+  #
+  #      SerialException: device reports readiness to read but returned no
+  #      data (device disconnected or multiple access on port?)
+  #
+  #    2026-09-06 실측: 폴더 11개 중 뒤쪽 5개(09-01·02·04·05·06)가 3회 재시도를
+  #    전부 태우고 실패했고, FC 로그가 251개인데 130개로 보였다. 앞쪽 폴더는
+  #    통과했다 — 뒤로 갈수록 파일이 많아 조회가 길고, 그만큼 경합에 오래
+  #    노출된다. 곧바로 다시 돌리니 11개가 전부 읽혔다.
+  #
+  #    2단계의 `sleep 2` 재시도로는 못 막는다. 그 재시도는 pymavlink 2.4.49 의
+  #    산발적 TypeError 를 겨냥한 것이라 "한 번 실패하고 다음엔 되는" 종류를
+  #    전제한다. 포트 점유는 조건이 풀릴 때까지 계속 실패하므로 4초 유예를
+  #    3회 태우고 같이 죽는다. 재시도를 늘릴 것이 아니라 여기서 기다려야 한다.
+  #
+  #    포트가 비면 즉시 통과하므로 정상 실행은 느려지지 않는다.
+  wait_port_free
 fi
 
 scp -q -o BatchMode=yes -o ConnectTimeout=60 \
