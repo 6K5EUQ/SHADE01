@@ -23,6 +23,9 @@ const { execFile } = require('child_process');
 
 const REPO = path.dirname(__dirname);
 const PUBLIC = path.join(__dirname, 'public');
+// 라이브 화면은 로컬 트래커와 **같은 파일**을 쓴다 (web/live/public/).
+// 사본을 두면 한쪽만 고쳐져 두 화면이 갈라진다 — 그래서 여기서 그대로 낸다.
+const LIVE_PUBLIC = path.join(__dirname, 'live', 'public');
 
 const PORT = parseInt(process.env.PORT || '4300', 10);
 const BIND = process.env.BIND_ADDR || '127.0.0.1';
@@ -33,6 +36,9 @@ const PY = process.env.QGCLOG_PYTHON || path.join(REPO, '.venv', 'bin', 'python'
 const EXTRACT = path.join(__dirname, 'extract.py');
 const UPLOAD_PASSWORD = process.env.UPLOAD_PASSWORD || '';
 const MAX_UPLOAD = parseInt(process.env.MAX_UPLOAD || String(64 * 1024 * 1024), 10);
+// 라이브 중계용 암호. rim3 의 livepush.py 가 같은 값을 보낸다.
+// 🔴 비우면 라이브 **수신**이 막힌다 (보기는 계속 공개다).
+const LIVE_PUSH_KEY = process.env.LIVE_PUSH_KEY || '';
 const PARSE_TIMEOUT = parseInt(process.env.PARSE_TIMEOUT || '60000', 10);
 const MAX_JOBS = parseInt(process.env.MAX_JOBS || '3', 10);
 
@@ -338,6 +344,28 @@ async function handleUpload(req, res) {
 }
 
 // ── 정적 파일 ────────────────────────────────────────────────────────
+/** 라이브 화면의 정적 파일. web/live/public/ 안의 **허용 목록**만 낸다.
+ *
+ * 🔴 serveStatic 처럼 임의 경로를 받지 않는다. 그 폴더에는 화면과 상관없는
+ *    것(_selftest.html 등)도 있고, 무엇보다 루트를 하나 더 여는 것 자체가
+ *    경로 탈출 표면을 늘린다. 필요한 네 개만 이름으로 건다.
+ */
+const LIVE_FILES = new Map([
+  ['/live/index.html', 'index.html'],
+  ['/live.css', 'live.css'],
+  ['/live.js', 'live.js'],
+]);
+
+async function serveLiveAsset(req, res, urlPath) {
+  const name = LIVE_FILES.get(urlPath);
+  if (!name) return send(req, res, 404, '없다', 'text/plain; charset=utf-8');
+  let buf;
+  try { buf = await fsp.readFile(path.join(LIVE_PUBLIC, name)); }
+  catch { return send(req, res, 404, '없다', 'text/plain; charset=utf-8'); }
+  const type = TYPES[path.extname(name).toLowerCase()] || 'application/octet-stream';
+  send(req, res, 200, buf, type, { 'Cache-Control': 'no-cache' });
+}
+
 async function serveStatic(req, res, urlPath) {
   const rel = urlPath === '/' ? 'index.html' : decodeURIComponent(urlPath).slice(1);
   const file = path.normalize(path.join(PUBLIC, rel));
@@ -351,6 +379,131 @@ async function serveStatic(req, res, urlPath) {
   const cache = file.includes(path.sep + 'vendor' + path.sep)
     ? 'public, max-age=604800' : 'no-cache';
   send(req, res, 200, buf, type, { 'Cache-Control': cache });
+}
+
+// ── 라이브 중계 ──────────────────────────────────────────────────────
+// 🔴 **현장 노트북은 rim3 다.** 비행 나갈 때 들고 나가는 PC 가 rim3 이고, FC 는
+//    거기에 USB 나 ELRS 백팩으로 붙는다. 이 서버는 FC 를 **직접 못 본다** —
+//    rim3 의 livepush.py 가 1초마다 밀어 올리는 것을 받아 들고 있을 뿐이다.
+//    그래서 rim3 가 꺼져 있거나 인터넷이 없으면 라이브도 없다. 정상이다.
+//
+// 🔴 **한 방향뿐이다.** 받기만 하고, 여기서 기체로 나가는 경로는 없다.
+//    트래커(mav_live.py)가 소켓에 쓰는 코드 0줄이라는 성질을 웹까지 이어 놓은
+//    것이다 — 웹에서 ARM·모드변경을 할 길이 구조적으로 존재하지 않는다.
+//
+// 메모리에만 둔다. 디스크에 안 쓰는 이유: 라이브는 지금 이 순간의 값이고,
+// 재시작하면 rim3 가 다음 초에 다시 보낸다. 정본은 비행 후 .ulg 로 올라온다.
+const live = {
+  at: 0,            // 마지막으로 받은 시각 (Date.now)
+  state: null,      // 마지막 스냅샷 (항적 제외)
+  track: [],        // 누적 항적 [[lat,lon,alt], ...]
+  dropped: 0,       // 앞에서 버린 점 개수 (증분 프로토콜의 기준)
+  pusher: null,     // 어느 PC 가 올렸나
+};
+
+// 항적 상한. 트래커와 같은 값이다 — 5Hz 로 40분이면 12000 점.
+const LIVE_TRACK_MAX = 12000;
+
+// 이 시간 동안 안 올라오면 「끊김」으로 본다. 중계 주기(1초)의 몇 배로 잡는다 —
+// LTE 로 올리면 한두 번은 늦을 수 있다.
+const LIVE_STALE_MS = 12000;
+
+function livePushOk(given) {
+  if (!LIVE_PUSH_KEY) return false;
+  const a = Buffer.from(String(given || ''));
+  const b = Buffer.from(LIVE_PUSH_KEY);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+async function handleLivePush(req, res) {
+  if (!livePushOk(req.headers['x-live-key'])) {
+    return sendJson(req, res, 403, { error: '라이브 키가 맞지 않는다' });
+  }
+  let raw;
+  // 스냅샷 하나는 항적을 빼면 1~2KB 다. 1MB 면 넘치고도 남는다.
+  try { raw = await readBody(req, 1024 * 1024); }
+  catch { return sendJson(req, res, 413, { error: '너무 크다' }); }
+
+  let snap;
+  try { snap = JSON.parse(raw.toString('utf8')); }
+  catch { return sendJson(req, res, 400, { error: 'JSON 이 아니다' }); }
+  if (!snap || typeof snap !== 'object') {
+    return sendJson(req, res, 400, { error: '객체가 아니다' });
+  }
+
+  // 🔴 항적은 **증분**으로 온다. `track_from` 이 이 묶음의 첫 점이 전체에서
+  //    몇 번째인지 말해 준다. 그것이 우리가 가진 개수와 맞을 때만 이어 붙이고,
+  //    어긋나면(서버 재시작·rim3 재시작) 통째로 갈아 끼운다 — 안 그러면
+  //    지도에 궤적이 조용히 빠지거나 겹친다.
+  const inc = Array.isArray(snap.track) ? snap.track : [];
+  const from = Number.isInteger(snap.track_from) ? snap.track_from : 0;
+  const have = live.dropped + live.track.length;
+  if (from === have) {
+    for (const pt of inc) live.track.push(pt);
+  } else if (from === 0) {
+    live.track = inc.slice();
+    live.dropped = 0;
+  } else if (from < have) {
+    // 겹치는 만큼 건너뛰고 나머지만 붙인다.
+    const skip = have - from;
+    if (skip < inc.length) for (const pt of inc.slice(skip)) live.track.push(pt);
+  } else {
+    // 구멍이 생겼다 — 다음 푸시에서 처음부터 받도록 0 을 돌려준다.
+    live.track = [];
+    live.dropped = 0;
+  }
+  if (live.track.length > LIVE_TRACK_MAX) {
+    const cut = live.track.length - LIVE_TRACK_MAX;
+    live.track.splice(0, cut);
+    live.dropped += cut;
+  }
+
+  delete snap.track;
+  live.state = snap;
+  live.at = Date.now();
+  live.pusher = typeof snap.pusher === 'string' ? snap.pusher.slice(0, 40) : null;
+
+  // 다음에 어디서부터 보내면 되는지 알려 준다.
+  return sendJson(req, res, 200, { ok: true, track_n: live.dropped + live.track.length });
+}
+
+/** 라이브 페이지가 폴링한다. 트래커의 /api/state 와 **같은 모양**이어야 한다 —
+ *  같은 live.js 가 로컬에서도 여기서도 돌기 때문이다. */
+function handleLiveState(req, res, url) {
+  const stale = !live.state || (Date.now() - live.at) > LIVE_STALE_MS;
+  if (!live.state) {
+    return sendJson(req, res, 200, {
+      live: false, seq: 0, age: null, packets: 0, bytes: 0,
+      src: null, link: null, links: {}, sysid: null, uptime: 0,
+      d: {}, home: null, mission: [],
+      track_n: 0, track_from: 0, track: [], messages: [],
+      rec: null, play: null,
+      relay: { pusher: null, age: null, note: '아직 아무 PC 도 안 올렸다' },
+    });
+  }
+
+  let since = parseInt(url.searchParams.get('since') || '0', 10);
+  if (!Number.isFinite(since) || since < 0) since = 0;
+  const wantTrack = url.searchParams.get('track') !== '0';
+  const start = since < live.dropped ? 0 : Math.min(since - live.dropped, live.track.length);
+
+  const ageS = (Date.now() - live.at) / 1000;
+  const out = {
+    ...live.state,
+    // 🔴 중계가 끊기면 화면도 끊긴 것으로 보여야 한다. rim3 가 보낸 마지막
+    //    `live: true` 를 그대로 흘리면, 노트북을 닫고 집에 온 뒤에도 웹은
+    //    기체가 떠 있는 것처럼 보인다.
+    live: stale ? false : !!live.state.live,
+    age: stale ? ageS : live.state.age,
+    track_n: live.dropped + live.track.length,
+    track_from: live.dropped + start,
+    track: wantTrack ? live.track.slice(start) : [],
+    // 로컬 트래커에는 없는 칸. 어느 PC 가 언제 올렸는지 화면이 말할 수 있게.
+    relay: { pusher: live.pusher, age: Math.round(ageS * 10) / 10, note: null },
+  };
+  // 재생은 로컬 트래커에만 있다. 웹에서는 지난 비행을 /log/<id> 로 본다.
+  out.play = null;
+  return sendJson(req, res, 200, out);
 }
 
 // ── 라우팅 ───────────────────────────────────────────────────────────
@@ -400,11 +553,18 @@ async function route(req, res) {
 
   if (p === '/api/upload' && req.method === 'POST') return handleUpload(req, res);
 
+  // 라이브 — rim3 가 밀어 올리고(POST), 브라우저가 폴링한다(GET).
+  if (p === '/api/live/push' && req.method === 'POST') return handleLivePush(req, res);
+  if (p === '/api/live/state' && req.method === 'GET') return handleLiveState(req, res, url);
+
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return send(req, res, 405, '허용하지 않는 메서드', 'text/plain; charset=utf-8');
   }
   // /log/<id> 는 분석 페이지. 실제 파일은 log.html 이다.
   if (/^\/log\/[0-9a-f]{16}$/.test(p)) return serveStatic(req, res, '/log.html');
+  // /live 는 실시간 화면. 로컬 트래커(:4400)와 **같은 파일**을 쓴다.
+  if (p === '/live' || p === '/live/') return serveLiveAsset(req, res, '/live/index.html');
+  if (LIVE_FILES.has(p)) return serveLiveAsset(req, res, p);
   if (/^\/compare\b/.test(p)) return serveStatic(req, res, '/compare.html');
   return serveStatic(req, res, p);
 }

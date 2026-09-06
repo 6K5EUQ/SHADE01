@@ -19,6 +19,11 @@
   <label class="muted" style="font-size:12px;display:flex;align-items:center;gap:4px">
     <input type="checkbox" id="showAll"> 사본까지</label>
   <button id="cmpBtn" disabled>비교</button>
+  <!-- 실시간. 현장 노트북(rim3)이 밀어 올리는 동안에만 초록 점이 켜진다 —
+       기체가 안 떠 있으면 눌러도 「끊김」 화면이라, 눌러 볼 값어치가 있는지를
+       버튼 자체가 말해 준다. -->
+  <a class="btn" id="liveBtn" href="/live" title="지금 뜬 기체를 실시간으로">
+    <span class="livedot" id="liveDot"></span>실시간</a>
   <button class="primary" id="upBtn">업로드</button>
 </header>
 
@@ -187,4 +192,40 @@ $('#upForm').onsubmit = async (e) => {
 };
 
 load();
+
+// ── 실시간 버튼의 상태 점 ────────────────────────────────────────────
+// 🔴 **현장 노트북은 rim3 다.** 비행 나갈 때 들고 나가는 PC 가 rim3 이고, FC 는
+//    거기에 USB 나 ELRS 백팩으로 붙는다. rim3 가 꺼져 있거나 인터넷이 없으면
+//    점은 회색이다 — 서버 잘못이 아니라 올려 주는 PC 가 없는 것이다.
+//
+// 목록 화면에서는 느리게 본다(10초). 이 점은 "지금 눌러 볼 값어치가 있나" 만
+// 답하면 되고, 실제 계기는 /live 가 5Hz 로 긁는다.
+const LIVE_PING_MS = 10000;
+
+async function liveTick() {
+  const dot = $('#liveDot');
+  const btn = $('#liveBtn');
+  if (!dot || !btn) return;
+  try {
+    const r = await fetch('/api/live/state?track=0', { cache: 'no-store' });
+    const s = await r.json();
+    const on = !!s.live;
+    dot.classList.toggle('on', on);
+    if (on) {
+      const who = s.relay && s.relay.pusher ? ` · ${s.relay.pusher}` : '';
+      const mode = s.d && s.d.mode ? ` · ${s.d.mode}` : '';
+      btn.title = `실시간 수신 중${who}${mode} — 눌러서 보기`;
+    } else if (s.relay && s.relay.age != null) {
+      btn.title = `끊김 — 마지막 수신 ${Math.round(s.relay.age)}초 전`
+        + ' (현장 노트북 rim3 가 꺼졌거나 인터넷이 없다)';
+    } else {
+      btn.title = '지금은 안 뜬다 — 현장 노트북(rim3)이 올리는 중일 때만 켜진다';
+    }
+  } catch {
+    dot.classList.remove('on');
+    btn.title = '상태를 못 읽는다';
+  }
+}
+liveTick();
+setInterval(liveTick, LIVE_PING_MS);
 </script>

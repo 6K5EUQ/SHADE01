@@ -21,6 +21,14 @@
 
 'use strict';
 
+// 🔴 같은 파일이 **두 곳에서** 돈다:
+//      로컬 트래커 (rim3 :4400)      → /api/state
+//      shade01.bewe.co.kr  /live     → /api/live/state   (rim3 가 밀어 올린 것)
+//    화면·계기·차트는 완전히 같아야 하므로 파일을 나누지 않고, **어느 API 를
+//    두드릴지만** 갈라 놓는다. 웹에서는 재생·기록이 없다 (로컬 전용이다).
+const ON_WEB = location.pathname.startsWith('/live');
+const API_STATE = ON_WEB ? '/api/live/state' : '/api/state';
+
 const POLL_MS = 200;
 
 // ── 계기 스케일 상수. 빌드와 layout() 이 같은 값을 읽는다 (두 벌이 되면 어긋난다) ──
@@ -1232,20 +1240,37 @@ async function poll() {
   try {
     // track=0 — 지도를 뺐으므로 항적은 안 받는다. 긴 비행에서 폴마다 수백 KB 가
     // 오가는 것을 막는다 (서버는 개수만 알려 준다).
-    const r = await fetch('/api/state?track=0', { cache: 'no-store' });
+    const r = await fetch(API_STATE + '?track=0', { cache: 'no-store' });
     if (r.ok) render(await r.json());
   } catch (e) {
     // 서버가 죽었을 때도 점으로 말한다 — 깜빡이는 빨강.
     const dot = $('dot');
     dot.dataset.st = '서버 없음';
     dot.className = 'dot bad';
-    dot.title = '서버 없음 — mav_live.py 가 안 떠 있다';
+    dot.title = ON_WEB ? '웹서버에 못 닿는다' : '서버 없음 — mav_live.py 가 안 떠 있다';
     setText($('stats'), '서버 없음');
   }
   setTimeout(poll, POLL_MS);
 }
 
 // ── 기동 ────────────────────────────────────────────────────────────
+// 웹(shade01.bewe.co.kr/live)에서는 로컬 전용 기능을 숨긴다. 재생·기록은 현장
+// 노트북(rim3)의 파일을 다루는 것이라 웹에는 그 파일이 없다 — 버튼만 남겨 두면
+// 눌렀을 때 조용히 아무 일도 안 일어난다.
+if (ON_WEB) {
+  document.documentElement.classList.add('on-web');
+  for (const id of ['pbOpen']) { const el = $(id); if (el) el.hidden = true; }
+  // 목록으로 돌아가는 길. 웹에서는 이 페이지가 사이트의 한 페이지다.
+  const back = document.createElement('a');
+  back.href = '/';
+  back.textContent = '← 로그 목록';
+  back.className = 'weblink';
+  back.title = 'shade01 비행로그 목록으로';
+  // 하단 바의 첫 칸(링크 점) 앞에 끼운다. 여기가 화면에서 유일한 조작 줄이다.
+  const bar = document.querySelector('#chartPane .msgs .hd');
+  if (bar) bar.insertBefore(back, bar.firstChild);
+}
+
 buildHUD();
 resolveColors();      // 반드시 buildCharts 앞에 — 범례·선이 같은 색을 쓴다
 buildToc();

@@ -64,6 +64,24 @@ button:disabled { opacity: .45; cursor: default; }
 button.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
 button.primary:hover { background: #2b7cf3; }
 
+/* 실시간 버튼. `.btn` 은 <a> 라 글자색·밑줄을 따로 잡는다. */
+#liveBtn { text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+/* 상태 점 — 회색(모름/끊김) / 초록(수신 중). 색만으로 말하지 않는다:
+   title 에 같은 내용이 글로 들어간다 (색각 이상·스크린리더). */
+.livedot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--muted); flex: none;
+}
+.livedot.on {
+  background: #3fb950;
+  /* 켜져 있을 때만 은은하게 숨쉰다. 꺼져 있으면 정지 — 안 움직이는 것이
+     "지금 아무 일도 없다" 는 뜻이다. */
+  animation: livepulse 2s ease-in-out infinite;
+}
+@keyframes livepulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+/* 🔴 애니메이션을 끄라고 한 사용자에게는 끈다. */
+@media (prefers-reduced-motion: reduce) { .livedot.on { animation: none; } }
+
 input[type=text], input[type=password], input[type=search], select {
   background: var(--bg); color: var(--text);
   border: 1px solid var(--border-2); border-radius: 6px;
