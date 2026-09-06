@@ -50,7 +50,31 @@ CACHE_S = 30.0
 
 
 def _remote_list():
-    """labserver 의 `.ulg` 목록. [(이름, 크기)]. 못 받으면 None."""
+    """정본의 `.ulg` 목록. [(이름, 크기)]. 못 받으면 None.
+
+    🔴 **랩서버 자신이 정본일 때는 ssh 를 타지 않는다.** `SHADE_LOG_HOST` 가
+       비어 있으면 "원격이 없다" 가 아니라 "내가 정본이다" 라는 뜻이다 —
+       `REMOTE_DIR` 을 그 자리에서 읽는다. 자기 자신에게 ssh 하면 키가
+       있어야 하고, 없으면 목록이 통째로 비어 웹 재생이 죽는다 (2026-09-06
+       실측: `그런 로그가 없다`).
+
+       정본이 목록을 정한다는 원칙은 그대로다 — 읽는 곳이 로컬 디스크로
+       바뀔 뿐, 그 디렉토리가 정본이다.
+    """
+    if not REMOTE_HOST:
+        d = os.path.expanduser(REMOTE_DIR)
+        try:
+            names = [n for n in os.listdir(d) if n.endswith('.ulg')]
+        except OSError:
+            return None
+        out = []
+        for n in names:
+            try:
+                out.append((n, os.path.getsize(os.path.join(d, n))))
+            except OSError:
+                pass
+        return out or None
+
     cmd = _SSH + [REMOTE_HOST,
                   'cd %s && stat -c "%%s %%n" *.ulg 2>/dev/null' % REMOTE_DIR]
     try:
