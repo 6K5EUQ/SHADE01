@@ -292,19 +292,22 @@ cd ~/SHADE01 && git pull --ff-only
 ssh ku@ku-labserver 'cd ~/SHADE01 && git pull --ff-only'
 ssh ku@ku-labserver 'sudo systemctl restart lab-shade01'   # server.js 를 고쳤을 때만
 
-#   2-3. 나머지 뷰어 PC
-ssh rim3@rim3        'cd ~/SHADE01 && git pull --ff-only'
-ssh rim@100.107.83.47 'cd ~/SHADE01 && git pull --ff-only'
+#   2-3. 나머지 뷰어 PC — gram 도 이제 ku 에서 들어간다 (2026-09-06)
+ssh rim3@rim3            'cd ~/SHADE01 && git pull --ff-only'
+ssh dsa@100.66.204.25    'cd ~/SHADE01 && git pull --ff-only'   # gram
+ssh rim@100.107.83.47    'cd ~/SHADE01 && git pull --ff-only'   # ⚠️ ku 에서는 안 된다, 아래
 
-# 3. gram 은 아무도 못 들어간다 → gram 앞에서 직접
-#    cd ~/SHADE01 && git pull --ff-only
-
-# 4. 검증 — **캐시버스터를 붙이지 마라** (아래)
+# 3. 검증 — **캐시버스터를 붙이지 마라** (아래)
 curl -s https://shade01.bewe.co.kr/live | grep -o 'id="sc-[a-z]*"' | head -6
 ```
 
-⚠️ `rim` 은 MagicDNS 가 없어 **이름을 못 쓴다** — IP 로 부른다. 같은 이유로
-`rim → rim3` 은 아예 도달하지 못한다.
+🔴 **`rim` 만 예외다.** `rim` 은 **다른 tailnet(`yyrrm@`)** 에 있어 ku·gram 에서
+아예 도달하지 못한다 — `labserver` 하고만 통한다. rim 을 갱신하려면
+`ssh ku@ku-labserver` 로 들어가 거기서 `ssh rim@100.107.83.47` 한다.
+자세한 사정: [ACCESS.md](../../gcs/ACCESS.md#-rim-은-다른-tailnet-이다--키로-못-푼다)
+
+⚠️ **rim 은 뷰어를 안 띄운다면 갱신할 필요가 없다.** 화면이 뜨는 곳은
+랩서버(4300)·rim3·ku·gram 이다.
 
 ### 🔴 검증할 때 `?cb=…` 를 붙이지 마라
 

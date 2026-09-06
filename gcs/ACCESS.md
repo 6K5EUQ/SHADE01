@@ -29,52 +29,60 @@ gram 에 무언가를 설치하려면 **gram 앞에 앉아서** 하거나, gram 
 | `rim` | 100.107.83.47 | **`rim`** | `~/SHADE01` | 호스트명은 `RIM`. RTT ~0.3ms |
 | `raspb1-dgs3` | 100.126.161.1 | `raspb1` | (리포 없음) | 기체 컴패니언 — [PROCEDURE.md](../PROCEDURE.md) 참조 |
 
-### SSH 도달 매트릭스 (2026-09-06 전수 실측)
+### SSH 도달 매트릭스 (2026-09-06 전수 실측 · 키 등록 후)
 
-세로가 출발지, 가로가 목적지. **`ku` 가 중앙 PC 다** — gram 만 빼고 전부 나간다.
+세로가 출발지, 가로가 목적지. **`ku`·`rim3`·`gram`·`labserver` 4대는 서로 전부
+오간다.** 배포는 [ku 를 거친다](../web/live/README.md#-절차--배포는-ku-를-거친다).
 
 | ↓에서 →로 | ku | rim3 | rim | labserver | gram |
 |---|---|---|---|---|---|
-| **ku** | — | ✅ | ✅ | ✅ | ❌ 키 없음 |
-| **rim3** | ✅ | — | ❌ 키 없음 | ✅ | ❌ 키 없음 |
-| **rim** | ✅ | ❌ **도달 불가** | — | ✅ (IP 로만) | ❌ |
-| **labserver** | ✅ | ❌ 키 없음 | ✅ | — | ❌ 키 없음 |
-| **gram** | ? | ? | ? | ? | — |
+| **ku** | — | ✅ | ✅ | ✅ | ✅ |
+| **rim3** | ✅ | — | ✅ | ✅ | ✅ |
+| **gram** | ✅ | ✅ | ✅ | ✅ | — |
+| **labserver** | ✅ | ✅ | ✅ | — | ❌ |
+| **rim** | ❌ | ❌ | — | ✅ | ❌ |
 
-🔴 **`rim → rim3` 는 키 문제가 아니다.** `100.117.47.105:22` 가 **연결 자체로
-타임아웃**한다 (rim3 은 IP 로 22번이 안 열린다 — 위 주소표 참조). rim 에는
-MagicDNS 가 없어 `rim3` 이라는 **이름을 못 쓴다** (`Temporary failure in name
-resolution`). 키를 등록해도 안 붙는다 — **rim 에서 MagicDNS 를 켜야 한다.**
+2026-09-06 에 gram 의 `authorized_keys` 에 `ku`·`rim3` 키를, 각 PC 에 gram 키를
+넣어 **gram 이 처음으로 양방향으로 뚫렸다.** `rim3→rim`·`labserver→rim3` 도
+같이 메웠다.
 
-⚠️ `rim` 은 `ku-labserver` 도 이름으로 못 찾는다. IP(`100.86.239.31`)를 써야 한다.
+### 🔴 `rim` 은 다른 tailnet 이다 — 키로 못 푼다
 
-### 키를 등록해야 할 곳 — 사용자가 직접
+`rim` 은 **`yyrrm@` 계정**의 tailnet 에 있다. 거기서 보이는 것은 `ku-labserver`
+(`6K5EUQ@`, 공유된 것) 하나뿐이고 **`ku-dgs1`·`gram` 은 목록에 아예 없다.**
+ping 조차 안 간다 (`tcp 22 CLOSED`) — `authorized_keys` 를 아무리 넣어도 안 붙는다.
 
-아래를 각 PC 의 `~/.ssh/authorized_keys` 에 한 줄로 추가한다.
+⚠️ **`rim` 이 보는 `rim3` 은 우리 rim3 이 아니다.** rim 의 tailnet 에는
+`rim3 = 100.105.212.78` (4일 전 offline) 이라는 **다른 노드**가 있다. 우리가 쓰는
+rim3 은 `100.117.47.105` 다. 이름이 같아 헷갈리기 딱 좋다.
 
-**① gram 에 (`dsa` 계정)** — gram 은 아무도 못 들어간다. **gram 앞에 앉아서** 한다.
+**풀려면** `rim` 을 `6K5EUQ@` tailnet 으로 옮기거나, 필요한 노드를 rim 쪽으로
+공유해야 한다. 그 전까지 `rim` 은 **labserver 하고만** 통한다.
 
+⚠️ `labserver → gram` 만 아직 막혀 있다. labserver 의 공개키
+(`labserver-love-sync`)를 gram 의 `authorized_keys` 에 넣으면 열린다 — 급하지
+않다면 ku 를 경유하면 된다.
+
+### 키를 더 등록해야 할 때
+
+```bash
+# 받는 쪽 PC 에서 (또는 ku 를 거쳐)
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+cat >> ~/.ssh/authorized_keys <<'KEY'
+<보내는 쪽의 ~/.ssh/id_ed25519.pub 한 줄>
+KEY
+chmod 600 ~/.ssh/authorized_keys
 ```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOPMFV3mXT+XCFN7Mlxfk4te1NP1/d3ammlzhIGDz/IR ku@ku
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAHrVD8K7BonvmxjBtCeSrALGUehIIQwh/zr2uWoS3hq rim3@bewe
-```
 
-**② rim3 에 (`rim3` 계정)** — labserver 가 들어오려면 필요하다. `ku` 에서 할 수 있다.
+각 PC 공개키 (2026-09-06):
 
-```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOPMFV3mXT+XCFN7Mlxfk4te1NP1/d3ammlzhIGDz/IR ku@ku   # 이미 됨
-# labserver 공개키는 그 PC 에서 `cat ~/.ssh/id_ed25519.pub` 로 뽑아 넣는다
-```
-
-**③ rim 에 (`rim` 계정)** — rim3 에서 들어가려면 필요하다.
-
-```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAHrVD8K7BonvmxjBtCeSrALGUehIIQwh/zr2uWoS3hq rim3@bewe
-```
-
-**gram 이 나가는 쪽**은 gram 의 공개키가 있어야 검증할 수 있다. gram 앞에서
-`cat ~/.ssh/id_ed25519.pub` (없으면 `ssh-keygen -t ed25519`) 를 뽑아 주면
-나머지 PC 에 등록해 준다.
+| PC | 공개키 |
+|---|---|
+| ku | `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOPMFV3mXT+XCFN7Mlxfk4te1NP1/d3ammlzhIGDz/IR ku@ku` |
+| rim3 | `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAHrVD8K7BonvmxjBtCeSrALGUehIIQwh/zr2uWoS3hq rim3@bewe` |
+| gram | `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBqX9y81HzHHQ+hjhUN/ja1kGTmuQFj4KRn7KvOll3fU dsa@gram` |
+| rim | `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFcgpqpYFL0RdAB6/0oNZFgqgxfsQWzbnGgpEtHGkM5s` |
+| labserver | `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHD+Bu61aJCl/roKRazmvaPYHX18XtzccwsjbWia9c55 labserver-love-sync` |
 
 
 > ⚠️ **`rim` 은 붙는다 — 계정명이 `rim` 이다** (2026-09-04 실측). 이 문서는 오랫동안
