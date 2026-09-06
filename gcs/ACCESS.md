@@ -39,12 +39,16 @@ gram 에 무언가를 설치하려면 **gram 앞에 앉아서** 하거나, gram 
 | **ku** | — | ✅ | ✅ | ✅ | ✅ |
 | **rim3** | ✅ | — | ✅ | ✅ | ✅ |
 | **gram** | ✅ | ✅ | ✅ | ✅ | — |
-| **labserver** | ✅ | ✅ | ✅ | — | ❌ |
+| **labserver** | ✅ | ✅ | ✅ | — | ✅ |
 | **rim** | ❌ | ❌ | — | ✅ | ❌ |
 
-2026-09-06 에 gram 의 `authorized_keys` 에 `ku`·`rim3` 키를, 각 PC 에 gram 키를
-넣어 **gram 이 처음으로 양방향으로 뚫렸다.** `rim3→rim`·`labserver→rim3` 도
-같이 메웠다.
+**`rim` 을 뺀 4대(ku·rim3·gram·labserver)는 20/20 전부 오간다.** 2026-09-06 에
+gram 의 `authorized_keys` 에 `ku`·`rim3`·`rim`·`labserver` 키를 넣고, 각 PC 에
+gram 키를 넣어 **gram 이 처음으로 양방향으로 뚫렸다.** `rim3→rim`·
+`labserver→rim3`·`labserver→gram` 도 같이 메웠다.
+
+**`rim` 은 들어가는 것은 된다** (`ssh rim@100.107.83.47` — 4대 전부에서 붙는다).
+못 하는 것은 **rim 에서 나가는 쪽**뿐이다.
 
 ### 🔴 `rim` 은 다른 tailnet 이다 — 키로 못 푼다
 
