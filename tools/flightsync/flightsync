@@ -9,9 +9,9 @@
 #   ./shade01 sync --min-size=MB  크기 문턱 (기본 1.0)
 #
 # 일곱 단계가 한 번에 돈다:
-#   1 브리지 정지 → 2 FC 목록 ↔ 랩서버 대조 → 3 없는 것만 받기 →
-#   4 회수 → 5 번호 라벨링 → 6 랩서버로 업로드 →
-#   7 랩서버에서 야외 판정 · 아니면 삭제
+#   1 브리지 정지 → 2 FC 목록 ↔ 랩서버 대조 → 3 없는 것만 받기 → 4 회수 →
+#   5 랩서버로 업로드 → 6 랩서버에서 야외 판정 · 아니면 삭제 →
+#   7 랩서버에서 번호 부여 (그 이름이 shade01 · localhost:4400 에 그대로)
 #
 # 손으로 하면 순서대로 일곱 번을 해야 하고, 하나만 빠뜨려도 — 특히 **브리지
 # 복구** — QGC 무선 링크가 끊긴 채 남는다. 여기서는 어떻게 끝나든 복구가 돈다.
@@ -206,7 +206,10 @@ nfc=$(printf '%s' "$LIST" | grep -c . || true)
 say "  FC 로그 ${nfc}개"
 
 # 랩서버가 이미 가진 것 + 판정에서 지운 것
-"${SSH[@]}" "$SERVER" "ls '$SERVER_LOGS'/*.ulg 2>/dev/null | xargs -rn1 basename" \
+# 🔴 **크기까지** 가져온다. 이름만으로 대조하면 이웃 로그를 같은 것으로
+#    오인한다 — 실측(2026-09-06): 3분 차이 나는 두 비행이 겹쳐 보여, 지운
+#    로그를 다시 받지 않았다. 크기가 주 키다.
+"${SSH[@]}" "$SERVER" "cd '$SERVER_LOGS' 2>/dev/null && stat -c '%n	%s' *.ulg 2>/dev/null" \
   > "$SCRATCH/server.txt" 2>/dev/null || : > "$SCRATCH/server.txt"
 if [ "$ALL" = 1 ]; then
   : > "$SCRATCH/pruned.txt"
@@ -288,7 +291,8 @@ if [ "$nwant" -gt 0 ]; then
   # MAVFTP 는 SD 디렉토리를 훑을 뿐이라 **번호가 안 온다.** 번호는
   # `LOG_REQUEST_LIST` 에 있고, 그것이 이 기체의 비행을 세는 유일한 일련번호다.
   # 🔴 FC 가 붙어 있는 지금(브리지 정지 중)만 물어볼 수 있다. 목록 조회일 뿐
-  #    FC 상태는 바꾸지 않는다.
+  #    FC 상태는 바꾸지 않는다. 실제로 이름을 붙이는 것은 **야외 판정이 끝난
+  #    뒤 랩서버에서** 한다 — 지울 것에 번호를 붙일 이유가 없다.
   if [ ${#FETCHED[@]} -gt 0 ]; then
     if "${SSHL[@]}" "$FC_HOST" "cd /tmp && $FC_VENV fclist.py --save /tmp/fcentries.json >/dev/null 2>&1" \
        && scp -q -o BatchMode=yes "$FC_HOST:/tmp/fcentries.json" "$SCRATCH/entries.json" 2>/dev/null; then
@@ -315,21 +319,9 @@ fi
 # 브리지는 여기서 되살린다 — 아래는 FC 와 무관하다.
 restore
 
-# ═══ 5. 번호 라벨링 ═════════════════════════════════════════════════
-if [ ${#FETCHED[@]} -gt 0 ] && [ -f "$SCRATCH/entries.json" ]; then
-  step "5/7 번호 라벨링"
-  # 🔴 **이번에 받은 것만** 개명한다. 디렉토리 전체를 개명하면 랩서버 이름과
-  #    어긋나고, 중복쌍에서 이름이 충돌해 fclist 가 전체를 취소한다 (실측).
-  "$PY" "$HERE/number_new.py" --out "$SCRATCH/final.txt" \
-       "$SCRATCH/entries.json" "$LOCAL" "${FETCHED[@]}" 2>&1 | sed 's/^/  /' || true
-  # 개명됐으면 **새 이름**으로 다시 잡는다. 옛 이름으로 찾으면 아래 업로드가
-  # 조용히 아무것도 안 올린다 — 실측으로 물렸다.
-  [ -s "$SCRATCH/final.txt" ] && mapfile -t FETCHED < "$SCRATCH/final.txt"
-fi
-
-# ═══ 6. 랩서버로 업로드 ═════════════════════════════════════════════
+# ═══ 5. 랩서버로 업로드 ═══════════════════════════════════════════════
 if [ ${#FETCHED[@]} -gt 0 ]; then
-  step "6/7 랩서버로 업로드"
+  step "5/7 랩서버로 업로드"
   up=()
   for b in "${FETCHED[@]}"; do [ -e "$LOCAL/$b" ] && up+=("$LOCAL/$b"); done
   if [ ${#up[@]} -eq 0 ]; then
@@ -348,10 +340,10 @@ if [ ${#FETCHED[@]} -gt 0 ]; then
   fi
 fi
 
-# ═══ 7. 랩서버에서 야외 판정 · 아니면 삭제 ══════════════════════════
+# ═══ 6. 랩서버에서 야외 판정 · 아니면 삭제 ══════════════════════════
 # 🔴 판정은 **랩서버 안에서** 돈다. 파일이 거기 있으니 옮길 필요가 없고, 이 PC
 #    에 사본이 없는 로그도 판정할 수 있다 (다른 PC 가 올린 것).
-step "7/7 랩서버에서 야외 판정"
+step "6/7 랩서버에서 야외 판정"
 "${SSH[@]}" "$SERVER" "cd $SERVER_REPO && git pull -q >/dev/null 2>&1; true"
 
 verdicts=$("${SSHL[@]}" "$SERVER" "
@@ -397,6 +389,52 @@ else
       done < /tmp/shade_del.txt
       echo \"  지움 \$n개 — 기록: $PRUNED_FILE\"
       rm -f /tmp/shade_del.txt" || fail "삭제 실패"
+  fi
+fi
+
+# ═══ 7. 랩서버에서 번호 부여 ════════════════════════════════════════
+# 🔴 **판정이 끝난 뒤에** 번호를 붙인다. 지울 것에 번호를 붙일 이유가 없고,
+#    번호가 붙은 이름이 곧 shade01 과 localhost:4400 에 그대로 뜬다.
+#
+# 🔴 랩서버에서 돈다. 파일이 거기 있고, 이름이 거기서 정해져야 두 화면이
+#    같은 것을 본다. 이 PC 에서 개명하면 서버 이름과 어긋난다 — 실측으로
+#    그 상태를 만들어 봤다 (로컬만 번호가 붙어 목록이 갈렸다).
+#
+# ⚠️ 웹에서 비교용으로 받은 참조 로그(`REF_*`)는 FC 엔트리가 없어 자연히
+#    제외된다 — 크기·시각이 어느 엔트리와도 안 맞는다.
+if [ -f "$SCRATCH/entries.json" ]; then
+  step "7/7 랩서버에서 번호 부여"
+  if scp -q -o BatchMode=yes "$SCRATCH/entries.json" "$SERVER:/tmp/shade_entries.json" 2>/dev/null; then
+    rn=$("${SSHL[@]}" "$SERVER" "
+      $SERVER_VENV $SERVER_REPO/tools/flightsync/renumber.py \
+        /tmp/shade_entries.json '$SERVER_LOGS' 2>&1
+      rm -f /tmp/shade_entries.json")
+    printf '%s\n' "$rn" | awk -F'\t' '
+      $1=="RENAME"  { printf "    %-38s → %s\n", $2, $3 }
+      $1=="DUP"     { printf "    − %-38s 중복 %s\n", $2, $3 }
+      $1=="SKIP"    { printf "    ? %-38s %s\n", $2, $3 }
+      $1=="ERR"     { printf "    ✗ %-38s %s\n", $2, $3 }
+      $1=="요약"    { printf "  %s %s %s\n", $2, $3, $4 }'
+    # 🔴 중복으로 지운 것은 **삭제 기록에 남긴다.** 안 그러면 다음 sync 가
+    #    같은 파일을 또 받아 또 지운다.
+    dupnames=$(printf '%s\n' "$rn" | awk -F'\t' '$1=="DELETED"{print $2}')
+    if [ -n "$dupnames" ]; then
+      printf '%s\n' "$dupnames" | sed 's/$/\t중복(이미 번호 있음)/' > "$SCRATCH/dup.txt"
+      scp -q -o BatchMode=yes "$SCRATCH/dup.txt" "$SERVER:/tmp/shade_dup.txt" 2>/dev/null \
+        && "${SSH[@]}" "$SERVER" "
+             while IFS= read -r l; do
+               printf '%s\t%s\n' \"\$l\" \"\$(date -Is)\" >> '$PRUNED_FILE'
+             done < /tmp/shade_dup.txt; rm -f /tmp/shade_dup.txt"
+    fi
+  else
+    say "  ⚠️ 엔트리 전송 실패 — 번호를 못 붙였다"
+  fi
+  # 남은 것이 있으면 드러낸다. 번호 없는 파일이 목록에 섞이면 안 된다.
+  left=$("${SSH[@]}" "$SERVER" "cd '$SERVER_LOGS' && ls *.ulg 2>/dev/null | grep -v '^log_[0-9]' | grep -v '^REF_'" 2>/dev/null)
+  if [ -n "$left" ]; then
+    say "  ⚠️ 번호가 안 붙은 로그가 남았다:"
+    printf '%s\n' "$left" | sed 's/^/     /'
+    say "     (같은 이름이 이미 있거나 크기가 어느 엔트리와도 안 맞는다)"
   fi
 fi
 

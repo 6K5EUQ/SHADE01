@@ -50,13 +50,17 @@ _FC = re.compile(r"^(\d{4})-(\d{2})-(\d{2})_(\d{2})_(\d{2})_(\d{2})\.ulg$")
 # 번호가 붙은 이름 — KST, 로그 **종료** 시각
 _QGC = re.compile(r"^log_(\d+)_(\d{4})-(\d{1,2})-(\d{1,2})-(\d{1,2})-(\d{1,2})-(\d{1,2})\.ulg$")
 
-# 시작시각과 종료시각의 차이를 흡수하는 창. 실측된 가장 긴 비행이 443초이므로
-# 그보다 넉넉히 잡되, 비행 사이 간격(가장 짧았던 것이 약 14초)보다는 짧아야
-# 다른 로그를 잘못 물지 않는다 — 그 둘 사이에서 고른다.
+# 🔴 **크기가 주 키다.** 시각만으로 맞추면 이웃 로그를 같은 것으로 오인한다 —
+#    실측(2026-09-06): `log_244`(UTC 09:31:28)가 FC 의 `09_34_04`(09:34:04)를
+#    156초 차이로 물어, 지운 로그를 **다시 안 받았다.** 비행이 3분 간격으로
+#    이어지는 것은 흔하다.
 #
-# ⚠️ 창을 넓히면 이웃 로그를 같은 것으로 오인해 **새 비행을 안 받는다.**
-#    좁히면 이미 있는 것을 또 받는다 (그쪽이 덜 나쁘다).
-_MATCH_WINDOW_S = 900
+# FC 목록은 MB 를 소수 둘째자리로 준다 (`9.83M`). 서버 파일 크기를 같은 방식으로
+# 반올림해 문자열로 비교한다 — 같은 파일이면 정확히 같은 값이 나온다.
+#
+# 크기가 같은 다른 비행이 있을 수 있으므로 **시각도 함께** 본다. 크기가 이미
+# 걸러 주므로 창은 넉넉해도 된다.
+_MATCH_WINDOW_S = 1800
 
 
 def parse(name):
@@ -79,10 +83,37 @@ def parse(name):
 
 
 def load_names(path):
+    """한 줄에 이름 하나. 탭이 있으면 첫 칸만 쓴다."""
     if not path or not os.path.exists(path):
         return []
+    out = []
     with open(path) as fh:
-        return [l.strip() for l in fh if l.strip()]
+        for l in fh:
+            l = l.strip()
+            if l:
+                out.append(l.split("\t")[0])
+    return out
+
+
+def load_server(path):
+    """`이름<TAB>바이트` → [(UTC, "MB문자열")]. 크기가 없으면 시각만."""
+    out = []
+    if not path or not os.path.exists(path):
+        return out
+    with open(path) as fh:
+        for l in fh:
+            l = l.rstrip("\n")
+            if not l.strip():
+                continue
+            parts = l.split("\t")
+            t, _num = parse(parts[0])
+            if t is None:
+                continue          # 못 읽는 이름은 버린다 — 아래 주석 참조
+            mb = None
+            if len(parts) > 1 and parts[1].strip().isdigit():
+                mb = "%.2f" % (int(parts[1]) / 1e6)
+            out.append((t, mb))
+    return out
 
 
 def known_times(names):
@@ -100,7 +131,17 @@ def known_times(names):
 
 
 def cmd_pick(server_file, pruned_file, lines):
-    known = known_times(load_names(server_file)) + known_times(load_names(pruned_file))
+    have = load_server(server_file)               # [(UTC, MB문자열|None)]
+    # 🔴 지운 것은 **이름이 정확히 같을 때만** 같은 것으로 본다. 시각 창을
+    #    쓰면 안 된다 — 실측(2026-09-06): 지운 `09_33_20` 이 44초 뒤의
+    #    `09_34_04`(9.83MB 실비행)를 물어 **다시 안 받았다.** 연속 로그가
+    #    그만큼 붙어 있으므로 어떤 창도 안전하지 않다.
+    #
+    #    판정이 번호 붙이기보다 **먼저** 돌므로 기록에는 FC 이름이 그대로
+    #    남는다. 옛 기록에 번호 이름이 섞여 있으면 그것은 한 번 더 받아
+    #    다시 판정·삭제된다 — 그때 FC 이름으로 다시 기록되어 스스로 낫는다.
+    gone = set(load_names(pruned_file))
+
     for line in lines:
         line = line.rstrip("\n")
         if not line.strip():
@@ -108,16 +149,27 @@ def cmd_pick(server_file, pruned_file, lines):
         parts = line.split("\t")
         if len(parts) < 3:
             continue
-        name, _mb, d = parts[0], parts[1], parts[2]
-        t, _ = parse("%s_%s" % (d, name))
+        name, mb, d = parts[0], parts[1].strip(), parts[2]
+        fcname = "%s_%s" % (d, name)
+        if fcname in gone:
+            continue                              # 판정에서 지운 것 — 다시 안 받는다
+        t, _ = parse(fcname)
         if t is None:
             # 🔴 읽을 수 없으면 **받는다.** 새 비행을 조용히 놓치는 것이
             #    이 도구의 가장 나쁜 실패다.
             print(line)
             continue
-        if any(abs((t - k).total_seconds()) <= _MATCH_WINDOW_S for k in known):
-            continue                      # 서버에 있거나, 판정 끝나 지운 것
-        print(line)
+        # 서버 보유분과 대조 — **크기가 같고** 시각이 창 안이면 같은 로그다.
+        # 크기를 모르는 항목(옛 기록)은 시각만으로 본다.
+        dup = False
+        for kt, kmb in have:
+            if abs((t - kt).total_seconds()) > _MATCH_WINDOW_S:
+                continue
+            if kmb is None or kmb == mb:
+                dup = True
+                break
+        if not dup:
+            print(line)
 
 
 def cmd_utc(lines):
