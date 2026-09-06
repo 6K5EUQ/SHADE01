@@ -15,8 +15,6 @@ qgc-5.1.4/
 # QGC binaries and flight_review (large, machine-local)
 Applications/
 
-# Python virtualenv -- absolute paths inside, must be per-machine
-venv-ardupilot/
 
 # Upstream projects with their own git history, checked out per machine
 PX4-Autopilot/

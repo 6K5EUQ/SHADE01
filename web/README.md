@@ -68,7 +68,7 @@ public/          index.html(목록) log.html(분석) compare.html(비교)
                  chart.js(SVG 차트) player.js(재생) app.css
                  vendor/leaflet/  자체 호스팅 (CDN 미사용)
 deploy/          systemd 유닛 2개 + cloudflared ingress + deploy.sh
-tools/gather.sh  3대에서 로그 수집 → 서버 업로드
+tools/           uploadable.py — sync 6단계가 랩서버에서 돌리는 야외 판정
 ```
 
 **Node 가 Python 을 서브프로세스로 부른다.** `qgclog` 는
@@ -118,9 +118,13 @@ pyulog 클래스를 영구 변형하므로 **스레드로 돌리면 서로 밟�
 ⚠️ **격자 값은 보여주기용이다.** 5Hz 는 79.3A 같은 순간 첨두를 놓칠 수 있으므로
 최대값은 항상 `sum` 을 쓴다. (실측: 격자 78.5A vs 요약 79.3A)
 
-### 올릴 값이 없는 로그는 안 올라간다 (2026-09-05)
+### 올릴 값이 없는 로그는 안 올라간다 (2026-09-05 · 2026-09-07 정정)
 
-`gather.sh` 가 업로드 전에 세 가지를 거른다:
+🔴 **지금 규칙은 [FLIGHT-SYNC.md](../FLIGHT-SYNC.md#무엇이-올라가는가) 다** — `flight`·`hover` 만
+올리고 나머지는 `./shade01 sync` 6단계가 랩서버에서 지운다. 아래 표는 2026-09-05 의
+`gather.sh`(2026-09-07 삭제) 규칙이라 **`ground` 행이 지금과 다르다.** 기록으로만 둔다.
+
+옛 `gather.sh` 가 업로드 전에 거르던 세 가지:
 
 | 사유 | 기준 |
 |---|---|
@@ -128,12 +132,7 @@ pyulog 클래스를 영구 변형하므로 **스레드로 돌리면 서로 밟�
 | `abort` | arm 하자마자 disarm (6초 이하) |
 | `indoor` | GPS 가 붙어 있는데 **3D fix 를 한 번도 못 잡았다** |
 
-`ground`·`hover`·`noarm`·`unknown` 은 **올린다** — *이것은 `gather.sh` 의 규칙이다.*
-
-🔴 **현행 경로 `./shade01 sync` 는 다르다** (2026-09-06): `flight`·`hover` **만** 올리고,
-`ground` 가 랩서버에 있으면 6단계가 **지운다** ([FLIGHT-SYNC.md](../FLIGHT-SYNC.md#무엇이-올라가는가)).
-`gather.sh` 로 지상 시험을 올리면 다음 sync 가 도로 지운다 — 둘이 싸운다.
-`gather.sh` 는 유일본 회수용 옛 도구로만 남겨 둔다.
+`ground`·`hover`·`noarm`·`unknown` 은 올렸다 — 그래서 sync 와 싸웠고, 지웠다.
 
 판정은 [`web/tools/uploadable.py`](tools/uploadable.py) 가 하고, 배지는
 `extract.py` 의 `classify()` 를 그대로 쓴다 — 기준을 두 곳에 두면 "목록에
@@ -199,7 +198,7 @@ ssh ku@<서버> '
   grep UPLOAD_PASSWORD .env'      # ← 이 값을 조종자에게 알려준다
 
 # 4. 로그 올리기 — 어느 PC 에서든
-./shade01 sync                # FC → 랩서버 → 웹 (FLIGHT-SYNC.md). gather.sh 는 옛 수집기다
+./shade01 sync                # FC → 랩서버 → 웹 (FLIGHT-SYNC.md)다
 
 # 5. 터널 — UUID 는 create 가 만들어 준다
 ssh ku@<서버> '

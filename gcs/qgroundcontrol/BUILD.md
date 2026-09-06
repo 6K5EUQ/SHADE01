@@ -88,8 +88,8 @@ sudo apt-get install -y build-essential ninja-build cmake \
 요구한다 (`.github/build-config.json` 의 `qt.version`). `aqtinstall` 로 받는다:
 
 ```bash
-~/SHADE01/venv-ardupilot/bin/python -m pip install aqtinstall
-~/SHADE01/venv-ardupilot/bin/python -m aqt install-qt linux desktop 6.11.1 linux_gcc_64 \
+~/SHADE01/.venv/bin/pip install aqtinstall          # venv-ardupilot 은 2026-09-07 삭제
+~/SHADE01/.venv/bin/python -m aqt install-qt linux desktop 6.11.1 linux_gcc_64 \
   -O ~/Qt \
   -m qtgraphs qtlocation qtpositioning qtspeech qtmultimedia qtserialport \
      qtimageformats qtshadertools qtconnectivity qtquick3d qtsensors qtscxml \

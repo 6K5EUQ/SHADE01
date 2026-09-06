@@ -175,8 +175,7 @@ ulog, repaired = qgclog._load(path)
 ## 의존성
 
 `pyulog`, `numpy`. 런처가 아래 순으로 인터프리터를 찾는다:
-`$QGCLOG_PYTHON` → **리포의 `.venv/bin/python`** → **리포의 `venv-ardupilot/bin/python`** →
-`python3` → `python`.
+`$QGCLOG_PYTHON` → **리포의 `.venv/bin/python`** → `python3` → `python`.
 
 **새 PC 설치** — Ubuntu 24.04 는 `pip` 가 없을 수 있다. 그러면 venv 를 부트스트랩한다.
 **리포 안 `.venv/`** 에 만든다 (`.gitignore` 로 제외돼 있어 홈이 지저분해지지 않는다):
@@ -275,8 +274,7 @@ CLI 는 시간축을 못 보여준다. 지도 위 궤적과 시계열이 **동�
 
 `<id>` 는 `curl -s https://shade01.bewe.co.kr/api/logs` 로 파일명과 함께 나온다.
 
-로그를 올리려면 `./shade01 sync` ([shade01-sync](../shade01-sync/SKILL.md)). `web/tools/gather.sh`
-는 옛 수집기다 — ground 까지 올려 다음 sync 와 싸운다. 업로드에는 공유 암호가
+로그를 올리려면 `./shade01 sync` ([shade01-sync](../shade01-sync/SKILL.md)). 업로드에는 공유 암호가
 필요하다 — 서버 `web/.env` 에만 있고 커밋되지 않는다.
 
 수치는 CLI 와 **같은 `qgclog` 경로**로 나오므로 둘이 갈리지 않는다. 다만 웹의

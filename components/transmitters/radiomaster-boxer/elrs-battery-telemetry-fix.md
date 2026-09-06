@@ -147,6 +147,9 @@ xtensa-esp32-elf-nm firmware.elf | grep primary_batt
 /home/ku/SHADE01/venv-ardupilot/bin/pio run -e Unified_ESP32_2400_TX_via_WIFI
 ```
 
+> 위는 그날 실제로 친 명령이다. `venv-ardupilot` 은 2026-09-07 에 지웠으므로 다시
+> 할 때는 `~/SHADE01/.venv/bin/pip` · `.venv/bin/pio` 다.
+
 ## 플래시
 
 Boxer WiFi 웹UI 경유:

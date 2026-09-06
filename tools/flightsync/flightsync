@@ -89,8 +89,7 @@ step() { printf '\n== %s ==\n' "$*"; }
 fail() { printf '✗ %s\n' "$*" >&2; }
 
 pick_python() {
-  for c in "${QGCLOG_PYTHON:-}" "$REPO/.venv/bin/python" \
-           "$REPO/venv-ardupilot/bin/python" python3; do
+  for c in "${QGCLOG_PYTHON:-}" "$REPO/.venv/bin/python" python3; do
     [ -n "$c" ] || continue
     command -v "$c" >/dev/null 2>&1 \
       && "$c" -c "import pyulog,numpy" >/dev/null 2>&1 && { echo "$c"; return 0; }

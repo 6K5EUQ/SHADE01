@@ -118,7 +118,6 @@ git remote -v      # origin  https://github.com/6K5EUQ/SHADE01.git 만 나와야
 | `rim3` | ✅ origin 교체 + 커밋 신원 `6k5euq` · **push 는 SSH 키로 해결** (2026-09-06, 아래) |
 | `gram-labtop` | ✅ origin 교체 완료 (2026-09-06). HTTPS + `credential.helper=store` 로 push 된다 |
 | `rim` | 🟡 origin 은 이미 `6K5EUQ` 하나뿐 (2026-09-06 확인) · **`user.name` 비어 있음** · push 는 `credential.helper=gh` 때문에 ❌ ([rim3 와 같은 방식](#rim3-push-해결--ssh-키로-2026-09-06)으로 푼다) |
-| `central` | ❓ 이 표 말고는 리포 어디에도 없는 이름이다. 실재하는 PC 인지 확인 전까지 표에서 지우지 않는다 |
 
 미처리 PC 는 각각 한 번씩 돌려야 한다:
 
@@ -237,11 +236,11 @@ ssh ku@100.99.120.110 'cd ~/SHADE01 && git merge --ff-only from-gram && git bran
 .venv/bin/pip download -d /tmp/wheels pyulog numpy pymavlink pyserial
 scp /tmp/wheels/*.whl ku@100.99.120.110:/tmp/shade-wheels/
 
-# ku 에서 — 새 venv 는 pip 이 없으므로 기존 venv 의 pip 을 빌려 쓴다
+# ku 에서 — 새 venv 는 pip 이 없으므로 get-pip 으로 넣는다 (venv-ardupilot 은 2026-09-07 삭제)
 cd ~/SHADE01
 python3 -m venv --without-pip .venv
-~/SHADE01/venv-ardupilot/bin/python -m pip --python .venv/bin/python install \
-  --no-index --find-links /tmp/shade-wheels pyulog numpy pymavlink pyserial
+.venv/bin/python /tmp/shade-wheels/get-pip.py -q    # 휠과 함께 옮겨 둔 get-pip.py
+.venv/bin/pip install --no-index --find-links /tmp/shade-wheels pyulog numpy pymavlink pyserial
 ```
 
 ⚠️ `--python` 은 **`install` 앞에** 와야 한다. 뒤에 두면

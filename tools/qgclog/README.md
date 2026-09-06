@@ -66,8 +66,7 @@ MAVFTP 버스트로 7.6MB 를 18초에. `fcfetch.py` 사용.
 
 ## 의존성
 
-`pyulog`, `numpy`. 런처가 `$QGCLOG_PYTHON` → **리포의 `.venv/bin/python`** →
-리포의 `venv-ardupilot/bin/python` → `python3` 순으로 찾는다.
+`pyulog`, `numpy`. 런처가 `$QGCLOG_PYTHON` → **리포의 `.venv/bin/python`** → `python3` 순으로 찾는다.
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install pyulog numpy

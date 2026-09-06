@@ -8,7 +8,7 @@
 그 이전 기록이며, 이제는 참고용이다.
 
 ```bash
-./shade01 sync          # 새 비행 후 한 줄 (FLIGHT-SYNC.md). gather.sh 는 옛 수집기
+./shade01 sync          # 새 비행 후 한 줄 (FLIGHT-SYNC.md)
 ```
 
 ## 🔴 2026-09-06 — gram 에 유일본 20개가 있었다

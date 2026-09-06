@@ -99,8 +99,8 @@ rm -f /tmp/get-pip.py
 .venv/bin/pip install pyulog numpy pymavlink pyserial
 ```
 
-> 리포에 `venv-ardupilot/` 이 이미 있는 PC(`ku`, `rim3`)는 그대로 둬도 된다 —
-> 런처가 `.venv` 다음 후보로 계속 찾는다. 이름만 남은 잔재이고 ArduPilot 과는 무관하다.
+> `venv-ardupilot/` 은 2026-09-07 에 폴백 체인과 PC 에서 지웠다 — `.venv` 와 내용이
+> 같았고 이름만 ArduPilot 시절 잔재였다. 런처는 이제 `$QGCLOG_PYTHON` → `.venv` → `python3` 다.
 
 확인: `./qgc log list` 가 표를 뿌리면 된다.
 다른 경로에 있으면 `QGCLOG_PYTHON=/path/to/python` 으로 지정한다.
@@ -165,8 +165,8 @@ done
 `noarm`·`unknown`·`indoor`·`unreadable` 은 받지도 올리지도 않고, 이미 올라가
 있으면 sync 6단계가 랩서버에서 지운다. 기준은 [FLIGHT-SYNC.md](FLIGHT-SYNC.md#무엇이-올라가는가).
 
-⚠️ `web/tools/gather.sh` 는 그 전 규칙(`ground` 도 올린다)으로 도는 **옛 수집기**다.
-지금 돌리면 올린 지상 시험을 다음 sync 가 도로 지운다 — 둘이 싸운다. 쓰지 마라.
+(`web/tools/gather.sh` 는 그 전 규칙 — `ground` 도 올린다 — 으로 돌던 옛 수집기였다.
+sync 와 규칙이 달라 서로 지우고 올리기를 반복할 수 있어 **2026-09-07 에 지웠다.**)
 
 특정 순간을 남에게 보낼 때는 `?t=` 를 붙인다:
 `https://shade01.bewe.co.kr/log/<id>?t=155`

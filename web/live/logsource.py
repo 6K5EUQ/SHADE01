@@ -28,7 +28,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, '..', '..', 'tools', 'qgclog'))
 
-# 정본 보관소. `web/tools/gather.sh` 가 3대에서 모아 올리는 그 자리다.
+# 정본 보관소. `./shade01 sync` 가 FC 에서 받아 올리는 그 자리다.
 REMOTE_HOST = os.environ.get('SHADE_LOG_HOST', 'ku@ku-labserver')
 REMOTE_DIR = os.environ.get('SHADE_LOG_DIR', '~/shade01-data/logs')
 
