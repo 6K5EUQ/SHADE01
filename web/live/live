@@ -21,6 +21,9 @@ HTTP="${LIVE_HTTP:-4400}"
 # 바인딩 주소. 기본은 모든 인터페이스지만, 백팩 경로에서는 WiFi 주소에만
 # 못박아 shade-bridge(Tailscale 주소)와 같은 포트를 나눠 쓴다.
 BIND="${LIVE_BIND:-0.0.0.0}"
+# 들을 곳 목록 (쉼표로 구분). 있으면 이것이 BIND/PORT 를 대신한다 —
+# 두 경로를 **동시에** 듣기 위한 것이다. `./qgc live on` 이 채워 준다.
+LISTEN="${LIVE_LISTEN:-}"
 
 if [[ ! -x "$PY" ]]; then
   echo "python venv 이 없다: $PY" >&2
@@ -39,7 +42,7 @@ fi
 # 포트가 이미 쓰이고 있으면 미리 알려준다. 안 그러면 bind 실패 메시지만 뜬다.
 # 특정 주소에 못박아 열 때는 다른 주소의 같은 포트와 안 부딪힌다 — 그때
 # 경고를 띄우면 거짓말이다 (shade-bridge 는 Tailscale 주소에만 바인딩한다).
-if [[ "$BIND" == "0.0.0.0" ]] && ss -ulnp 2>/dev/null | grep -q ":${PORT}\b"; then
+if [[ -z "$LISTEN" && "$BIND" == "0.0.0.0" ]] && ss -ulnp 2>/dev/null | grep -q ":${PORT}\b"; then
   echo "⚠️  UDP ${PORT} 를 이미 누가 쓰고 있다:"
   ss -ulnp 2>/dev/null | grep ":${PORT}\b" | sed 's/^/    /'
   echo "    QGC 나 shade-bridge 다. 그쪽을 끄거나 다른 포트를 써라: $0 14551"
@@ -47,4 +50,16 @@ if [[ "$BIND" == "0.0.0.0" ]] && ss -ulnp 2>/dev/null | grep -q ":${PORT}\b"; th
 fi
 
 echo "브라우저: http://localhost:${HTTP}"
+
+# LISTEN 이 있으면 --listen 을 여러 번 넘긴다. mav_live.py 가 그만큼 소켓을
+# 열고, 살아 있는 경로를 골라 쓴다 (둘 다면 USB 우선).
+if [[ -n "$LISTEN" ]]; then
+  ARGS=()
+  IFS=',' read -ra SPECS <<< "$LISTEN"
+  for spec in "${SPECS[@]}"; do
+    [[ -n "$spec" ]] && ARGS+=(--listen "$spec")
+  done
+  exec "$PY" "$REPO/web/live/mav_live.py" --http "$HTTP" --port "$PORT" "${ARGS[@]}"
+fi
+
 exec "$PY" "$REPO/web/live/mav_live.py" --port "$PORT" --http "$HTTP" --bind "$BIND"

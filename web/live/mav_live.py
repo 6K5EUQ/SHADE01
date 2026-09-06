@@ -13,9 +13,15 @@ HTTP 로 내준다. 로그(.ulg) 재생이 아니라 **현재 프레임**이다.
    둔다. 여기서는 socket.recvfrom() 만 하고 sendto() 는 코드에 없다. 브라우저가
    무엇을 하든 FC 로 나가는 바이트는 0 이다 (README "상행이 열려 있다" 참조).
 
-받는 경로는 둘 다 같은 포트로 들어온다:
+받는 경로는 둘이다. **둘을 동시에 듣는다** — 갈아타는 데 재시작이 필요 없다:
   - ELRS 백팩   조종기 AP(10.0.0.1) → PC. TELEM1 경유
   - shade-bridge  FC USB → UDP 중계
+
+둘 다 살아 있으면 **USB 를 쓴다** (`LINK_PRIORITY`). 28.4 KB/s 대 285 B/s 라
+같은 화면이면 USB 쪽이 언제나 낫다. 우선 경로가 조용해지면
+`LINK_FALLBACK_AFTER` 초 뒤 아래 경로가 이어받는다.
+
+    ./mav_live.py --listen 14550 --listen 10.0.0.100:14550
 
 ⚠️ 브리지가 이미 14550 을 쓰고 있으면 여기서 시끄럽게 죽는다. SO_REUSEADDR 을
    켜서 조용히 나눠 갖게 하면 커널이 패킷을 둘 중 하나에만 주므로, QGC 와
@@ -57,6 +63,16 @@ TRACK_MAX = 12000
 # 이 시간 동안 프레임이 없으면 링크가 끊긴 것으로 본다. ELRS 백팩은
 # 대역폭이 좁아(615 B/s) 하트비트 간격이 벌어지므로 넉넉히 잡는다.
 LINK_TIMEOUT = 3.0
+
+# 두 경로가 동시에 들어올 때 무엇을 화면에 쓸지 — 앞이 강하다.
+# USB 직결/브리지가 28.4 KB/s 로 백팩(285 B/s)보다 두 자릿수 빠르고 자세
+# 갱신도 촘촘해서, 둘 다 살아 있으면 USB 쪽이 언제나 더 나은 그림이다.
+LINK_PRIORITY = ('USB', 'ELRS')
+
+# 우선 경로가 이만큼 조용하면 아래 경로로 넘긴다. LINK_TIMEOUT 보다 짧게 잡는다
+# — 링크가 죽었다고 화면에 뜨기 **전에** 살아 있는 쪽으로 갈아타야, 갈아타는
+# 동안 계기가 빈다는 인상이 안 생긴다.
+LINK_FALLBACK_AFTER = 2.0
 
 # 항적에 점을 찍는 최소 간격(m). GPS 노이즈로 제자리에서 점이 쌓이는 것을 막는다.
 TRACK_MIN_MOVE = 0.4
@@ -666,9 +682,14 @@ class State:
         self.boot = time.time()
         self.packets = 0
         self.bytes = 0
-        self.src = None            # 마지막으로 보내온 (ip, port)
+        self.src = None            # 화면에 반영 중인 경로의 마지막 (ip, port)
         self.sysid = None
         self.compid = None
+
+        # 경로별 마지막 수신 시각(monotonic). 두 경로를 동시에 듣기 때문에
+        # "지금 어느 쪽이 살아 있나" 를 링크 종류별로 따로 들고 있어야 한다.
+        #   {'USB': monotonic, 'ELRS': monotonic}
+        self.link_seen = {}
 
         self.rec = None            # Recorder. main() 이 꽂는다
         self.player = None         # Player. main() 이 꽂는다
@@ -694,13 +715,40 @@ class State:
         # 항적이 조용히 빠지거나 겹친다.
         self.track_total = 0
 
-    def touch(self, addr, nbytes):
+    def touch(self, addr, nbytes, kind=None):
         # 수신 스레드만 쓰지만 snapshot() 이 락 안에서 읽으므로 여기서도 잠근다.
         with self.lock:
-            self.seen = time.monotonic()
+            now = time.monotonic()
+            if kind:
+                self.link_seen[kind] = now
             self.packets += 1
             self.bytes += nbytes
-            self.src = addr
+            # `seen`·`src` 는 **화면에 쓰는 경로**의 것이다. 아래 경로의 프레임까지
+            # 여기 찍으면, 우선 경로가 죽었는데도 링크가 붙어 있는 것처럼 보인다.
+            if kind is None or kind == self._active_locked(now):
+                self.seen = now
+                self.src = addr
+
+    def _active_locked(self, now=None):
+        """지금 화면에 쓸 경로. 락을 **이미 쥔 채** 부른다.
+
+        LINK_PRIORITY 순서로 훑어 살아 있는 첫 경로를 고른다. 우선 경로가
+        LINK_FALLBACK_AFTER 보다 오래 조용하면 다음 경로로 내려간다.
+        """
+        now = time.monotonic() if now is None else now
+        for kind in LINK_PRIORITY:
+            t = self.link_seen.get(kind)
+            if t is not None and now - t < LINK_FALLBACK_AFTER:
+                return kind
+        # 전부 조용하다 — 가장 최근에 말한 쪽을 유지한다. 화면 값이 어느 경로의
+        # 마지막 값인지는 여전히 알려 줘야 한다.
+        if not self.link_seen:
+            return None
+        return max(self.link_seen, key=self.link_seen.get)
+
+    def active_link(self):
+        with self.lock:
+            return self._active_locked()
 
     def snapshot(self, since=None, want_track=True):
         """HTTP 로 나갈 형태. since(총 개수 기준) 이후의 항적만 잘라 보낸다.
@@ -723,7 +771,14 @@ class State:
                 'packets': self.packets,
                 'bytes': self.bytes,
                 'src': '%s:%d' % self.src if self.src else None,
-                'link': _link_kind(self.src),
+                'link': self._active_locked(),
+                # 지금 붙어 있는 경로 전부. 둘 다 살아 있으면 둘 다 true 다 —
+                # 화면은 `link` 를 쓰지만, 어느 쪽이 더 붙어 있는지 진단할 때
+                # 이것을 본다.
+                'links': {
+                    k: round(time.monotonic() - t, 2)
+                    for k, t in self.link_seen.items()
+                },
                 'sysid': self.sysid,
                 'uptime': round(time.time() - self.boot),
                 'd': dict(self.d),
@@ -974,7 +1029,8 @@ def receiver(sock, st):
             continue
         if not data:
             continue
-        st.touch(addr, len(data))
+        kind = _link_kind(addr)
+        st.touch(addr, len(data), kind)
 
         now = time.monotonic()
         ent = parsers.get(addr)
@@ -1000,7 +1056,14 @@ def receiver(sock, st):
             #    과거와 현재가 한 화면에서 엎치락뒤치락한다. 기록은 계속한다 —
             #    재생을 보는 사이에도 실제 비행이 벌어질 수 있다.
             replaying = st.player is not None and st.player.frames
-            if not replaying:
+            # 🔴 두 경로를 동시에 듣는다. 화면(`st.d`)에 쓰는 것은 **우선 경로
+            #    하나뿐**이다 — 둘의 프레임을 같은 d 에 섞으면 갱신 주기가 다른
+            #    두 링크가 서로 덮어써 고도·자세가 튄다 (백팩 1.6Hz vs USB 수십Hz).
+            #    아래 경로의 프레임도 버리지는 않는다: 기록기가 경로별로 따로
+            #    적고(`_ELRS`/`_FC`), link_seen 도 이미 찍혔으므로 우선 경로가
+            #    죽는 순간 곧바로 이어받는다.
+            passive = kind is not None and kind != st._active_locked()
+            if not replaying and not passive:
                 for m in msgs:
                     if m.get_type() == 'BAD_DATA':
                         continue
@@ -1010,6 +1073,7 @@ def receiver(sock, st):
                         pass      # 한 메시지가 이상해도 수집은 계속돼야 한다
             else:
                 # 화면에는 안 넣더라도 arm 전환은 봐야 기록 파일이 갈린다.
+                # 재생 중이든 아래 경로든 마찬가지다.
                 for m in msgs:
                     if m.get_type() != 'HEARTBEAT':
                         continue
@@ -1028,9 +1092,11 @@ def receiver(sock, st):
             #    본다 (`handle()` 이 재생 경로에서는 안 돌고, 아래가 원본 바이트를
             #    따로 훑기 때문이다).
             if st.rec is not None:
-                if replaying:
+                # 아래 경로의 프레임도 야외 판정 GPS 는 스스로 챙겨야 한다 —
+                # handle() 을 안 거쳤으므로 rec_gps 가 안 채워진다.
+                if replaying or passive:
                     _sniff_gps(msgs, st)
-                st.rec.write(data, _link_kind(addr), st.rec_gps)
+                st.rec.write(data, kind, st.rec_gps)
 
 
 class Playback:
@@ -1403,6 +1469,57 @@ class Handler(BaseHTTPRequestHandler):
         pass          # 접근 로그로 터미널을 덮지 않는다
 
 
+def parse_listen(spec, default_port):
+    """'10.0.0.100:14550' · ':14551' · '14551' → (주소, 포트)."""
+    spec = spec.strip()
+    if not spec:
+        raise ValueError('빈 값')
+    if ':' in spec:
+        host, _, port = spec.rpartition(':')
+        host = host or '0.0.0.0'
+    else:
+        # 숫자뿐이면 포트, 아니면 주소.
+        if spec.isdigit():
+            host, port = '0.0.0.0', spec
+        else:
+            host, port = spec, str(default_port)
+    try:
+        port = int(port)
+    except ValueError:
+        raise ValueError('포트가 숫자가 아니다: %r' % port)
+    if not 1 <= port <= 65535:
+        raise ValueError('포트 범위를 벗어났다: %d' % port)
+    return (host, port)
+
+
+def bind_udp(addr, port):
+    """UDP 소켓 하나를 연다. 못 열면 이유를 말하고 None.
+
+    🔴 SO_REUSEADDR 을 켜지 않는다 — mav_bridge.py 와 같은 이유다. 조용히
+       포트를 나눠 가지면 커널이 패킷을 한쪽에만 주어, QGC 와 이 페이지가
+       프레임을 서로 훔쳐 간다.
+
+    여기서 죽지 않고 None 을 돌려주는 이유: 경로를 여럿 듣기 때문이다. 백팩
+    AP 를 떠나면 10.0.0.x 가 사라져 EADDRNOTAVAIL 이 나는데(실측 rim3
+    2026-09-05), 그것 때문에 브리지 경로까지 같이 잃으면 안 된다. 하나도
+    못 열었을 때만 main() 이 죽는다.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.bind((addr, port))
+    except OSError as e:
+        sock.close()
+        if e.errno == errno.EADDRNOTAVAIL:
+            print('%s:%d — 그 주소가 이 PC 에 없다 (AP 를 떠났나?). 건너뛴다'
+                  % (addr, port), flush=True)
+        elif e.errno == errno.EADDRINUSE:
+            print('%s:%d — 이미 누가 쓰고 있다. 건너뛴다' % (addr, port), flush=True)
+        else:
+            print('%s:%d — 못 연다 (%s). 건너뛴다' % (addr, port, e), flush=True)
+        return None
+    return sock
+
+
 def main():
     ap = argparse.ArgumentParser(description='MAVLink 실시간 트래킹 (읽기 전용)')
     ap.add_argument('--port', type=int, default=int(os.environ.get('LIVE_UDP', '14550')),
@@ -1412,6 +1529,12 @@ def main():
     ap.add_argument('--bind', default='0.0.0.0',
                     help='UDP 바인딩 주소. 기본은 전부 — 백팩(10.0.0.x)과 '
                          '브리지(tailscale)가 서로 다른 인터페이스로 들어오기 때문이다')
+    ap.add_argument('--listen', action='append', metavar='[주소:]포트',
+                    default=[x for x in os.environ.get('LIVE_LISTEN', '').split(',') if x.strip()],
+                    help='들을 곳. 여러 번 줄 수 있다 — 두 경로를 **동시에** 듣고 '
+                         '살아 있는 쪽을 쓴다 (USB 우선). 예: '
+                         "--listen 14550 --listen 10.0.0.100:14550. "
+                         '주면 --bind/--port 대신 이것을 쓴다')
     ap.add_argument('--rec-dir', default=LIVE_DIR,
                     help='실시간 기록(.tlog) 폴더. 기본은 리포의 logs/live/ '
                          '— 이 PC 안에만 쓴다')
@@ -1423,37 +1546,39 @@ def main():
     st.rec = Recorder(args.rec_dir, enabled=not args.no_record)
     st.player = Player(st)
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    # SO_REUSEADDR 을 켜지 않는다 — mav_bridge.py 와 같은 이유다. 조용히 포트를
-    # 나눠 가지면 커널이 패킷을 한쪽에만 주어, QGC 와 이 페이지가 프레임을
-    # 서로 훔쳐 간다. 충돌하면 여기서 시끄럽게 죽는 편이 낫다.
-    try:
-        sock.bind((args.bind, args.port))
-    except OSError as e:
-        # 🔴 주소가 사라졌으면 0.0.0.0 으로 물러선다. 죽으면 안 된다.
-        #    백팩 경로에서는 WiFi 주소(10.0.0.x)에 못박아 여는데, AP 를 떠나면
-        #    그 주소가 없어져 EADDRNOTAVAIL 로 시작조차 못 한다 — 다음 부팅에
-        #    화면이 통째로 안 뜬다 (실측 rim3 2026-09-05).
-        #    0.0.0.0 으로 열면 최소한 브리지 경로는 살아난다. 포트가 이미
-        #    잡혀 있으면 그때는 진짜로 죽는 게 맞다 (아래 EADDRINUSE).
-        if args.bind != '0.0.0.0' and e.errno == errno.EADDRNOTAVAIL:
-            print('%s 가 없다 — 0.0.0.0 으로 물러선다 (백팩 AP 를 떠났나?)'
-                  % args.bind, flush=True)
-            args.bind = '0.0.0.0'
-            try:
-                sock.bind((args.bind, args.port))
-            except OSError as e2:
-                e = e2
-            else:
-                e = None
-        if e is not None:
-            print('UDP %s:%d 를 못 연다 (%s)' % (args.bind, args.port, e), file=sys.stderr)
-            print('이미 QGC 나 브리지가 쓰고 있다. 확인:  ss -ulnp | grep %d' % args.port,
-                  file=sys.stderr)
-            print('다른 포트로 비켜라:  --port 14551', file=sys.stderr)
-            sys.exit(1)
+    # 들을 곳을 정한다. --listen 이 있으면 그대로, 없으면 --bind/--port 하나.
+    wanted = []
+    for spec in (args.listen or []):
+        try:
+            wanted.append(parse_listen(spec, args.port))
+        except ValueError as e:
+            print('--listen %s: %s' % (spec, e), file=sys.stderr)
+            sys.exit(2)
+    if not wanted:
+        wanted = [(args.bind, args.port)]
+    # 같은 (주소, 포트) 를 두 번 열지 않는다 — 두 번째가 EADDRINUSE 로 죽는다.
+    wanted = list(dict.fromkeys(wanted))
 
-    threading.Thread(target=receiver, args=(sock, st), daemon=True).start()
+    socks = []
+    for addr, port in wanted:
+        sock = bind_udp(addr, port)
+        if sock is not None:
+            socks.append((sock, addr, port))
+
+    # 🔴 하나라도 열렸으면 산다. 두 경로를 동시에 듣기 때문에, 백팩 AP 를
+    #    떠나 10.0.0.x 가 사라져도 브리지 쪽은 멀쩡히 열린다 — 그때 통째로
+    #    죽으면 남은 경로까지 같이 잃는다.
+    if not socks:
+        print('들을 수 있는 UDP 소켓이 하나도 없다:', file=sys.stderr)
+        for addr, port in wanted:
+            print('  %s:%d' % (addr, port), file=sys.stderr)
+        print('이미 QGC 나 브리지가 쓰고 있다. 확인:  ss -ulnp | grep 1455',
+              file=sys.stderr)
+        print('다른 포트로 비켜라:  --port 14551', file=sys.stderr)
+        sys.exit(1)
+
+    for sock, _, _ in socks:
+        threading.Thread(target=receiver, args=(sock, st), daemon=True).start()
 
     Handler.st = st
     Handler.rec_dir = os.path.abspath(args.rec_dir)
@@ -1461,8 +1586,14 @@ def main():
     srv = ThreadingHTTPServer(('127.0.0.1', args.http), Handler)
     srv.daemon_threads = True
 
-    print('MAVLink UDP  %s:%d  (읽기 전용 — FC 로 아무것도 안 보낸다)'
-          % (args.bind, args.port))
+    for i, (_, addr, port) in enumerate(socks):
+        label = 'MAVLink UDP ' if i == 0 else '            '
+        print('%s %s:%-6d %s' % (label, addr, port,
+                                 '(읽기 전용 — FC 로 아무것도 안 보낸다)'
+                                 if i == 0 else ''))
+    if len(socks) > 1:
+        print('             두 경로를 동시에 듣는다 — 살아 있는 쪽을 쓰고, '
+              '둘 다면 %s 우선' % LINK_PRIORITY[0])
     print('라이브 페이지  http://127.0.0.1:%d' % args.http)
     if st.rec.enabled:
         print('기록          %s  (ARM 마다 새 .tlog)' % os.path.abspath(args.rec_dir))

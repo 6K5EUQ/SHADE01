@@ -50,7 +50,40 @@ install_unit() {
   [[ $changed -eq 1 ]] && systemctl --user daemon-reload || true
 }
 
-# 지금 어느 경로가 살아 있나. USB 직결(브리지)이 우선이다.
+# FC 가 이 PC 에 꽂혀 있나 — 시리얼 장치 파일이 하나라도 있으면 그렇다.
+#
+# 🔴 `ls /dev/ttyACM* /dev/ttyUSB*` 로 쓰지 마라. 둘 중 **한쪽 글롭만 안 맞아도**
+#    ls 가 exit 2 를 낸다 — ttyACM0 이 멀쩡히 있는데도 "없다" 가 된다
+#    (실측 rim3 2026-09-06). 셸에게 글롭을 직접 물어야 한다.
+fc_usb_present() {
+  local f
+  for f in /dev/ttyACM* /dev/ttyUSB*; do
+    [[ -e "$f" ]] && return 0
+  done
+  return 1
+}
+
+# 백팩 AP 에 붙어 있나. 붙어 있으면 10.0.0.1 이 ping 에 답한다.
+backpack_up() { ping -c1 -W1 "$BACKPACK_IP" >/dev/null 2>&1; }
+
+# 이 PC 의 백팩 WiFi 주소 (10.0.0.x). 없으면 빈 문자열.
+backpack_addr() {
+  ip -4 -br addr show 2>/dev/null | grep -oE '10\.0\.0\.[0-9]+' | head -1 || true
+}
+
+# 지금 트래커가 실제로 무엇을 받고 있나 — 'USB' · 'ELRS' · 빈 문자열.
+# 트래커가 보낸 쪽 주소로 이미 갈라 `link` 에 넣어 준다.
+current_link() {
+  systemctl --user is-active --quiet "$UNIT" 2>/dev/null || return 0
+  command -v curl >/dev/null 2>&1 || return 0
+  local js
+  js="$(curl -s --max-time 2 "http://127.0.0.1:${HTTP_PORT}/api/state?track=0" 2>/dev/null || true)"
+  printf '%s' "$js" | grep -q '"live": true' || return 0
+  printf '%s' "$js" | grep -oE '"link"[[:space:]]*:[[:space:]]*"[A-Za-z]+"' \
+    | grep -oE '"[A-Za-z]+"$' | tr -d '"' || true
+}
+
+# 남겨 둔다 — 진단용. 지금 어느 경로가 살아 있나.
 #   usb      — FC 가 꽂혀 있거나 브리지가 밀어주고 있다
 #   backpack — 조종기 백팩 AP 에 붙어 있다 (10.0.0.1 이 응답)
 #   none     — 둘 다 아니다
@@ -85,7 +118,7 @@ detect_path() {
   #    FC 를 뽑아도 pgrep 은 잡히므로 USB 로 오판해 백팩 poker 를 안 띄운다
   #    (rim3 에서 실제로 그랬다: FC 뽑힌 지 30분인데 "경로: USB 직결/브리지").
   #    장치 파일이 있는지로만 판단한다.
-  if ls /dev/ttyACM* /dev/ttyUSB* >/dev/null 2>&1; then echo usb; return; fi
+  if fc_usb_present; then echo usb; return; fi
 
   # 3) 백팩. AP 에 붙어 있으면 10.0.0.1 이 ping 에 답한다.
   if ping -c1 -W1 "$BACKPACK_IP" >/dev/null 2>&1; then echo backpack; return; fi
@@ -119,30 +152,49 @@ cmd_on() {
   have_systemd || die "systemd --user 를 쓸 수 없다. 직접 띄워라:  ./web/live/live ${udp:-}"
   install_unit
 
-  # 🔴 경로 감지를 **먼저** 한다. 포트·바인딩 주소가 경로에 따라 달라지므로,
-  #    env 를 쓰고 나서 감지하면 이미 틀린 포트로 뜬 뒤다 (rim3 에서 그랬다:
-  #    백팩인데 14550/0.0.0.0 으로 열려다 브리지와 충돌해 시작 실패).
-  local path; path="$(detect_path)"
-  local bind_addr=""
+  # 🔴 경로를 **고르지 않는다.** 둘 다 열어 두고 트래커가 살아 있는 쪽을
+  #    쓰게 한다 (둘 다면 USB 우선 — mav_live.py 의 LINK_PRIORITY).
+  #
+  #    예전에는 여기서 하나를 골라 그 포트로만 열었다. 그래서 USB 를 뽑고
+  #    백팩으로 갈아탈 때마다 `./qgc live on` 을 다시 돌려야 했고, 안 돌리면
+  #    옛 포트에 그대로 앉아 조용했다. 이제 갈아타는 데 아무것도 안 해도 된다.
+  # 🔴 브리지 경로 포트는 **PC 마다 다르다.** rim3 은 shade-bridge 자신이
+  #    14550 을 쥐고 있어 트래커가 14551 로 비켜 앉고, 브리지가 거기로도
+  #    복사본을 보낸다 (pc_bridge.sh 의 TARGETS 에 127.0.0.1:14551).
+  #    그래서 인자로 안 주면 **지난번에 쓰던 포트를 그대로 쓴다** — 매번
+  #    14550 으로 되돌리면 그 PC 는 켤 때마다 조용해진다.
+  local want="$udp"
+  if [[ -z "$want" && -f "$ENV_FILE" ]]; then
+    want="$(grep -oP '(?<=^LIVE_UDP=).*' "$ENV_FILE" 2>/dev/null | head -1 || true)"
+  fi
+  want="${want:-14550}"
 
-  if [[ "$path" == "backpack" && -z "$udp" ]]; then
-    # 백팩이 보내는 포트를 백팩에게 묻고, WiFi 주소에만 못박는다 —
-    # shade-bridge 는 Tailscale 주소에만 있으므로 같은 포트를 나눠 쓴다.
-    udp="$(backpack_send_port)"
-    bind_addr="$(ip -4 -br addr show 2>/dev/null \
-                 | grep -oE '10\.0\.0\.[0-9]+' | head -1 || true)"
+  local listen="$want"                     # 브리지/USB 경로
+  local bp_addr="" bp_port=""
+
+  if backpack_up; then
+    # 백팩이 보내는 포트를 백팩에게 묻는다. WiFi 주소에만 못박아 여는 이유는
+    # shade-bridge 가 Tailscale 주소에 같은 포트로 앉아 있을 수 있기 때문이다 —
+    # 주소가 다르면 같은 포트를 나눠 써도 커널이 안 헷갈린다.
+    bp_port="$(backpack_send_port)"
+    bp_addr="$(backpack_addr)"
+    if [[ -n "$bp_addr" && "${bp_addr}:${bp_port}" != "0.0.0.0:${want}" ]]; then
+      listen="${listen},${bp_addr}:${bp_port}"
+    fi
   fi
 
-  # 포트를 환경파일에 적는다. 유닛을 안 고치고 바꿀 수 있게.
+  # 환경파일에 적는다. 유닛을 안 고치고 바꿀 수 있게.
+  # LIVE_UDP/LIVE_BIND 는 남겨 둔다 — 옛 유닛이나 손으로 띄운 것이 아직 본다.
   mkdir -p "$(dirname "$ENV_FILE")"
   {
-    [[ -n "$udp" ]] && printf 'LIVE_UDP=%s\n' "$udp"
+    printf 'LIVE_UDP=%s\n' "$want"
     printf 'LIVE_HTTP=%s\n' "$HTTP_PORT"
-    [[ -n "$bind_addr" ]] && printf 'LIVE_BIND=%s\n' "$bind_addr"
+    printf 'LIVE_LISTEN=%s\n' "$listen"
   } > "$ENV_FILE"
 
-  local want="${udp:-14550}"
-  if [[ -z "$bind_addr" ]] && port_taken_by_other "$want"; then
+  # 브리지 경로 포트가 남에게 잡혀 있으면 미리 말해 준다. 백팩 쪽은 주소에
+  # 못박으므로 안 부딪힌다.
+  if port_taken_by_other "$want"; then
     echo "⚠️  UDP $want 를 이미 누가 쓰고 있다:"
     ss -ulnp 2>/dev/null | grep -E "[:.]${want}\b" | sed 's/^/    /'
     echo "    QGC 나 shade-bridge 다. 그쪽을 끄거나 다른 포트로 켜라:"
@@ -161,29 +213,57 @@ cmd_on() {
     exit 1
   fi
 
-  # ── 경로별 뒤처리. poker 는 백팩일 때만 띄운다 — USB 경로에서는 필요도
-  #    없고, 괜히 띄우면 있지도 않은 10.0.0.1 로 하트비트를 계속 쏜다.
-  case "$path" in
-    usb)
-      systemctl --user stop "$POKE_UNIT" 2>/dev/null || true
-      echo "   경로: USB 직결/브리지" ;;
-    backpack)
-      # 백팩이 먼저 밀어주므로 poker 는 대개 필요 없다. 그래도 띄워 둔다 —
-      # 펌웨어에 따라 GCS 가 먼저 말을 걸어야 하는 구현도 있다.
-      systemctl --user reset-failed "$POKE_UNIT" 2>/dev/null || true
-      systemctl --user restart "$POKE_UNIT" 2>/dev/null || true
-      echo "   경로: ELRS 백팩 — ${bind_addr:-0.0.0.0}:${want} 수신" ;;
-    *)
-      systemctl --user stop "$POKE_UNIT" 2>/dev/null || true
-      echo "   ⚠️  경로를 못 찾았다 — FC USB 도 브리지도 없고 백팩 AP 에도 안 붙어 있다" ;;
-  esac
+  # ── 무엇을 듣고 있는지 알려 준다. 이제 경로를 고르지 않으므로 "이것만
+  #    본다" 가 아니라 "이 둘을 듣는다" 가 맞는 말이다.
+  echo "   수신: 0.0.0.0:${want}  (USB 직결/브리지)"
+  if [[ -n "$bp_addr" ]]; then
+    echo "         ${bp_addr}:${bp_port}  (ELRS 백팩)"
+  fi
+
+  # poker 는 백팩 AP 에 붙어 있을 때만 띄운다 — 백팩은 먼저 말을 걸어온
+  # 곳에만 텔레메트리를 보내기 때문이다. AP 가 없으면 있지도 않은 10.0.0.1 로
+  # 계속 쏘게 되므로 띄우지 않는다.
+  if [[ -n "$bp_addr" ]]; then
+    systemctl --user reset-failed "$POKE_UNIT" 2>/dev/null || true
+    systemctl --user restart "$POKE_UNIT" 2>/dev/null || true
+  else
+    systemctl --user stop "$POKE_UNIT" 2>/dev/null || true
+  fi
+
+  # 지금 실제로 무엇이 들어오는지까지 본다. 켜졌다는 것과 데이터가 온다는
+  # 것은 다른 말이다.
+  # ⚠️ 여기서 `return` 하지 마라 — 아래 `always` 블록(enable + linger)을
+  #    통째로 건너뛴다. 링크가 붙어 있을 때만 조용히 안 걸리는 버그가 된다.
+  local now_link; now_link="$(current_link)"
+  if [[ -n "$now_link" ]]; then
+    echo "   지금 링크: ${now_link}"
+  else
+    # 아직 아무것도 안 들어온다. **왜** 안 들어오는지까지 말해 준다 —
+    # "링크 없음" 만으로는 무엇을 고쳐야 할지 알 수 없다.
+    echo "   ⚠️  아직 아무것도 안 들어온다"
+    if fc_usb_present; then
+      # FC 는 꽂혀 있는데 아무도 UDP 로 안 밀어주고 있다. 브리지가 그 일을 한다.
+      if ! systemctl --user is-active --quiet shade-bridge 2>/dev/null; then
+        echo "       FC 는 꽂혀 있는데 shade-bridge 가 꺼져 있다:"
+        echo "         systemctl --user start shade-bridge"
+      else
+        echo "       FC 도 브리지도 있다 — 브리지가 이 포트로도 보내는지 보라"
+        echo "         (pc_bridge.sh 의 TARGETS 에 127.0.0.1:${want})"
+      fi
+    elif [[ -n "$bp_addr" ]]; then
+      echo "       백팩 AP 에는 붙어 있다 — 조종기가 켜져 있고 기체와 링크됐는지 보라"
+    else
+      echo "       FC USB 도 없고 백팩 AP 에도 안 붙어 있다"
+    fi
+  fi
 
   if [[ "$persist" == "always" ]]; then
     # enable 만으로는 부족하다 — 로그인 세션이 없는 동안에도 유닛이 돌려면
     # linger 가 켜져 있어야 한다. 둘 다 있어야 "재부팅해도 산다" 가 성립한다.
     systemctl --user enable "$UNIT" >/dev/null 2>&1 || true
-    # poker 는 백팩일 때만 부팅에 건다. USB 경로 PC 에 걸면 없는 AP 로 계속 쏜다.
-    if [[ "$path" == "backpack" ]]; then
+    # poker 는 백팩 AP 가 있는 PC 에서만 부팅에 건다. 없는 PC 에 걸면
+    # 있지도 않은 AP 로 계속 쏜다.
+    if [[ -n "$bp_addr" ]]; then
       systemctl --user enable "$POKE_UNIT" >/dev/null 2>&1 || true
     else
       systemctl --user disable "$POKE_UNIT" >/dev/null 2>&1 || true
@@ -249,9 +329,16 @@ try: s=json.load(sys.stdin)
 except Exception: sys.exit()
 d=s.get('d',{})
 live=s.get('live'); age=s.get('age')
-print('  링크: %s   패킷 %s   %s' % (
+print('  링크: %s   패킷 %s   %s%s' % (
     '수신 중' if live else ('끊김 (%.0f초 전)' % age if age is not None else '없음'),
-    format(s.get('packets',0),','), s.get('src') or '-'))
+    format(s.get('packets',0),','), s.get('src') or '-',
+    '  [%s]' % s['link'] if s.get('link') else ''))
+# 두 경로를 동시에 듣는다. 둘 다 붙어 있으면 둘 다 보여 준다 —
+# 화면이 쓰는 것은 위의 [경로] 하나뿐이다 (둘 다면 USB 우선).
+lk = s.get('links') or {}
+if len(lk) > 1:
+    print('  붙어 있는 경로: %s' % '  '.join(
+        '%s(%.0f초 전)' % (k, v) for k, v in sorted(lk.items())))
 # 링크가 끊기면 아래 값은 **마지막으로 받은 값**이다. 지금 상태가 아니다 —
 # 비행 중에 옛 고도를 현재값으로 읽으면 위험하다.
 if d:
