@@ -105,6 +105,24 @@ git push origin main
 ⚠️ **`rim` 은 아직 fetch 만 된다.** 같은 방식으로 풀 수 있다 (그 PC 의 공개키를
 `6K5EUQ` 에 등록 → `git remote set-url` 을 SSH 로).
 
+### rim3 도 랩서버에 붙는다 (2026-09-06)
+
+`./shade01 sync` 를 **rim3 에서도** 돌릴 수 있게 rim3 의 공개키를 두 곳에 넣었다:
+
+| 대상 | 왜 |
+|---|---|
+| `rim3` 자기 자신 | FC 명령이 `ssh $FC_HOST` 로 도는 구조라 자기한테 붙어야 한다 |
+| `ku-labserver` | 대조·업로드·판정을 랩서버에서 하기 때문 |
+
+넣기 전 `authorized_keys` 를 `~/.ssh/authorized_keys.bak.<날짜>` 로 백업했다.
+
+`known_hosts` 도 비어 있어 `Host key verification failed` 로 막혔었다.
+**`ku` 가 이미 검증해 둔 항목을 옮겼다** — `ssh-keyscan` 으로 무작정 받지 않았다.
+
+⚠️ **`web/tools/hosts.conf` 는 gitignore 라 git 으로 안 따라간다.** 새 PC 에서
+sync 를 돌리려면 손으로 만들어야 한다 ([예시](../web/tools/hosts.conf.example)).
+rim3 것은 `FC_HOST="rim3@rim3"` 로 자기를 가리킨다 — FC 가 거기 붙어 있다.
+
 ### PC 별 하드웨어 제약
 
 | | WiFi 라디오 | [ELRS 백팩 링크](qgroundcontrol/README.md#어느-pc-에서-되나-2026-09-03-확인) | GitHub 접속 |
