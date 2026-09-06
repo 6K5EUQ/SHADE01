@@ -271,23 +271,40 @@ http://localhost:4400/?demo=1&auto=1              # AUTO 일 때만 뜨는 WP �
 "웹은 새 화면인데 로컬은 옛 화면" 으로 한참을 헤맸는데, ku 리포가 `ab1b035` 에
 멈춰 있던 것이 원인이었다.
 
-### 절차
+### 🔴 절차 — 배포는 `ku` 를 거친다
+
+**`ku` 가 중앙 PC 다.** gram 을 뺀 전부(rim3·rim·labserver)로 SSH 가 나간다
+([도달 매트릭스](../../gcs/ACCESS.md#ssh-도달-매트릭스-2026-09-06-전수-실측)).
+어느 PC 에서 고쳤든 **ku 를 경유해 퍼뜨린다** — 출발지마다 되는 곳이 달라
+헤매지 않으려면 통로를 하나로 고정하는 편이 낫다.
 
 ```bash
-# 1. 이 PC 에서 고치고 커밋·푸시
+# 1. 고친 PC 에서 커밋·푸시
 git add web/live/public/ && git commit && git push
 
-# 2. 랩서버 — pull 하고, server.js 를 고쳤으면 재시작
-ssh <SERVER> 'cd ~/SHADE01 && git pull --ff-only'
-ssh <SERVER> 'sudo systemctl restart lab-shade01'      # server.js 를 고쳤을 때만
+# 2. ku 로 들어가 거기서 전부 뿌린다
+ssh ku@ku-dgs1
 
-# 3. 다른 PC — 뷰어를 띄우는 곳마다
-ssh ku@ku-dgs1 'cd ~/SHADE01 && git pull --ff-only'
-#    gram 은 SSH 불가 → gram 앞에서 직접
+#   2-1. ku 자신
+cd ~/SHADE01 && git pull --ff-only
+
+#   2-2. 랩서버 (웹). server.js 를 고쳤으면 재시작까지
+ssh ku@ku-labserver 'cd ~/SHADE01 && git pull --ff-only'
+ssh ku@ku-labserver 'sudo systemctl restart lab-shade01'   # server.js 를 고쳤을 때만
+
+#   2-3. 나머지 뷰어 PC
+ssh rim3@rim3        'cd ~/SHADE01 && git pull --ff-only'
+ssh rim@100.107.83.47 'cd ~/SHADE01 && git pull --ff-only'
+
+# 3. gram 은 아무도 못 들어간다 → gram 앞에서 직접
+#    cd ~/SHADE01 && git pull --ff-only
 
 # 4. 검증 — **캐시버스터를 붙이지 마라** (아래)
 curl -s https://shade01.bewe.co.kr/live | grep -o 'id="sc-[a-z]*"' | head -6
 ```
+
+⚠️ `rim` 은 MagicDNS 가 없어 **이름을 못 쓴다** — IP 로 부른다. 같은 이유로
+`rim → rim3` 은 아예 도달하지 못한다.
 
 ### 🔴 검증할 때 `?cb=…` 를 붙이지 마라
 

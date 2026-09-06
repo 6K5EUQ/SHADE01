@@ -29,6 +29,54 @@ gram 에 무언가를 설치하려면 **gram 앞에 앉아서** 하거나, gram 
 | `rim` | 100.107.83.47 | **`rim`** | `~/SHADE01` | 호스트명은 `RIM`. RTT ~0.3ms |
 | `raspb1-dgs3` | 100.126.161.1 | `raspb1` | (리포 없음) | 기체 컴패니언 — [PROCEDURE.md](../PROCEDURE.md) 참조 |
 
+### SSH 도달 매트릭스 (2026-09-06 전수 실측)
+
+세로가 출발지, 가로가 목적지. **`ku` 가 중앙 PC 다** — gram 만 빼고 전부 나간다.
+
+| ↓에서 →로 | ku | rim3 | rim | labserver | gram |
+|---|---|---|---|---|---|
+| **ku** | — | ✅ | ✅ | ✅ | ❌ 키 없음 |
+| **rim3** | ✅ | — | ❌ 키 없음 | ✅ | ❌ 키 없음 |
+| **rim** | ✅ | ❌ **도달 불가** | — | ✅ (IP 로만) | ❌ |
+| **labserver** | ✅ | ❌ 키 없음 | ✅ | — | ❌ 키 없음 |
+| **gram** | ? | ? | ? | ? | — |
+
+🔴 **`rim → rim3` 는 키 문제가 아니다.** `100.117.47.105:22` 가 **연결 자체로
+타임아웃**한다 (rim3 은 IP 로 22번이 안 열린다 — 위 주소표 참조). rim 에는
+MagicDNS 가 없어 `rim3` 이라는 **이름을 못 쓴다** (`Temporary failure in name
+resolution`). 키를 등록해도 안 붙는다 — **rim 에서 MagicDNS 를 켜야 한다.**
+
+⚠️ `rim` 은 `ku-labserver` 도 이름으로 못 찾는다. IP(`100.86.239.31`)를 써야 한다.
+
+### 키를 등록해야 할 곳 — 사용자가 직접
+
+아래를 각 PC 의 `~/.ssh/authorized_keys` 에 한 줄로 추가한다.
+
+**① gram 에 (`dsa` 계정)** — gram 은 아무도 못 들어간다. **gram 앞에 앉아서** 한다.
+
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOPMFV3mXT+XCFN7Mlxfk4te1NP1/d3ammlzhIGDz/IR ku@ku
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAHrVD8K7BonvmxjBtCeSrALGUehIIQwh/zr2uWoS3hq rim3@bewe
+```
+
+**② rim3 에 (`rim3` 계정)** — labserver 가 들어오려면 필요하다. `ku` 에서 할 수 있다.
+
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOPMFV3mXT+XCFN7Mlxfk4te1NP1/d3ammlzhIGDz/IR ku@ku   # 이미 됨
+# labserver 공개키는 그 PC 에서 `cat ~/.ssh/id_ed25519.pub` 로 뽑아 넣는다
+```
+
+**③ rim 에 (`rim` 계정)** — rim3 에서 들어가려면 필요하다.
+
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAHrVD8K7BonvmxjBtCeSrALGUehIIQwh/zr2uWoS3hq rim3@bewe
+```
+
+**gram 이 나가는 쪽**은 gram 의 공개키가 있어야 검증할 수 있다. gram 앞에서
+`cat ~/.ssh/id_ed25519.pub` (없으면 `ssh-keygen -t ed25519`) 를 뽑아 주면
+나머지 PC 에 등록해 준다.
+
+
 > ⚠️ **`rim` 은 붙는다 — 계정명이 `rim` 이다** (2026-09-04 실측). 이 문서는 오랫동안
 > "소유자가 `yyrrm@` 라 위 키로는 안 붙는다" 고 적고 있었는데 **틀렸다.** Tailscale 의
 > 소유자 태그(`yyrrm@`)와 SSH 계정명은 별개다. `yyrrm@`·`ku@`·`rim3@` 로는 실제로
