@@ -1,9 +1,9 @@
 ---
-name: flight-sync
-description: 비행이 끝난 뒤 한 줄로 FC 로그를 웹에 올린다. "qgc sync" 로 그날 실제로 뜬 비행만 FC 에서 받아 shade01.bewe.co.kr 에 등록한다. 지상 시험·즉시 disarm·실내·읽기 실패는 받지도 올리지도 않는다. 비행 후 정리, "로그 올려줘", "오늘 비행 웹에 등록" 에 쓴다. 지나간 .ulg 분석은 qgc-log, 실시간 화면은 qgc-live, 비행 전 점검은 preflight 쪽이다.
+name: shade01-sync
+description: 비행이 끝난 뒤 한 줄로 FC 로그를 웹에 올린다. "qgc sync" 로 그날 실제로 뜬 비행만 FC 에서 받아 shade01.bewe.co.kr 에 등록한다. 지상 시험·즉시 disarm·실내·읽기 실패는 받지도 올리지도 않는다. 비행 후 정리, "로그 올려줘", "오늘 비행 웹에 등록" 에 쓴다. 지나간 .ulg 분석은 shade01-log, 실시간 화면은 shade01-live, 비행 전 점검은 shade01-test 쪽이다.
 ---
 
-# flight-sync — 비행 로그를 랩서버에 올린다
+# shade01-sync — 비행 로그를 랩서버에 올린다
 
 비행이 끝나면 **한 줄**이다.
 
@@ -11,8 +11,8 @@ description: 비행이 끝난 뒤 한 줄로 FC 로그를 웹에 올린다. "qgc
 ./shade01 sync
 ```
 
-**이 스킬은 SHADE01 리포가 정본이다** (`skills/flight-sync/SKILL.md`).
-`~/.claude/skills/flight-sync` 는 그쪽을 가리키는 심볼릭이다 — 사본을 만들지 마라.
+**이 스킬은 SHADE01 리포가 정본이다** (`skills/shade01-sync/SKILL.md`).
+`~/.claude/skills/shade01-sync` 는 그쪽을 가리키는 심볼릭이다 — 사본을 만들지 마라.
 
 근거·실측치 전문은 **[`FLIGHT-SYNC.md`](../../FLIGHT-SYNC.md)** 에 있다.
 
@@ -30,8 +30,8 @@ description: 비행이 끝난 뒤 한 줄로 FC 로그를 웹에 올린다. "qgc
 "비행 로그 올려줘" / "오늘 비행 웹에 등록" / "shade01 에 반영" /
 "로그 받아서 올려" / "비행 끝났어 정리해줘"
 
-지나간 로그 **분석**은 `qgc-log`. 지금 날고 있는 것을 **보는** 것은 `qgc-live`.
-비행 **전** "날려도 되나" 는 `preflight` (`./shade01 test`).
+지나간 로그 **분석**은 `shade01-log`. 지금 날고 있는 것을 **보는** 것은 `shade01-live`.
+비행 **전** "날려도 되나" 는 `shade01-test` (`./shade01 test`).
 
 ## 한 줄이 하는 일 (7단계)
 

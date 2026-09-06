@@ -1,14 +1,14 @@
 ---
-name: qgc-log
+name: shade01-log
 description: PX4/QGC 비행 로그(.ulg) 목록·분석. "qgc log list" 로 최근 비행을 번호로 나열하고 "qgc log N" 으로 그 비행을 분석해 문제·잘된점·다음 할일을 리포트한다. 비행 후 디브리핑, 진동/전류/EKF/에어스피드 이상 진단, 사고 원인 추적에 사용.
 ---
 
-# qgc-log — 비행 로그 분석
+# shade01-log — 비행 로그 분석
 
 PX4 ULog 를 읽어 **무엇이 문제였고, 무엇이 잘 됐고, 다음에 뭘 고쳐야 하는지**를 뽑는다.
 
-**이 스킬은 SHADE01 리포가 정본이다** (`skills/qgc-log/SKILL.md`).
-`~/.claude/skills/qgc-log` 는 그쪽을 가리키는 심볼릭이다 — 사본을 만들지 마라.
+**이 스킬은 SHADE01 리포가 정본이다** (`skills/shade01-log/SKILL.md`).
+`~/.claude/skills/shade01-log` 는 그쪽을 가리키는 심볼릭이다 — 사본을 만들지 마라.
 판정 임계값이 이 기체 하드웨어에 묶여 있어 기체 문서와 함께 버전 관리되어야 한다.
 
 도구 본체:
@@ -23,12 +23,12 @@ PX4 ULog 를 읽어 **무엇이 문제였고, 무엇이 잘 됐고, 다음에 �
 
 | 명령 | 무엇 | 스킬 |
 |---|---|---|
-| `./shade01 test` | **비행 전** 점검 — GO / NO-GO | [`preflight`](../preflight/SKILL.md) |
-| `./qgc live` | **지금** 날고 있는 기체 (HUD + 흘러가는 차트, `localhost:4400`) | [`qgc-live`](../qgc-live/SKILL.md) |
-| `./shade01 sync` | 비행 **뒤** FC 로그를 랩서버로 | [`flight-sync`](../flight-sync/SKILL.md) |
+| `./shade01 test` | **비행 전** 점검 — GO / NO-GO | [`shade01-test`](../shade01-test/SKILL.md) |
+| `./qgc live` | **지금** 날고 있는 기체 (HUD + 흘러가는 차트, `localhost:4400`) | [`shade01-live`](../shade01-live/SKILL.md) |
+| `./shade01 sync` | 비행 **뒤** FC 로그를 랩서버로 | [`shade01-sync`](../shade01-sync/SKILL.md) |
 
-사용자가 "실시간"·"지금 상태" 를 물으면 로그 분석이 아니라 `qgc-live` 다.
-"날려도 되나"·"비행 전 점검" 은 `preflight` 다.
+사용자가 "실시간"·"지금 상태" 를 물으면 로그 분석이 아니라 `shade01-live` 다.
+"날려도 되나"·"비행 전 점검" 은 `shade01-test` 다.
 
 ## 사용법
 

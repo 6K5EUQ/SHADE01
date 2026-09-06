@@ -1,19 +1,19 @@
 ---
-name: qgc-live
-description: 지금 날고 있는 기체를 브라우저로 본다. "qgc live on" 으로 실시간 트래킹(HUD + 흘러가는 차트, localhost:4400)을 켜고 "off" 로 끈다. 비행 중 상태 확인, 링크가 붙었는지 점검, 화면이 안 뜰 때 진단에 쓴다. 읽기 전용이라 FC 로 아무것도 안 보낸다. 지나간 .ulg 분석은 qgc-log, 비행 전 점검(날려도 되나)은 preflight 쪽이다.
+name: shade01-live
+description: 지금 날고 있는 기체를 브라우저로 본다. "qgc live on" 으로 실시간 트래킹(HUD + 흘러가는 차트, localhost:4400)을 켜고 "off" 로 끈다. 비행 중 상태 확인, 링크가 붙었는지 점검, 화면이 안 뜰 때 진단에 쓴다. 읽기 전용이라 FC 로 아무것도 안 보낸다. 지나간 .ulg 분석은 shade01-log, 비행 전 점검(날려도 되나)은 shade01-test 쪽이다.
 ---
 
-# qgc-live — 실시간 비행 트래킹
+# shade01-live — 실시간 비행 트래킹
 
 **지금 이 순간**의 기체를 브라우저로 띄운다. 좌측은 HUD(인공수평의·테이프·
 상태밴드), 우측은 로그 뷰어와 같은 그림의 **흘러가는 시계열 차트**다.
 
-**이 스킬은 SHADE01 리포가 정본이다** (`skills/qgc-live/SKILL.md`).
-`~/.claude/skills/qgc-live` 는 그쪽을 가리키는 심볼릭이다 — 사본을 만들지 마라.
+**이 스킬은 SHADE01 리포가 정본이다** (`skills/shade01-live/SKILL.md`).
+`~/.claude/skills/shade01-live` 는 그쪽을 가리키는 심볼릭이다 — 사본을 만들지 마라.
 
 **`./qgc live` 만 다룬다.** 형제인 `./qgc log` 는 다른 물건이다 — 끝난 비행의
 `.ulg` 를 분석한다. 사용자가 "지난 비행", "로그", "디브리핑" 을 말하면 그쪽이다
-(`qgc-log` 스킬).
+(`shade01-log` 스킬).
 
 ```
 <SHADE01>/qgc                     진입점 — ./qgc live ...
@@ -202,4 +202,4 @@ QGC 와 이 페이지 중 한쪽에만 주어 서로 프레임을 훔친다. 지
 
 - [`web/live/README.md`](../../web/live/README.md) — 설계·함정·자체검사 전문
 - [`README.md`](../../README.md#링크-구성--3-경로) — 링크 3경로
-- 로그 분석은 `qgc-log` 스킬
+- 로그 분석은 `shade01-log` 스킬

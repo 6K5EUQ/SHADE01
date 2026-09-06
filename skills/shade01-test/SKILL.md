@@ -1,9 +1,9 @@
 ---
-name: preflight
-description: 비행 전 마지막 점검. "./shade01 test" 로 FC 에 한 번 붙어 파라미터·미션·GPS·전원·failsafe·센서를 한꺼번에 읽고 GO / NO-GO 를 낸다. 읽기 전용이라 FC 값을 바꾸지 않는다. 현장에서 "지금 날려도 되나" 를 물을 때, 비행 직전 마지막 확인, 파라미터를 바꾼 뒤 실기 반영 확인에 쓴다. 지나간 로그 분석은 qgc-log, 실시간 화면은 qgc-live 쪽이다.
+name: shade01-test
+description: 비행 전 마지막 점검. "./shade01 test" 로 FC 에 한 번 붙어 파라미터·미션·GPS·전원·failsafe·센서를 한꺼번에 읽고 GO / NO-GO 를 낸다. 읽기 전용이라 FC 값을 바꾸지 않는다. 현장에서 "지금 날려도 되나" 를 물을 때, 비행 직전 마지막 확인, 파라미터를 바꾼 뒤 실기 반영 확인에 쓴다. 지나간 로그 분석은 shade01-log, 실시간 화면은 shade01-live 쪽이다.
 ---
 
-# preflight — 비행 전 마지막 점검
+# shade01-test — 비행 전 마지막 점검
 
 ```bash
 ./shade01 test          # 판정만 (기본)
@@ -134,5 +134,5 @@ Tailscale 에서 온라인인 `rim3`·`raspb1`·`ku`·`rim` 순으로 훑는다.
 - **arm 뒤**: QGC 지도에서 **H 아이콘이 기체 위**인지 — RTL 이 그리로 간다
 - **조종기**: 모드 스위치 6단, `CH6 RC 캘리브레이션 금지` (슬롯 경계 여유 7us)
 
-관련: [`qgc-log`](../qgc-log/SKILL.md) 지나간 로그 · [`qgc-live`](../qgc-live/SKILL.md)
+관련: [`shade01-log`](../shade01-log/SKILL.md) 지나간 로그 · [`shade01-live`](../shade01-live/SKILL.md)
 실시간 화면 · [`FC_CHANGELOG.md`](../../FC_CHANGELOG.md) 파라미터가 왜 그 값인지

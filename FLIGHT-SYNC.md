@@ -9,7 +9,7 @@
 FC 에 있는데 랩서버에 없는 로그를 받아 **번호를 붙여** 올리고, **야외 비행이
 아니면 랩서버에서 지운다.** 그 한 번에 일곱 단계가 다 돈다.
 
-> 이 문서는 [`skills/flight-sync`](skills/flight-sync/SKILL.md) 의 정본이다.
+> 이 문서는 [`skills/shade01-sync`](skills/shade01-sync/SKILL.md) 의 정본이다.
 > `./qgc sync` 는 같은 것을 가리키는 옛 이름이다 — 둘 다 동작한다.
 
 ---
