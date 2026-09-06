@@ -1176,17 +1176,29 @@ async function pbShowPicker() {
   // ── FC 로그 (.ulg) ────────────────────────────────────────────
   // 🔴 머리말이 없다. 이름이 `log_<번호>_<시각>.ulg` 라 무엇인지 이름만 봐도
   //    안다 — 설명을 한 줄 더 얹으면 목록만 밀린다 (사용자 지시 2026-09-06).
-  if (logs && logs.logs && logs.logs.length) {
-    for (const e of logs.logs) {
+  //
+  // 🔴 **두 서버가 같은 경로에 다른 모양을 준다** (2026-09-07 수정).
+  //      로컬 mav_live.py : {logs:[...], source, error}   ← logsource.catalog()
+  //      웹   server.js   : [...]                          ← 웹 목록 페이지의 카탈로그
+  //    `logs.logs` 만 보던 동안 웹에서는 늘 undefined 라 이 블록이 통째로
+  //    건너뛰어졌고, 랩서버에 .ulg 가 56개인데 「재생할 것이 없다」가 떴다.
+  //    웹서버 쪽 모양은 목록 페이지도 쓰므로 바꾸지 않고 여기서 받아 준다.
+  const logRows = Array.isArray(logs) ? logs : (logs && logs.logs) || [];
+  if (logRows.length) {
+    for (const e of logRows) {
       const bs = [];
       // 번호를 추론한 것은 흐리게 — FC 가 준 번호와 같다는 보장이 없다.
-      bs.push(badge(e.exact ? 'ULG' : 'ULGX', 'ulg',
-        e.exact ? 'FC 가 준 번호다' :
+      // exact/local 은 로컬 카탈로그에만 있는 값이다. 웹 모양(배열)에서는
+      // undefined 이므로 **모르는 것을 단정하지 않는다** — 배지를 안 붙인다.
+      const known = e.exact !== undefined;
+      bs.push(badge(!known || e.exact ? 'ULG' : 'ULGX', 'ulg',
+        !known ? '' : e.exact ? 'FC 가 준 번호다' :
           '번호는 추론한 것이다 (원본 이름 ' + e.name + ')'));
       // 복구본은 **같은 제목**을 쓰고 배지로만 가른다 (사용자 지시).
-      if (e.recovered) bs.push(badge('REC2', '복구', '_repair() 가 살려낸 사본'));
-      if (!e.local) bs.push(badge('REM', '원격', 'labserver 에 있다 — 재생하면 받아 온다'));
-      const row = mkrow(bs, e.disp, (e.size / 1e6).toFixed(1) + 'MB');
+      if (e.recovered || e.repaired) bs.push(badge('REC2', '복구', '_repair() 가 살려낸 사본'));
+      if (known && !e.local) bs.push(badge('REM', '원격', 'labserver 에 있다 — 재생하면 받아 온다'));
+      // 웹 카탈로그에는 disp(정리한 표시 이름)가 없다. 이름을 그대로 쓴다.
+      const row = mkrow(bs, e.disp || e.name, (e.size / 1e6).toFixed(1) + 'MB');
       row.onclick = () => pbStart(e.name);
     }
   }
@@ -1198,7 +1210,7 @@ async function pbShowPicker() {
   }
   // 목록이 어디서 왔는지. 🔴 목록은 **정본만** 따른다 — 정본에 못 붙으면
   // 로컬 사본으로 대신하지 않고 비운다. 그래야 화면에 뜬 것이 곧 정본이다.
-  if (logs && logs.source === 'down' && logs.error) {
+  if (!Array.isArray(logs) && logs && logs.source === 'down' && logs.error) {
     const w = document.createElement('div');
     w.className = 'msg warn';
     w.textContent = '⚠️ ' + logs.error;
