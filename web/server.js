@@ -202,6 +202,29 @@ function dedupe(rows, all) {
 function send(req, res, status, body, type, extra = {}) {
   const buf = Buffer.isBuffer(body) ? body : Buffer.from(body);
   const headers = { 'Content-Type': type, 'X-Robots-Tag': 'noindex, nofollow', ...extra };
+
+  // 🔴 `no-cache` 는 "캐시하지 마라" 가 아니라 "쓰기 전에 서버에 물어봐라" 다.
+  //    물어보려면 지문이 있어야 하는데 ETag 도 Last-Modified 도 안 보내고
+  //    있었다 — 검증할 것이 없으니 브라우저는 그냥 옛 사본을 쓴다.
+  //
+  //    2026-09-06 실측으로 물렸다. 계기판 순서(index.html)와 자세 차트
+  //    기본값(live.js)을 같이 고쳐 배포했는데 **자세만 바뀌고 계기판은
+  //    옛날 그대로**였다. live.js 는 4시간 만료가 지나 다시 받았고,
+  //    index.html 은 아직 아니라 캐시에서 나온 것이다. 강력 새로고침으로도
+  //    안 바뀌는 것처럼 보여 배포 실패로 오해하기 딱 좋다.
+  //
+  //    본문 해시를 ETag 로 붙인다. 내용이 그대로면 304 로 끝나 트래픽도 준다.
+  //    gzip 여부는 지문에 안 섞는다 — Vary: Accept-Encoding 이 이미 가른다.
+  if (status === 200 && !headers['ETag']) {
+    headers['ETag'] = '"' + crypto.createHash('sha1').update(buf).digest('base64').slice(0, 22) + '"';
+    const inm = req.headers['if-none-match'];
+    if (inm && inm.split(',').some((t) => t.trim() === headers['ETag'])) {
+      delete headers['Content-Encoding'];
+      res.writeHead(304, headers).end();
+      return;
+    }
+  }
+
   const wantsGz = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
   if (wantsGz && buf.length > 1024 && !headers['Content-Encoding']) {
     const gz = zlib.gzipSync(buf);
