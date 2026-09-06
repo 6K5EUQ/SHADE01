@@ -1,6 +1,6 @@
 ---
 name: qgc-live
-description: 지금 날고 있는 기체를 브라우저로 본다. "qgc live on" 으로 실시간 트래킹(HUD + 흘러가는 차트, localhost:4400)을 켜고 "off" 로 끈다. 비행 중 상태 확인, 링크가 붙었는지 점검, 화면이 안 뜰 때 진단에 쓴다. 읽기 전용이라 FC 로 아무것도 안 보낸다. 지나간 .ulg 분석은 qgc-log 쪽이다.
+description: 지금 날고 있는 기체를 브라우저로 본다. "qgc live on" 으로 실시간 트래킹(HUD + 흘러가는 차트, localhost:4400)을 켜고 "off" 로 끈다. 비행 중 상태 확인, 링크가 붙었는지 점검, 화면이 안 뜰 때 진단에 쓴다. 읽기 전용이라 FC 로 아무것도 안 보낸다. 지나간 .ulg 분석은 qgc-log, 비행 전 점검(날려도 되나)은 preflight 쪽이다.
 ---
 
 # qgc-live — 실시간 비행 트래킹
@@ -35,7 +35,7 @@ FC 로 나가는 바이트가 **0** 이다. ARM·모드변경·미션업로드�
 ## 사용법
 
 ```bash
-./qgc live on          # 켠다 → http://localhost:4400
+./qgc live on          # 켠다 → http://localhost:4400   (./shade01 live 도 같다)
 ./qgc live on 14551    # UDP 포트 지정 (14550 이 이미 물려 있을 때)
 ./qgc live always      # 켜고 + 부팅 때도 자동 (재부팅해도 산다)
 ./qgc live off         # 끈다 (부팅 자동시작도 같이 뗀다)

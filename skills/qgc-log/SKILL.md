@@ -19,10 +19,16 @@ PX4 ULog 를 읽어 **무엇이 문제였고, 무엇이 잘 됐고, 다음에 �
 <SHADE01>/qgc                        진입점 — ./qgc log ...
 ```
 
-**이 스킬은 `./qgc log` 만 다룬다.** `./qgc live` 는 형제 하위명령이지만 다른
-물건이다 — 지나간 로그가 아니라 **지금 날고 있는 기체**를 지도+계기로 띄운다
-(읽기 전용, `localhost:4400`). 사용자가 "실시간", "지금 상태" 를 물으면 로그
-분석이 아니라 그쪽이다: [`web/live/README.md`](../../web/live/README.md).
+**이 스킬은 `./qgc log` 만 다룬다.** 형제 하위명령이 셋 더 있고 전부 다른 물건이다:
+
+| 명령 | 무엇 | 스킬 |
+|---|---|---|
+| `./shade01 test` | **비행 전** 점검 — GO / NO-GO | [`preflight`](../preflight/SKILL.md) |
+| `./qgc live` | **지금** 날고 있는 기체 (HUD + 흘러가는 차트, `localhost:4400`) | [`qgc-live`](../qgc-live/SKILL.md) |
+| `./shade01 sync` | 비행 **뒤** FC 로그를 랩서버로 | [`flight-sync`](../flight-sync/SKILL.md) |
+
+사용자가 "실시간"·"지금 상태" 를 물으면 로그 분석이 아니라 `qgc-live` 다.
+"날려도 되나"·"비행 전 점검" 은 `preflight` 다.
 
 ## 사용법
 
@@ -35,6 +41,7 @@ qgclog 1 --dir ~/다른/Logs
 ```
 
 사용자가 `./qgc log list` / `./qgc log 1` 처럼 말하면 위 명령으로 옮겨 실행한다.
+`./shade01 log …` 도 같은 것을 가리킨다 — 진입점이 둘이고 둘 다 산다.
 
 ## 실행 절차
 

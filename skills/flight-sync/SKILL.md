@@ -1,6 +1,6 @@
 ---
 name: flight-sync
-description: 비행이 끝난 뒤 한 줄로 FC 로그를 웹에 올린다. "qgc sync" 로 그날 실제로 뜬 비행만 FC 에서 받아 shade01.bewe.co.kr 에 등록한다. 지상 시험·즉시 disarm·실내·읽기 실패는 받지도 올리지도 않는다. 비행 후 정리, "로그 올려줘", "오늘 비행 웹에 등록" 에 쓴다. 지나간 .ulg 분석은 qgc-log, 실시간 화면은 qgc-live 쪽이다.
+description: 비행이 끝난 뒤 한 줄로 FC 로그를 웹에 올린다. "qgc sync" 로 그날 실제로 뜬 비행만 FC 에서 받아 shade01.bewe.co.kr 에 등록한다. 지상 시험·즉시 disarm·실내·읽기 실패는 받지도 올리지도 않는다. 비행 후 정리, "로그 올려줘", "오늘 비행 웹에 등록" 에 쓴다. 지나간 .ulg 분석은 qgc-log, 실시간 화면은 qgc-live, 비행 전 점검은 preflight 쪽이다.
 ---
 
 # flight-sync — 비행 로그를 랩서버에 올린다
@@ -20,7 +20,7 @@ description: 비행이 끝난 뒤 한 줄로 FC 로그를 웹에 올린다. "qgc
 <SHADE01>/shade01                       진입점 (./qgc 도 같은 것)
 <SHADE01>/tools/flightsync/flightsync   본체 (bash)
 <SHADE01>/tools/flightsync/since.py     FC ↔ 랩서버 대조
-<SHADE01>/tools/flightsync/number_new.py 받은 것에만 번호 붙이기
+<SHADE01>/tools/flightsync/renumber.py  번호 부여 · 중복 삭제 (랩서버에서 돈다)
 <SHADE01>/web/tools/uploadable.py       야외 판정 (랩서버에서 돈다)
 <SHADE01>/web/tools/hosts.conf          주소 (gitignore 됨)
 ```
@@ -31,6 +31,7 @@ description: 비행이 끝난 뒤 한 줄로 FC 로그를 웹에 올린다. "qgc
 "로그 받아서 올려" / "비행 끝났어 정리해줘"
 
 지나간 로그 **분석**은 `qgc-log`. 지금 날고 있는 것을 **보는** 것은 `qgc-live`.
+비행 **전** "날려도 되나" 는 `preflight` (`./shade01 test`).
 
 ## 한 줄이 하는 일 (7단계)
 
@@ -40,9 +41,9 @@ description: 비행이 끝난 뒤 한 줄로 FC 로그를 웹에 올린다. "qgc
 | 2 | **대조** | FC 전체 ↔ 랩서버 보유 + 삭제 기록 (**집합 차이**) |
 | 3 | 받기 | 없는 것만. 1MB 미만은 받지도 않는다 |
 | 4 | 회수 | rim3 → 이 PC |
-| 5 | **번호** | FC 에 물어 `log_<번호>_<KST>.ulg` |
-| 6 | 업로드 | 랩서버 `~/shade01-data/logs/` |
-| 7 | **판정·삭제** | **랩서버 안에서** 돈다. 야외 비행이 아니면 지우고 기록 |
+| 5 | 업로드 | 랩서버 `~/shade01-data/logs/` |
+| 6 | **판정·삭제** | **랩서버 안에서** 돈다. 야외 비행이 아니면 지우고 기록 |
+| 7 | **번호** | 랩서버에서 `log_<번호>_<KST>.ulg`. 🔴 **판정 뒤**다 — 남을 것이 정해진 다음에 번호를 준다 |
 
 ## 그냥 올려 달라고 하면
 
