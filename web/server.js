@@ -632,6 +632,10 @@ async function route(req, res) {
   // UI 가 갈리지 않는다. 랩서버는 ~/shade01-data/logs 를 그 자리에서 읽으므로
   // 받아올 것도 없다.
   if (p.startsWith('/api/playback/')) return proxyLive(req, res);
+  // ⚠️ `/api/logs` 는 넘기지 않는다 — 웹서버가 이미 자기 카탈로그로 쓰고 있고,
+  //    내용도 같은 랩서버의 .ulg 라 프론트가 그대로 쓸 수 있다.
+  //    `/api/recordings` 는 웹서버에 없던 것이라 넘긴다 (현장 .tlog 자리).
+  if (p === '/api/recordings') return proxyLive(req, res);
   if (/^\/compare\b/.test(p)) return serveStatic(req, res, '/compare.html');
   return serveStatic(req, res, p);
 }
