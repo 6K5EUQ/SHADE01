@@ -387,7 +387,7 @@ const CHARTS = [
       { key: 'volt', color: 'var(--c-volt)', label: '전압', axis: 'right', unit: 'V', minSpan: 2 }],
     // 45A 는 8/31 비행에서 453초 중 270초를 넘긴 선이다 (README 「전류」).
     thresholds: [{ v: 45, label: '45A', color: '#d29922' }] },
-  { id: 'k-att', title: '자세', on: false, series: [
+  { id: 'k-att', title: '자세', on: true, series: [
       { key: 'roll', color: '#d55e00', label: '롤', axis: 'left', weight: 2, unit: '°', minSpan: 20 },
       { key: 'pitch', color: '#e69f00', label: '피치', axis: 'left', weight: 2, unit: '°', minSpan: 20 }] },
   { id: 'k-vib', title: '진동', on: false, series: [
