@@ -139,18 +139,30 @@ LIVE_DIR = os.environ.get(
 REC_TAIL_S = 10.0
 
 # ── 야외 판정 ──────────────────────────────────────────────────────────
-# arm 만으로는 안 적는다. 실내 벤치에서 프로펠러 없이 arm 해 보는 일이 잦은데,
-# 그것까지 남기면 목록이 쓸모없는 파일로 덮인다.
-#
 # 🔴 GPS 로 가른다 — 3D fix 이고 위성 6기 이상. 실내에서는 fix 가 2 이하로
 #    머물거나 위성이 서너 개에서 멎으므로 자연히 걸러진다. `qgclog.py` 가
 #    지난 로그를 실내로 판정하는 기준과 같은 성질이다.
-#
-# ⚠️ arm 순간에 못 넘었어도 **포기하지 않는다.** fix 는 arm 뒤에 잡히기도
-#    한다 — 매 프레임 다시 보고, 넘어서는 순간 그때부터 적는다. 그 앞은
-#    잃지만 비행 본체는 남는다.
 REC_MIN_FIX = 3
 REC_MIN_SATS = 6
+
+# ── 남길 것을 고르는 기준 (2026-09-06) ────────────────────────────────
+# 🔴 **일단 다 적고, 닫을 때 판정해서 지운다.** 예전에는 야외 판정을
+#    통과해야 파일을 열었는데, 그러면 fix 가 늦게 잡힌 비행의 **앞부분이
+#    통째로 없다** — 이륙 순간이 가장 보고 싶은 구간인데 그게 빠졌다.
+#    지금은 arm 하면 무조건 적기 시작하고, 닫을 때 아래 둘을 본다:
+#
+#      1. 비행 중 한 번이라도 야외(fix≥3, 위성≥6)였나
+#      2. 파일이 REC_MIN_KEEP_BYTES 이상인가
+#
+#    둘 다 맞아야 남는다. 하나라도 아니면 지운다 — 실내 벤치 arm 과
+#    즉시 disarm 이 목록을 덮는 것을 막는 것이 원래 목적이고, 그 목적은
+#    파일을 **안 여는 것**이 아니라 **안 남기는 것**으로 달성된다.
+REC_MIN_KEEP_BYTES = 1_000_000        # 1MB
+
+# 오래된 기록은 지운다. 몇 달을 켜 두면 ARM 마다 파일이 생기는데 아무도 안
+# 지운다 — git 에도 안 올라가니(.gitignore) 조용히 디스크만 먹는다.
+# 정본은 shade01.bewe.co.kr 이고 이것은 이 PC 의 사본이므로 넉넉히 잡아도 된다.
+REC_KEEP_DAYS = 90
 
 
 def _outdoor(d):
@@ -174,6 +186,9 @@ class _Sink:
         self.frames = 0
         self.bytes = 0
         self.error = None
+        # 이 파일이 사는 동안 **한 번이라도** 야외 GPS 를 봤나. 닫을 때
+        # 남길지 지울지의 판정 절반이다 (나머지 절반은 크기).
+        self.outdoor = False
 
     def open(self, stamp):
         """stamp 는 이 **비행 세션**의 시작 시각 (time.time). 경로가 달라도
@@ -218,7 +233,11 @@ class _Sink:
             self.close()
 
     def close(self):
-        """닫은 파일의 요약을 준다. 안 열려 있었으면 None."""
+        """닫고, 남길 값어치가 있으면 요약을 준다. 지웠거나 안 열렸으면 None.
+
+        🔴 판정은 **여기서** 한다 — 적는 동안이 아니라. 그래야 fix 가 늦게
+           잡힌 비행도 앞부분이 남는다 (REC_MIN_KEEP_BYTES 주석 참조).
+        """
         if self.f is None:
             self.path = None
             return None
@@ -227,15 +246,35 @@ class _Sink:
         except OSError:
             pass
         info = None
-        if self.path:
-            dur = time.time() - self.started if self.started else 0
-            info = {'name': os.path.basename(self.path), 'kind': self.kind,
-                    'frames': self.frames, 'bytes': self.bytes,
-                    'dur': round(dur, 1)}
-            print('기록 종료  %s  (%d프레임 %.1fMB %.0f초)'
-                  % (self.path, self.frames, self.bytes / 1e6, dur), flush=True)
+        path, dur = self.path, (time.time() - self.started if self.started else 0)
+        if path:
+            why = self._discard_reason()
+            if why is None:
+                info = {'name': os.path.basename(path), 'kind': self.kind,
+                        'frames': self.frames, 'bytes': self.bytes,
+                        'dur': round(dur, 1)}
+                print('기록 종료  %s  (%d프레임 %.1fMB %.0f초)'
+                      % (path, self.frames, self.bytes / 1e6, dur), flush=True)
+            else:
+                # 남길 값어치가 없다 — 지운다. 실패해도 트래킹은 계속돼야 하므로
+                # 조용히 넘어가되, 왜 지웠는지는 반드시 찍는다.
+                try:
+                    os.remove(path)
+                    print('기록 버림  %s  (%s — %.1fMB %.0f초)'
+                          % (os.path.basename(path), why, self.bytes / 1e6, dur),
+                          flush=True)
+                except OSError as e:
+                    print('기록 못 지움 %s: %s' % (path, e), file=sys.stderr, flush=True)
         self.f = self.path = self.started = None
         return info
+
+    def _discard_reason(self):
+        """버릴 이유. 남길 것이면 None."""
+        if not self.outdoor:
+            return '실내 — GPS 야외 판정을 한 번도 못 넘었다'
+        if self.bytes < REC_MIN_KEEP_BYTES:
+            return '%.1fMB < %.1fMB' % (self.bytes / 1e6, REC_MIN_KEEP_BYTES / 1e6)
+        return None
 
 
 class Recorder:
@@ -320,16 +359,21 @@ class Recorder:
             # disarm 뒤 10초짜리 조각 파일이 목록을 어지럽힌다.
             if self._closing_at is not None:
                 return
-            if not _outdoor(d):
-                self.waiting = True
-                return
+            # 🔴 야외인지 **묻지 않고 연다.** 판정은 닫을 때 한다 — 그래야
+            #    fix 가 늦게 잡힌 비행도 이륙 순간이 남는다.
             if self.stamp is None:
                 self.stamp = time.time()
             sink = self.sinks[k] = _Sink(self.dir, k)
             sink.open(self.stamp)
-            self.waiting = False
             if sink.error:
                 self.error = sink.error
+        # 이 비행이 야외였다는 사실은 **한 번 참이면 계속 참**이다. 착륙 후
+        # fix 를 잃어도 이미 야외 비행이었던 것은 변하지 않는다.
+        if not sink.outdoor and _outdoor(d):
+            sink.outdoor = True
+        # 화면의 「실내대기」는 이제 "안 적는 중" 이 아니라 "적고는 있는데
+        # 아직 야외를 못 봤다(=이대로 끝나면 버려진다)" 는 뜻이다.
+        self.waiting = not any(sk.outdoor for sk in self.sinks.values())
         sink.write(data)
         if sink.error:
             self.error = sink.error
@@ -577,6 +621,32 @@ def _rec_stamp(name):
     except (ValueError, OverflowError):
         return None
     return epoch, (kind or 'FC')
+
+
+def prune_recordings(dirpath, days=REC_KEEP_DAYS):
+    """REC_KEEP_DAYS 보다 오래된 .tlog 를 지운다. 지운 개수를 돌려준다.
+
+    🔴 실패해도 조용히 넘어간다 — 청소가 트래킹을 막으면 안 된다.
+    """
+    cutoff = time.time() - days * 86400
+    n = 0
+    try:
+        names = os.listdir(dirpath)
+    except OSError:
+        return 0
+    for name in names:
+        if not name.endswith('.tlog'):
+            continue
+        path = os.path.join(dirpath, name)
+        try:
+            if os.path.getmtime(path) < cutoff:
+                os.remove(path)
+                n += 1
+        except OSError:
+            pass
+    if n:
+        print('오래된 기록 %d개 지움 (%d일 지난 것)' % (n, days), flush=True)
+    return n
 
 
 def list_recordings(dirpath):
@@ -1002,8 +1072,17 @@ def _sniff_gps(msgs, st):
             st.rec_gps['sats'] = m.satellites_visible
 
 
-def receiver(sock, st):
-    """UDP 수신 루프. 이 함수는 소켓에 쓰지 않는다."""
+def receiver(sock, st, alive=None):
+    """UDP 수신 루프. 이 함수는 소켓에 쓰지 않는다.
+
+    alive 가 주어지면 그것이 False 를 돌려주는 순간 루프를 끝낸다 — 백팩
+    소켓처럼 도중에 은퇴하는 것을 위해서다.
+
+    🔴 닫힌 소켓에서 `continue` 로 버티면 안 된다. 스레드가 소켓 객체를
+       계속 붙들고 있어 **포트가 안 풀린다** — 다음에 같은 자리를 열려고 할
+       때 EADDRINUSE 로 실패한다. AP 를 껐다 켰다 하면 두 번째부터 영영
+       안 붙었다 (실측 2026-09-06, 200회 토글 시험에서 199회 실패).
+    """
     # 송신 주소마다 파서를 따로 둔다. 한 파서에 여러 기기의 바이트를 섞어
     # 넣으면 시퀀스가 어긋나 프레임을 통째로 버린다 (기체·Pi·GCS 가 같은
     # UDP 로 들어온다).
@@ -1021,12 +1100,15 @@ def receiver(sock, st):
         try:
             data, addr = sock.recvfrom(4096)
         except socket.timeout:
+            if alive is not None and not alive():
+                return
             if st.rec is not None:
                 with st.lock:
                     st.rec.tick()
             continue
         except OSError:
-            continue
+            # 소켓이 닫혔다(은퇴) — 스레드도 같이 끝난다. 그래야 fd 가 풀린다.
+            return
         if not data:
             continue
         kind = _link_kind(addr)
@@ -1520,6 +1602,160 @@ def bind_udp(addr, port):
     return sock
 
 
+# ── 백팩 자동 감지 ────────────────────────────────────────────────────
+# 백팩 AP 는 켜졌다 꺼졌다 한다. 그때마다 `./qgc live on` 을 치게 하지 않으려면
+# **트래커가 스스로** 붙었는지 보고 소켓을 열고 닫아야 한다.
+BACKPACK_IP = os.environ.get('BACKPACK_IP', '10.0.0.1')
+BACKPACK_NET = '10.0.0.'          # 이 대역의 주소가 생기면 AP 에 붙은 것이다
+WATCH_SEC = 3.0                   # 감시 주기
+
+
+def _local_backpack_addr():
+    """이 PC 에 붙은 백팩 대역(10.0.0.x) 주소. 없으면 None.
+
+    소켓 하나로 물어본다 — `ip` 를 부르지 않는 이유는 3초마다 프로세스를
+    띄우고 싶지 않아서다. UDP connect() 는 패킷을 안 보낸다(라우팅만 본다).
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect((BACKPACK_IP, 9))
+        ip = s.getsockname()[0]
+        return ip if ip.startswith(BACKPACK_NET) else None
+    except OSError:
+        return None
+    finally:
+        s.close()
+
+
+def _backpack_send_port(host, default=14550):
+    """백팩이 **보내는** 포트. 우리가 들어야 할 쪽이다.
+
+    GET /mavlink → {"ports":{"listen":14555,"send":14550}, ...}
+    """
+    try:
+        import json as _json
+        import urllib.request
+        with urllib.request.urlopen('http://%s/mavlink' % host, timeout=3) as r:
+            return int(_json.loads(r.read().decode())['ports']['send'])
+    except Exception:
+        return default
+
+
+class Listeners:
+    """열려 있는 UDP 소켓들을 관리한다. 백팩은 붙고 떨어지는 대로 따라간다.
+
+    🔴 이 클래스가 있는 이유: 예전에는 소켓을 시작할 때 한 번만 열었다. 그래서
+       백팩 AP 에 나중에 붙으면 `./qgc live on` 을 다시 쳐야 했고, 안 치면
+       조용했다. 이제 감시 스레드가 3초마다 보고 알아서 연다/닫는다.
+
+    🔴 **여는 데 실패해도 절대 죽지 않는다.** 유닛에 StartLimitBurst=3/60s 가
+       걸려 있어서, 프로세스가 죽고 되살아나기를 1분에 세 번 하면 systemd 가
+       영영 포기한다 — WiFi 를 껐다 켰다 하는 운용에서 언젠가 반드시 밟는다.
+       그래서 실패는 다음 주기에 다시 시도할 뿐이다.
+    """
+
+    def __init__(self, st, fixed):
+        self.st = st
+        self.fixed = list(fixed)      # [(addr, port)] — 항상 열어 두려는 것
+        self.socks = {}               # (addr, port) -> socket
+        self.threads = {}             # (addr, port) -> 그 소켓의 수신 스레드
+        self.lock = threading.Lock()
+        self.bp_key = None            # 지금 열려 있는 백팩 소켓의 (addr, port)
+
+    def _open(self, addr, port):
+        if (addr, port) in self.socks:
+            return True
+        sock = bind_udp(addr, port)
+        if sock is None:
+            return False
+        self.socks[(addr, port)] = sock
+        th = threading.Thread(target=receiver, args=(sock, self.st), daemon=True)
+        self.threads[(addr, port)] = th
+        th.start()
+        return True
+
+    def _close(self, key):
+        sock = self.socks.pop(key, None)
+        th = self.threads.pop(key, None)
+        if sock is None:
+            return
+        # 소켓을 닫으면 그 수신 스레드의 recvfrom 이 OSError 로 끝난다.
+        try:
+            sock.close()
+        except OSError:
+            pass
+        # 🔴 스레드가 끝날 때까지 기다린다. 안 기다리면 그 스레드가 소켓
+        #    객체를 붙들고 있는 동안 **포트가 안 풀려서**, 같은 자리를 다시
+        #    열 때 EADDRINUSE 로 실패한다 — AP 를 두 번째 켤 때부터 영영
+        #    안 붙는다 (실측 2026-09-06: 200회 토글 중 199회 실패).
+        #    recvfrom 타임아웃이 1초라 그보다 넉넉히 준다.
+        if th is not None and th.is_alive():
+            th.join(timeout=2.5)
+            if th.is_alive():
+                print('경고: %s:%d 수신 스레드가 안 끝났다' % key,
+                      file=sys.stderr, flush=True)
+        print('닫음  %s:%d (백팩 AP 를 떠났다)' % key, flush=True)
+
+    def start(self):
+        """고정 소켓을 연다. 하나도 못 열면 False — main() 이 그때만 죽는다."""
+        with self.lock:
+            for addr, port in self.fixed:
+                self._open(addr, port)
+            return bool(self.socks)
+
+    def _tick(self):
+        addr = _local_backpack_addr()
+        with self.lock:
+            # 고정 소켓 중 아직 못 연 것이 있으면 계속 시도한다 — 부팅 때
+            # 브리지보다 먼저 떠서 포트를 놓쳤을 수 있다.
+            for a, p in self.fixed:
+                if (a, p) not in self.socks:
+                    self._open(a, p)
+
+            if addr is None:
+                # AP 를 떠났다. 백팩 소켓은 주소가 사라졌으므로 닫는다.
+                if self.bp_key is not None:
+                    self._close(self.bp_key)
+                    self.bp_key = None
+                return
+
+            # AP 에 붙어 있다. 이미 맞는 소켓이 열려 있으면 할 일이 없다.
+            if self.bp_key is not None and self.bp_key[0] == addr:
+                return
+            if self.bp_key is not None:
+                self._close(self.bp_key)      # 주소가 바뀌었다 (재접속)
+                self.bp_key = None
+
+        # 포트를 묻는 동안은 락을 놓는다 — HTTP 3초 타임아웃이 걸릴 수 있다.
+        port = _backpack_send_port(BACKPACK_IP)
+        with self.lock:
+            if self.bp_key is not None:
+                return
+            # 고정 소켓이 이미 그 자리를 쥐고 있으면 새로 열 필요가 없다.
+            if (addr, port) in self.socks:
+                return
+            if self._open(addr, port):
+                self.bp_key = (addr, port)
+                print('열림  %s:%d (백팩 AP 에 붙었다)' % (addr, port), flush=True)
+
+    def run(self):
+        last_prune = time.monotonic()
+        while True:
+            try:
+                self._tick()
+                # 하루에 한 번 오래된 기록을 치운다. 몇 달 켜 두는 것이
+                # 전제이므로 시작할 때 한 번으로는 부족하다.
+                if time.monotonic() - last_prune > 86400:
+                    last_prune = time.monotonic()
+                    if self.st.rec is not None and self.st.rec.enabled:
+                        prune_recordings(self.st.rec.dir)
+            except Exception as e:
+                # 🔴 어떤 예외도 이 스레드를 끝내면 안 된다. 끝나면 그 뒤로
+                #    백팩이 영영 안 잡히는데, 아무도 눈치채지 못한다.
+                print('리스너 감시 오류(계속한다): %s' % e, file=sys.stderr, flush=True)
+            time.sleep(WATCH_SEC)
+
+
 def main():
     ap = argparse.ArgumentParser(description='MAVLink 실시간 트래킹 (읽기 전용)')
     ap.add_argument('--port', type=int, default=int(os.environ.get('LIVE_UDP', '14550')),
@@ -1545,6 +1781,8 @@ def main():
     st = State()
     st.rec = Recorder(args.rec_dir, enabled=not args.no_record)
     st.player = Player(st)
+    if st.rec.enabled:
+        prune_recordings(st.rec.dir)
 
     # 들을 곳을 정한다. --listen 이 있으면 그대로, 없으면 --bind/--port 하나.
     wanted = []
@@ -1559,16 +1797,10 @@ def main():
     # 같은 (주소, 포트) 를 두 번 열지 않는다 — 두 번째가 EADDRINUSE 로 죽는다.
     wanted = list(dict.fromkeys(wanted))
 
-    socks = []
-    for addr, port in wanted:
-        sock = bind_udp(addr, port)
-        if sock is not None:
-            socks.append((sock, addr, port))
-
-    # 🔴 하나라도 열렸으면 산다. 두 경로를 동시에 듣기 때문에, 백팩 AP 를
-    #    떠나 10.0.0.x 가 사라져도 브리지 쪽은 멀쩡히 열린다 — 그때 통째로
-    #    죽으면 남은 경로까지 같이 잃는다.
-    if not socks:
+    lst = Listeners(st, wanted)
+    # 🔴 고정 소켓이 하나라도 열렸으면 산다. 백팩은 감시 스레드가 나중에
+    #    열어 주므로, 지금 AP 에 안 붙어 있다고 죽을 이유가 없다.
+    if not lst.start():
         print('들을 수 있는 UDP 소켓이 하나도 없다:', file=sys.stderr)
         for addr, port in wanted:
             print('  %s:%d' % (addr, port), file=sys.stderr)
@@ -1577,8 +1809,8 @@ def main():
         print('다른 포트로 비켜라:  --port 14551', file=sys.stderr)
         sys.exit(1)
 
-    for sock, _, _ in socks:
-        threading.Thread(target=receiver, args=(sock, st), daemon=True).start()
+    socks = [(sk, a, p) for (a, p), sk in lst.socks.items()]
+    threading.Thread(target=lst.run, daemon=True).start()
 
     Handler.st = st
     Handler.rec_dir = os.path.abspath(args.rec_dir)
@@ -1591,9 +1823,9 @@ def main():
         print('%s %s:%-6d %s' % (label, addr, port,
                                  '(읽기 전용 — FC 로 아무것도 안 보낸다)'
                                  if i == 0 else ''))
-    if len(socks) > 1:
-        print('             두 경로를 동시에 듣는다 — 살아 있는 쪽을 쓰고, '
-              '둘 다면 %s 우선' % LINK_PRIORITY[0])
+    print('             백팩 AP 는 붙는 대로 알아서 연다 (%.0f초마다 확인)'
+          % WATCH_SEC)
+    print('             둘 다 들어오면 %s 를 쓴다' % LINK_PRIORITY[0])
     print('라이브 페이지  http://127.0.0.1:%d' % args.http)
     if st.rec.enabled:
         print('기록          %s  (ARM 마다 새 .tlog)' % os.path.abspath(args.rec_dir))

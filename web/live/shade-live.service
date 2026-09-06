@@ -10,8 +10,14 @@ After=network.target
 # UDP 포트를 이미 누가 쥐고 있으면 시작이 실패한다. 그때 무한 재시도하지
 # 않는다 — QGC 가 켜져 있는 동안 계속 되살아나면 로그만 더럽힌다.
 # ⚠️ StartLimit* 는 [Unit] 에 있어야 한다. [Service] 에 두면 조용히 무시된다.
-StartLimitBurst=3
-StartLimitIntervalSec=60
+#
+# 🔴 버스트를 넉넉히 잡는다. 이 제한에 걸리면 systemd 가 **영영 포기**하고,
+#    손으로 `systemctl --user reset-failed` 하기 전까지 화면이 안 뜬다.
+#    WiFi 를 껐다 켰다 하며 몇 달 쓰면 언젠가 3연속을 밟는다 — 그날 이후로
+#    조용해지는데 아무도 이유를 모른다. 소켓 하나쯤 못 열어도 프로세스가
+#    죽지 않게 만들어 뒀으므로(Listeners) 여기 걸릴 일 자체가 드물다.
+StartLimitBurst=10
+StartLimitIntervalSec=300
 
 [Service]
 Type=simple

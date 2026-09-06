@@ -66,11 +66,6 @@ fc_usb_present() {
 # 백팩 AP 에 붙어 있나. 붙어 있으면 10.0.0.1 이 ping 에 답한다.
 backpack_up() { ping -c1 -W1 "$BACKPACK_IP" >/dev/null 2>&1; }
 
-# 이 PC 의 백팩 WiFi 주소 (10.0.0.x). 없으면 빈 문자열.
-backpack_addr() {
-  ip -4 -br addr show 2>/dev/null | grep -oE '10\.0\.0\.[0-9]+' | head -1 || true
-}
-
 # 지금 트래커가 실제로 무엇을 받고 있나 — 'USB' · 'ELRS' · 빈 문자열.
 # 트래커가 보낸 쪽 주소로 이미 갈라 `link` 에 넣어 준다.
 current_link() {
@@ -81,62 +76,6 @@ current_link() {
   printf '%s' "$js" | grep -q '"live": true' || return 0
   printf '%s' "$js" | grep -oE '"link"[[:space:]]*:[[:space:]]*"[A-Za-z]+"' \
     | grep -oE '"[A-Za-z]+"$' | tr -d '"' || true
-}
-
-# 남겨 둔다 — 진단용. 지금 어느 경로가 살아 있나.
-#   usb      — FC 가 꽂혀 있거나 브리지가 밀어주고 있다
-#   backpack — 조종기 백팩 AP 에 붙어 있다 (10.0.0.1 이 응답)
-#   none     — 둘 다 아니다
-detect_path() {
-  # 1) 이미 프레임이 들어오는 중이면 그게 정답이다. 다만 **어느 경로로** 들어오는
-  #    중인지까지 봐야 한다 — 트래커가 이미 보낸 쪽 주소로 갈라 `link` 에 넣어
-  #    준다 ('ELRS' = 백팩 10.0.0.x, 'USB' = 브리지).
-  #
-  # 🔴 예전에는 여기서 무조건 `usb` 를 뱉었다. 그래서 USB 를 뽑고 백팩으로
-  #    갈아탄 뒤 `./qgc live on` 을 하면, 백팩으로 프레임이 멀쩡히 들어오는데도
-  #    "경로: USB 직결/브리지" 로 잡히고 poker 가 꺼졌다. 백팩은 먼저 말을
-  #    걸어온 곳에만 보내므로, 남아 있던 세션이 끊기면 그대로 조용해졌다
-  #    (실측 rim3 2026-09-06). 트래커가 아는 답을 버리지 말고 그대로 쓴다.
-  if systemctl --user is-active --quiet "$UNIT" 2>/dev/null && \
-     command -v curl >/dev/null 2>&1; then
-    local js kind
-    js="$(curl -s --max-time 2 "http://127.0.0.1:${HTTP_PORT}/api/state?track=0" 2>/dev/null || true)"
-    if printf '%s' "$js" | grep -q '"live": true'; then
-      kind="$(printf '%s' "$js" | grep -oE '"link"[[:space:]]*:[[:space:]]*"[A-Za-z]+"' \
-              | grep -oE '"[A-Za-z]+"$' | tr -d '"' || true)"
-      case "$kind" in
-        ELRS) echo backpack; return ;;
-        *)    echo usb; return ;;
-      esac
-    fi
-  fi
-
-  # 2) FC 가 이 PC 에 **실제로 꽂혀 있으면** USB 경로.
-  #
-  # 🔴 "브리지 프로세스가 돈다" 를 근거로 쓰면 안 된다. 브리지는 포트가 없어도
-  #    Restart=always 로 계속 살아 있고 /dev/ttyACM0 을 무한 재시도한다 —
-  #    FC 를 뽑아도 pgrep 은 잡히므로 USB 로 오판해 백팩 poker 를 안 띄운다
-  #    (rim3 에서 실제로 그랬다: FC 뽑힌 지 30분인데 "경로: USB 직결/브리지").
-  #    장치 파일이 있는지로만 판단한다.
-  if fc_usb_present; then echo usb; return; fi
-
-  # 3) 백팩. AP 에 붙어 있으면 10.0.0.1 이 ping 에 답한다.
-  if ping -c1 -W1 "$BACKPACK_IP" >/dev/null 2>&1; then echo backpack; return; fi
-  echo none
-}
-
-# 백팩이 텔레메트리를 **어느 포트로 보내는지** 백팩에게 직접 묻는다.
-# /mavlink 가 알려 준다: {"ports":{"listen":14555,"send":14550}, ...}
-#   send   = 백팩 → GCS  (우리가 **들어야 할** 포트)
-#   listen = GCS → 백팩
-# 실패하면 14550 (ELRS 기본값).
-backpack_send_port() {
-  local j
-  j="$(timeout 5 curl -s "http://${BACKPACK_IP}/mavlink" 2>/dev/null || true)"
-  local p
-  p="$(printf '%s' "$j" | grep -oE '"send"[[:space:]]*:[[:space:]]*[0-9]+' \
-        | grep -oE '[0-9]+$' || true)"
-  [[ -n "$p" ]] && echo "$p" || echo 14550
 }
 
 # 포트가 이미 쓰이고 있는지. 우리 유닛이 쥔 것은 제외한다.
@@ -169,27 +108,15 @@ cmd_on() {
   fi
   want="${want:-14550}"
 
-  local listen="$want"                     # 브리지/USB 경로
-  local bp_addr="" bp_port=""
-
-  if backpack_up; then
-    # 백팩이 보내는 포트를 백팩에게 묻는다. WiFi 주소에만 못박아 여는 이유는
-    # shade-bridge 가 Tailscale 주소에 같은 포트로 앉아 있을 수 있기 때문이다 —
-    # 주소가 다르면 같은 포트를 나눠 써도 커널이 안 헷갈린다.
-    bp_port="$(backpack_send_port)"
-    bp_addr="$(backpack_addr)"
-    if [[ -n "$bp_addr" && "${bp_addr}:${bp_port}" != "0.0.0.0:${want}" ]]; then
-      listen="${listen},${bp_addr}:${bp_port}"
-    fi
-  fi
-
-  # 환경파일에 적는다. 유닛을 안 고치고 바꿀 수 있게.
-  # LIVE_UDP/LIVE_BIND 는 남겨 둔다 — 옛 유닛이나 손으로 띄운 것이 아직 본다.
+  # 🔴 백팩은 여기서 **찾지 않는다.** 트래커가 3초마다 스스로 보고 붙는 대로
+  #    열고, 떠나면 닫는다 (mav_live.py 의 Listeners). 여기서 정하면 `on` 을
+  #    친 그 순간의 상태로 굳어서, AP 를 나중에 켜면 또 `on` 을 쳐야 했다.
+  #    그것을 없애는 게 이번 작업의 목적이다.
   mkdir -p "$(dirname "$ENV_FILE")"
   {
     printf 'LIVE_UDP=%s\n' "$want"
     printf 'LIVE_HTTP=%s\n' "$HTTP_PORT"
-    printf 'LIVE_LISTEN=%s\n' "$listen"
+    printf 'LIVE_LISTEN=%s\n' "$want"
   } > "$ENV_FILE"
 
   # 브리지 경로 포트가 남에게 잡혀 있으면 미리 말해 준다. 백팩 쪽은 주소에
@@ -213,22 +140,15 @@ cmd_on() {
     exit 1
   fi
 
-  # ── 무엇을 듣고 있는지 알려 준다. 이제 경로를 고르지 않으므로 "이것만
-  #    본다" 가 아니라 "이 둘을 듣는다" 가 맞는 말이다.
+  # ── 무엇을 듣는지 알려 준다.
   echo "   수신: 0.0.0.0:${want}  (USB 직결/브리지)"
-  if [[ -n "$bp_addr" ]]; then
-    echo "         ${bp_addr}:${bp_port}  (ELRS 백팩)"
-  fi
+  echo "         ELRS 백팩 — AP 가 올라오면 알아서 붙는다"
 
-  # poker 는 백팩 AP 에 붙어 있을 때만 띄운다 — 백팩은 먼저 말을 걸어온
-  # 곳에만 텔레메트리를 보내기 때문이다. AP 가 없으면 있지도 않은 10.0.0.1 로
-  # 계속 쏘게 되므로 띄우지 않는다.
-  if [[ -n "$bp_addr" ]]; then
-    systemctl --user reset-failed "$POKE_UNIT" 2>/dev/null || true
-    systemctl --user restart "$POKE_UNIT" 2>/dev/null || true
-  else
-    systemctl --user stop "$POKE_UNIT" 2>/dev/null || true
-  fi
+  # 🔴 poker 는 **언제나** 띄운다. AP 가 없어도 죽지 않고 기다리다가 올라오면
+  #    스스로 포트를 다시 묻고 깨우기 시작한다. 예전에는 AP 가 있을 때만
+  #    띄웠는데, 그러면 나중에 조종기를 켰을 때 아무도 안 깨워서 조용했다.
+  systemctl --user reset-failed "$POKE_UNIT" 2>/dev/null || true
+  systemctl --user restart "$POKE_UNIT" 2>/dev/null || true
 
   # 지금 실제로 무엇이 들어오는지까지 본다. 켜졌다는 것과 데이터가 온다는
   # 것은 다른 말이다.
@@ -250,10 +170,11 @@ cmd_on() {
         echo "       FC 도 브리지도 있다 — 브리지가 이 포트로도 보내는지 보라"
         echo "         (pc_bridge.sh 의 TARGETS 에 127.0.0.1:${want})"
       fi
-    elif [[ -n "$bp_addr" ]]; then
+    elif backpack_up; then
       echo "       백팩 AP 에는 붙어 있다 — 조종기가 켜져 있고 기체와 링크됐는지 보라"
     else
       echo "       FC USB 도 없고 백팩 AP 에도 안 붙어 있다"
+      echo "       (조종기를 켜면 알아서 붙는다 — 이 명령을 다시 칠 필요는 없다)"
     fi
   fi
 
@@ -261,13 +182,9 @@ cmd_on() {
     # enable 만으로는 부족하다 — 로그인 세션이 없는 동안에도 유닛이 돌려면
     # linger 가 켜져 있어야 한다. 둘 다 있어야 "재부팅해도 산다" 가 성립한다.
     systemctl --user enable "$UNIT" >/dev/null 2>&1 || true
-    # poker 는 백팩 AP 가 있는 PC 에서만 부팅에 건다. 없는 PC 에 걸면
-    # 있지도 않은 AP 로 계속 쏜다.
-    if [[ -n "$bp_addr" ]]; then
-      systemctl --user enable "$POKE_UNIT" >/dev/null 2>&1 || true
-    else
-      systemctl --user disable "$POKE_UNIT" >/dev/null 2>&1 || true
-    fi
+    # poker 도 같이 부팅에 건다. AP 가 없는 동안은 조용히 기다릴 뿐이라
+    # 켜 둬서 손해가 없고, 켜 둬야 조종기를 켰을 때 저절로 붙는다.
+    systemctl --user enable "$POKE_UNIT" >/dev/null 2>&1 || true
     if ! loginctl show-user "$(whoami)" 2>/dev/null | grep -q 'Linger=yes'; then
       loginctl enable-linger "$(whoami)" >/dev/null 2>&1 || true
     fi
