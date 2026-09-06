@@ -316,17 +316,21 @@ JSON 으로 돌려준다.
 | 보는 곳 | 프로세스 | 읽는 파일 | 갱신 방법 |
 |---|---|---|---|
 | `shade01.bewe.co.kr/live` | 랩서버 `lab-shade01` (node, **4300**) | 랩서버 `~/SHADE01/web/live/public/` | `git pull` + **서비스 재시작** |
-| `localhost:4400` (rim3) | rim3 `mav_live.py` | rim3 `~/SHADE01/web/live/public/` | `git pull` (재시작 불필요) |
-| `localhost:4400` (ku) | ku `mav_live.py` (`--bind 0.0.0.0`) | ku `~/SHADE01/web/live/public/` | `git pull` (재시작 불필요) |
-| `localhost:4400` (gram) | gram `mav_live.py` | gram `~/SHADE01/web/live/public/` | **gram 앞에서** `git pull` |
+| `localhost:4400` (rim3) | rim3 `mav_live.py` | rim3 `~/SHADE01/web/live/public/` | `git pull` — **`mav_live.py` 자체를 고쳤으면 `systemctl --user restart shade-live`** |
+| `localhost:4400` (ku) | ku `mav_live.py` (`--bind 0.0.0.0`) | ku `~/SHADE01/web/live/public/` | 위와 같다 |
+| `localhost:4400` (gram) | gram `mav_live.py` | gram `~/SHADE01/web/live/public/` | 위와 같다 — ku 에서 `ssh dsa@100.66.204.25` 로 들어간다 (2026-09-06) |
 
-🔴 **`mav_live.py` 는 요청마다 파일을 다시 읽는다** — `git pull` 만 하면 즉시
-반영된다. **node 서버(4300)는 아니다** — `server.js` 를 고쳤으면 재시작해야 한다.
+🔴 **`mav_live.py` 는 정적 파일(html/js/css)만 요청마다 다시 읽는다.** 그건 `git pull`
+로 즉시 반영된다. **자기 파이썬 코드는 아니다** — `mav_live.py`·`playback.py`·
+`logsource.py` 를 고쳤으면 그 PC 의 `shade-live`(랩서버는 `shade-playback`)를
+재시작해야 한다. 2026-09-06 에 ku 가 15:53 에 뜬 옛 코드로 6시간을 돌며 고도를
+다르게 보였다 — 파일은 최신인데 프로세스가 옛것이었다. **node 서버(4300)도 마찬가지**
+— `server.js` 를 고쳤으면 재시작한다.
 
-🔴 **gram 은 SSH 로 못 들어간다** ([ACCESS.md](../../gcs/ACCESS.md)). 다른 PC 에서
-갱신해 줄 방법이 없으므로 **gram 앞에 앉아서** `git pull` 해야 한다. 2026-09-06 에
-"웹은 새 화면인데 로컬은 옛 화면" 으로 한참을 헤맸는데, ku 리포가 `ab1b035` 에
-멈춰 있던 것이 원인이었다.
+⚠️ 2026-09-06 에 "웹은 새 화면인데 로컬은 옛 화면" 으로 한참을 헤맸는데, ku 리포가
+`ab1b035` 에 멈춰 있던 것이 원인이었다. gram 도 같은 날 저녁부터 `ssh dsa@100.66.204.25`
+로 들어간다 ([ACCESS.md](../../gcs/ACCESS.md#ssh-도달-매트릭스-2026-09-06-전수-실측)) —
+꺼져 있으면 당연히 못 들어가니 그때만 앞에 앉는다.
 
 ### 🔴 절차 — 배포는 `ku` 를 거친다
 
@@ -397,7 +401,7 @@ curl -s https://shade01.bewe.co.kr/live | grep -o 'id="sc-[a-z]*"' | head -6
 | `ku` | ✅ **항상** (부팅 자동) | **14550** | 비어 있다 |
 | `rim3` | ✅ **항상** (부팅 자동) | **14551** | `shade-bridge` 가 14550 을 쥔다 (Tailscale 주소에 바인딩) |
 | `rim` | ✅ **항상** (부팅 자동) | **14551** | QGC 가 14550 을 쥔다 (상주 지상국 — 22시간째 떠 있었다) |
-| `gram-labtop` | ✅ 가동 (수동) | **14550** | 비어 있다. gram 앞에서 직접 설치 (SSH 는 여전히 막혀 있다) |
+| `gram-labtop` | ✅ 가동 (수동) | **14550** | 비어 있다. 2026-09-06 부터 `ssh dsa@100.66.204.25` 로 들어간다 |
 
 **`ku`·`rim3`·`rim` 은 `./qgc live always` 로 걸어 뒀다** (2026-09-05).
 재부팅해도 저절로 뜬다. `gram` 만 수동이다 — 들고 나가는 노트북이라 항상 떠
@@ -578,6 +582,16 @@ Claude Code 용 절차는 [`skills/shade01-live`](../../skills/shade01-live/SKIL
 서버는 개수만 알려 준다.
 
 ## 알아 둘 것
+
+### GPS fix 전의 「고도」는 기압 AMSL 자리표시다 (2026-09-06 수정)
+
+`GLOBAL_POSITION_INT` 가 오기 전에는 `VFR_HUD.alt`(**기압 AMSL**)를 「고도」 칸에
+넣는다 — 그래서 지상에서 0 이 아니라 **54m 같은 해발**이 뜬다. 예전에는 이 값을
+**첫 한 번만** 잡고 굳혔다. GPS fix 가 없으면 GPI 가 영영 안 오므로 뷰어마다
+**자기가 켜진 순간의 기압고도**를 들고 있었고, 같은 FC 를 보는 rim3(54.56)·
+ku(120.56)·웹(rim3 것 그대로)이 제각각이었다. 지금은 GPI 를 한 번이라도 보기
+전까지 계속 갱신하고 `d.alt_src` 에 `baro`/`gps` 를 적는다. **fix 가 잡히면
+홈 기준 상대고도로 바뀐다** — 그 전의 숫자를 AGL 로 읽지 마라.
 
 🔴 **PX4 는 `ESTIMATOR_STATUS` 를 보낸다.** ArduPilot 의 `EKF_STATUS_REPORT` 가
 아니다 — pymavlink `common` 에는 `EKF_*` 상수 자체가 없다. 그리고 그 값은

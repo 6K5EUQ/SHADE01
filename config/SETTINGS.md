@@ -1,5 +1,12 @@
 # SHADE01 세팅 스냅샷 — 2026-09-02
 
+> 🔴 **이 문서는 9/2 스냅샷이다. 그 뒤 6번 바뀌었다** (2026-09-06 확인 — 여기 적힌
+> `RTL_RETURN_ALT 25`·`GF_ACTION 2`·`GF_MAX_HOR_DIST 150`·`NAV_DLL_ACT 0`·
+> `MIS_TAKEOFF_ALT 5` 는 **전부 지금 값이 아니다**: 20 / 0 / 0 / 2 / 20).
+> 지금 값은 [`params/px4_params_20260906-185941.params`](../params/px4_params_20260906-185941.params),
+> 왜 그 값인지는 [FC_CHANGELOG.md](../FC_CHANGELOG.md). 이 문서는 **9/2 당시 구조를
+> 사람이 읽기 위한 것**으로만 남긴다 — 값을 인용하지 마라.
+
 이 문서는 **저장된 파일에서 그대로 뽑은 값**이다. 해석·판단은 [README](../README.md),
 절차는 [PROCEDURE.md](../PROCEDURE.md) 에 있다. 여기는 "지금 기체에 뭐가 들어가 있나" 만 적는다.
 

@@ -418,7 +418,7 @@ def decoded_points(ulog):
 
 
 def classify(row):
-    """목록 배지. 임계값은 skills/qgc-log/SKILL.md 의 휴리스틱 그대로.
+    """목록 배지. 임계값은 skills/shade01-log/SKILL.md 의 휴리스틱 그대로.
 
     단정적 문장은 만들지 않는다 — 로그는 '무엇' 만 알고 '왜' 는 모른다.
     """

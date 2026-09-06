@@ -244,5 +244,5 @@ sudo usermod -aG dialout $USER   # 후 재로그인
 
 ## 왜 pymavlink 를 안 쓰나
 
-[`mav_bridge.py`](../raspberry-pi-5/mav_bridge.py) 를 그대로 재사용한다. 프레임을
+[`mav_bridge.py`](../components/companion/raspberry-pi-5/mav_bridge.py) 를 그대로 재사용한다. 프레임을
 해석하지 않고 바이트만 옮기므로 PC 에서도 동작이 같다. 의존성은 `pyserial` 뿐이다.

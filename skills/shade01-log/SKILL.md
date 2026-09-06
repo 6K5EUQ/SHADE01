@@ -275,7 +275,8 @@ CLI 는 시간축을 못 보여준다. 지도 위 궤적과 시계열이 **동�
 
 `<id>` 는 `curl -s https://shade01.bewe.co.kr/api/logs` 로 파일명과 함께 나온다.
 
-로그를 올리려면 `web/tools/gather.sh` (3대에서 모아 서버로). 업로드에는 공유 암호가
+로그를 올리려면 `./shade01 sync` ([shade01-sync](../shade01-sync/SKILL.md)). `web/tools/gather.sh`
+는 옛 수집기다 — ground 까지 올려 다음 sync 와 싸운다. 업로드에는 공유 암호가
 필요하다 — 서버 `web/.env` 에만 있고 커밋되지 않는다.
 
 수치는 CLI 와 **같은 `qgclog` 경로**로 나오므로 둘이 갈리지 않는다. 다만 웹의

@@ -913,6 +913,7 @@ def handle(msg, st):
         d['lat'], d['lon'] = lat, lon
         d['alt_msl'] = msg.alt / 1000.0
         d['alt'] = msg.relative_alt / 1000.0          # 홈 기준 상대고도
+        d['alt_src'] = 'gps'
         d['vx'], d['vy'], d['vz'] = msg.vx / 100.0, msg.vy / 100.0, msg.vz / 100.0
         d['groundspeed'] = math.hypot(msg.vx, msg.vy) / 100.0
         d['climb'] = -msg.vz / 100.0
@@ -938,8 +939,16 @@ def handle(msg, st):
         d['groundspeed'] = msg.groundspeed
         d['throttle'] = msg.throttle
         d['climb'] = msg.climb
-        if 'alt' not in d:
+        # 🔴 GLOBAL_POSITION_INT 가 오기 전까지의 자리표시다 — VFR_HUD.alt 는
+        #    **기압 AMSL** 이지 홈 기준 상대고도가 아니다. 예전에는 첫 값만 잡고
+        #    굳혔는데(`if 'alt' not in d`), GPS fix 가 없는 지상에서는 GPI 가
+        #    영영 안 와서 뷰어마다 **자기가 켜진 순간의 기압고도**를 들고 있었다.
+        #    실측 2026-09-06: rim3 54.56 / ku 120.56 → ku 재시작 뒤 58.85 —
+        #    같은 FC, 같은 브리지, 값만 셋. 웹은 rim3 것을 그대로 받아 54.56.
+        #    GPI 를 한 번이라도 본 뒤에는 건드리지 않는다.
+        if d.get('alt_src') != 'gps':
             d['alt'] = msg.alt
+            d['alt_src'] = 'baro'
 
     elif t == 'SYS_STATUS':
         d['volt'] = msg.voltage_battery / 1000.0 if msg.voltage_battery != 65535 else None

@@ -19,8 +19,12 @@ fi
 
 # 파서나 추출기가 바뀌면 캐시 지문이 달라져 서버가 알아서 다시 굽는다.
 sudo systemctl restart lab-shade01
+# 재생 백엔드(mav_live.py, :4401)는 파이썬이라 자기 코드를 다시 읽지 않는다 —
+# web/live/ 를 고쳤으면 이것도 재시작해야 웹 재생에 반영된다 (2026-09-06).
+systemctl --user restart shade-playback 2>/dev/null || echo "shade-playback 유닛 없음 — web/live/README '랩서버 재생 서비스'"
 sleep 2
 systemctl is-active lab-shade01
+systemctl --user is-active shade-playback 2>/dev/null || true
 
 # 🔴 곧바로 물으면 502 가 난다. 파서를 고친 배포에서는 캐시를 통째로 다시 굽느라
 #    listen 까지 시간이 걸린다 (실측: 로그 67개에 약 7초). 그동안은 터널이

@@ -128,8 +128,12 @@ pyulog 클래스를 영구 변형하므로 **스레드로 돌리면 서로 밟�
 | `abort` | arm 하자마자 disarm (6초 이하) |
 | `indoor` | GPS 가 붙어 있는데 **3D fix 를 한 번도 못 잡았다** |
 
-`ground`·`hover`·`noarm`·`unknown` 은 **올린다.** 지상 시험도 진동·전류 점검에
-쓰이고 나중에 되돌아볼 수 있어야 한다.
+`ground`·`hover`·`noarm`·`unknown` 은 **올린다** — *이것은 `gather.sh` 의 규칙이다.*
+
+🔴 **현행 경로 `./shade01 sync` 는 다르다** (2026-09-06): `flight`·`hover` **만** 올리고,
+`ground` 가 랩서버에 있으면 6단계가 **지운다** ([FLIGHT-SYNC.md](../FLIGHT-SYNC.md#무엇이-올라가는가)).
+`gather.sh` 로 지상 시험을 올리면 다음 sync 가 도로 지운다 — 둘이 싸운다.
+`gather.sh` 는 유일본 회수용 옛 도구로만 남겨 둔다.
 
 판정은 [`web/tools/uploadable.py`](tools/uploadable.py) 가 하고, 배지는
 `extract.py` 의 `classify()` 를 그대로 쓴다 — 기준을 두 곳에 두면 "목록에
@@ -194,8 +198,8 @@ ssh ku@<서버> '
   sed -i "s|^UPLOAD_PASSWORD=.*|UPLOAD_PASSWORD=$(openssl rand -base64 18)|" .env
   grep UPLOAD_PASSWORD .env'      # ← 이 값을 조종자에게 알려준다
 
-# 4. 로그 올리기 (gram 에서)
-./web/tools/gather.sh
+# 4. 로그 올리기 — 어느 PC 에서든
+./shade01 sync                # FC → 랩서버 → 웹 (FLIGHT-SYNC.md). gather.sh 는 옛 수집기다
 
 # 5. 터널 — UUID 는 create 가 만들어 준다
 ssh ku@<서버> '

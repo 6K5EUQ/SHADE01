@@ -14,12 +14,10 @@ ssh rim@100.107.83.47      # rim
 ⚠️ **사용자명이 호스트마다 다르다.** `dsa` 로는 안 붙는다 (`Permission denied`).
 공개키 인증이고 비밀번호는 안 받는다.
 
-⚠️ **`gram-labtop` 에는 다른 PC 에서 SSH 로 못 들어간다** (2026-09-04 `ku` 에서 실측).
-22 번은 열려 있고 Tailscale 로 ping 도 되지만 `dsa`·`ku`·`gram`·`6k5euq` 전부
-`Permission denied (publickey)` 다 — gram 의 `authorized_keys` 에 다른 PC 의 키가
-없다. gram 은 **나가는 쪽**으로만 쓴다 (이 문서를 쓴 PC 가 gram 이다).
-gram 에 무언가를 설치하려면 **gram 앞에 앉아서** 하거나, gram 에서 이쪽으로
-`ssh` 를 열어야 한다.
+✅ **`gram-labtop` 도 이제 들어간다** (2026-09-06 — 9/4 까지는 `authorized_keys` 에
+다른 PC 키가 없어 `Permission denied` 였다). `ssh dsa@100.66.204.25`. 들고 나가는
+노트북이라 **꺼져 있거나 절전이면 당연히 안 붙는다** — 키 문제로 오해하지 마라
+(실측: 같은 날 저녁 ping 자체가 끊겼다). 아래 매트릭스가 현재 상태다.
 
 | 호스트 | Tailscale | 사용자 | 리포 경로 | 비고 |
 |---|---|---|---|---|
@@ -119,7 +117,8 @@ git remote -v      # origin  https://github.com/6K5EUQ/SHADE01.git 만 나와야
 | `ku-dgs1` | ✅ origin 교체 완료 |
 | `rim3` | ✅ origin 교체 + 커밋 신원 `6k5euq` · **push 는 SSH 키로 해결** (2026-09-06, 아래) |
 | `gram-labtop` | ✅ origin 교체 완료 (2026-09-06). HTTPS + `credential.helper=store` 로 push 된다 |
-| `rim` · `central` | ⬜ **미처리** — 그때 꺼져 있었다 |
+| `rim` | 🟡 origin 은 이미 `6K5EUQ` 하나뿐 (2026-09-06 확인) · **`user.name` 비어 있음** · push 는 `credential.helper=gh` 때문에 ❌ ([rim3 와 같은 방식](#rim3-push-해결--ssh-키로-2026-09-06)으로 푼다) |
+| `central` | ❓ 이 표 말고는 리포 어디에도 없는 이름이다. 실재하는 PC 인지 확인 전까지 표에서 지우지 않는다 |
 
 미처리 PC 는 각각 한 번씩 돌려야 한다:
 

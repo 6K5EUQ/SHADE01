@@ -10,7 +10,17 @@
 
 ## 1. 로그 수집
 
-FC 는 raspb1 에 USB 로 붙어 있다. 로그는 **raspb1 에서** 받아 이 PC 로 회수한다.
+> 🔴 **이 절은 손으로 할 때의 예비 절차다.** 2026-09-06 부터 `./shade01 sync` 가
+> 아래 1-2~1-5 를 전부 대신한다 ([FLIGHT-SYNC.md](FLIGHT-SYNC.md)). 여기 남긴
+> 이유는 sync 가 죽었을 때 무엇이 안에서 도는지 사람이 따라갈 수 있게 하려는 것이다.
+>
+> ⚠️ **아래 예시는 raspb1 기준으로 쓰였다.** 2026-09-04 부터 FC 는 `rim3` USB 에
+> 붙어 있고 raspb1 은 오프라인이다 (`sudo systemctl stop mavlink-bridge` →
+> `systemctl --user stop shade-bridge`, `raspb1@100.126.161.1` → `rim3@rim3`,
+> `~/.venv-mav` 는 rim3 에도 같은 이름으로 있다). FC 가 어느 PC 에 꽂혀 있는지는
+> `web/tools/hosts.conf` 의 `FC_HOST` 가 정본이다.
+
+FC 가 꽂힌 PC 에서 받아 이 PC 로 회수한다.
 
 ### 1-1. 준비 (raspb1, 최초 1회)
 
@@ -148,13 +158,15 @@ done
 **조회는 공개, 업로드만 공유 암호.** 서버가 로그 정본 보관소이기도 하다.
 
 ```bash
-web/tools/gather.sh          # 3대에서 수집 → 서버 업로드 → 캐시 재생성
+./shade01 sync               # 비행 직후 한 줄 — FC → 랩서버 → 웹
 ```
 
-**세 가지는 안 올라간다** — 렌더가 안 되는 것, arm 하자마자 disarm 한 것(6초 이하),
-**GPS 로 3D fix 를 한 번도 못 잡은 것(실내)**. 지상 시험(`ground`)은 올라간다 —
-진동·전류 점검에 쓴다. 판정 기준과 함정은
-[web/README.md](web/README.md#올릴-값이-없는-로그는-안-올라간다-2026-09-05).
+🔴 **올라가는 것은 `flight`·`hover` 뿐이다** (2026-09-06). `ground`·`abort`·
+`noarm`·`unknown`·`indoor`·`unreadable` 은 받지도 올리지도 않고, 이미 올라가
+있으면 sync 6단계가 랩서버에서 지운다. 기준은 [FLIGHT-SYNC.md](FLIGHT-SYNC.md#무엇이-올라가는가).
+
+⚠️ `web/tools/gather.sh` 는 그 전 규칙(`ground` 도 올린다)으로 도는 **옛 수집기**다.
+지금 돌리면 올린 지상 시험을 다음 sync 가 도로 지운다 — 둘이 싸운다. 쓰지 마라.
 
 특정 순간을 남에게 보낼 때는 `?t=` 를 붙인다:
 `https://shade01.bewe.co.kr/log/<id>?t=155`
@@ -286,14 +298,6 @@ pyulog 가 이미 가진 손상 처리 경로(그 메시지만 버리고 계속)
 
 한글 헤더가 2칸 폭이라 `%-Ns` 로는 표가 어긋난다. `_pad()` 가
 `unicodedata.east_asian_width` 로 표시폭을 세어 채운다.
-
-### 목록에 복구 표시가 붙는다 (2026-09-03)
-
-`qgclog list` 의 파일크기 뒤 `⚠복구` 는 **구독 섹션이 유실돼 다른 로그의 정의를
-이식해 읽었다**는 뜻이다. `qgclog <N>` 은 원래 이 경고를 냈지만 목록에는 없어,
-표만 보고 수치를 정본으로 착각할 수 있었다.
-
-2026-09-02 자 로그 중 `log_180`·`log_179` 둘이 여기 해당한다.
 
 ### 목록에 복구 표시가 붙는다 (2026-09-03)
 
