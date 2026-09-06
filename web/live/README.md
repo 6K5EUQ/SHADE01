@@ -249,6 +249,67 @@ http://localhost:4400/?demo=1&cur=61              # 과전류 색
 http://localhost:4400/?demo=1&auto=1              # AUTO 일 때만 뜨는 WP 칸
 ```
 
+## 🔴 화면을 고쳤으면 — 배포 절차 (2026-09-06 확립)
+
+**커밋만으로는 아무 화면도 안 바뀐다.** 뷰어를 띄우는 곳이 네 군데이고 각자
+자기 리포의 파일을 읽는다. 한 곳만 고치면 나머지는 옛 화면을 계속 보여준다.
+
+### 화면 파일을 읽는 주체 — 넷이다
+
+| 보는 곳 | 프로세스 | 읽는 파일 | 갱신 방법 |
+|---|---|---|---|
+| `shade01.bewe.co.kr/live` | 랩서버 `lab-shade01` (node, **4300**) | 랩서버 `~/SHADE01/web/live/public/` | `git pull` + **서비스 재시작** |
+| `localhost:4400` (rim3) | rim3 `mav_live.py` | rim3 `~/SHADE01/web/live/public/` | `git pull` (재시작 불필요) |
+| `localhost:4400` (ku) | ku `mav_live.py` (`--bind 0.0.0.0`) | ku `~/SHADE01/web/live/public/` | `git pull` (재시작 불필요) |
+| `localhost:4400` (gram) | gram `mav_live.py` | gram `~/SHADE01/web/live/public/` | **gram 앞에서** `git pull` |
+
+🔴 **`mav_live.py` 는 요청마다 파일을 다시 읽는다** — `git pull` 만 하면 즉시
+반영된다. **node 서버(4300)는 아니다** — `server.js` 를 고쳤으면 재시작해야 한다.
+
+🔴 **gram 은 SSH 로 못 들어간다** ([ACCESS.md](../../gcs/ACCESS.md)). 다른 PC 에서
+갱신해 줄 방법이 없으므로 **gram 앞에 앉아서** `git pull` 해야 한다. 2026-09-06 에
+"웹은 새 화면인데 로컬은 옛 화면" 으로 한참을 헤맸는데, ku 리포가 `ab1b035` 에
+멈춰 있던 것이 원인이었다.
+
+### 절차
+
+```bash
+# 1. 이 PC 에서 고치고 커밋·푸시
+git add web/live/public/ && git commit && git push
+
+# 2. 랩서버 — pull 하고, server.js 를 고쳤으면 재시작
+ssh <SERVER> 'cd ~/SHADE01 && git pull --ff-only'
+ssh <SERVER> 'sudo systemctl restart lab-shade01'      # server.js 를 고쳤을 때만
+
+# 3. 다른 PC — 뷰어를 띄우는 곳마다
+ssh ku@ku-dgs1 'cd ~/SHADE01 && git pull --ff-only'
+#    gram 은 SSH 불가 → gram 앞에서 직접
+
+# 4. 검증 — **캐시버스터를 붙이지 마라** (아래)
+curl -s https://shade01.bewe.co.kr/live | grep -o 'id="sc-[a-z]*"' | head -6
+```
+
+### 🔴 검증할 때 `?cb=…` 를 붙이지 마라
+
+캐시를 우회한 요청은 **"원본에 새 파일이 있다" 만 증명**한다. 사용자 브라우저에
+무엇이 도착하는지는 답하지 못한다. 2026-09-06 에 이걸로 두 번 "배포 완료" 라고
+잘못 보고했다 — 정작 화면은 옛날 그대로였다. 사용자가 여는 것과 **같은 URL** 로
+확인하라.
+
+### CDN 이 ETag 를 떼어 간다 — URL 에 지문을 박는다
+
+`Cache-Control: no-cache` 는 "캐시하지 마라" 가 아니라 **"쓰기 전에 서버에
+물어봐라"** 다. 물어보려면 지문이 필요한데 Cloudflare 가 ETag 를 제거한다
+(실측: 원본 O, 엣지 X). 그러면 브라우저는 검증할 방법이 없어 옛 사본을 쓴다.
+
+증상이 고약하다 — **파일마다 갱신 시점이 달라 화면이 섞인다.** 실제로 계기판
+(`index.html`)은 옛것인데 자세 차트(`live.js`)만 새것인 상태가 나왔다. 배포가
+반만 된 것처럼 보이지만 원본은 멀쩡하다.
+
+`server.js` 의 `serveLiveAsset()` 이 HTML 을 내보낼 때 `/live.js` →
+`/live.js?v=<본문해시>` 로 치환한다. 내용이 바뀌면 URL 이 바뀌므로 CDN 도
+브라우저도 옛것을 줄 수 없다. 로컬호스트는 CDN 이 없어 원래 문제가 없다.
+
 ## PC 별 구축 상태 (2026-09-05)
 
 **4대 전부 가동.** 넷 다 합성 PX4 스트림으로 실제 디코딩까지 확인했다
