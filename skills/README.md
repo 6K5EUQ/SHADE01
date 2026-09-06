@@ -32,6 +32,36 @@ for s in shade01-test shade01-log shade01-live shade01-sync; do
 done
 ```
 
+### 이름을 바꿨을 때 — 옛 링크를 먼저 지운다 (2026-09-06)
+
+`ln -sfn` 은 **새 이름만 만든다.** 옛 이름의 심볼릭이 그대로 남아 같은 스킬이
+두 이름으로 뜬다. 지우고 걸어야 한다:
+
+```bash
+rm -f ~/.claude/skills/{preflight,qgc-live,qgc-log,flight-sync}
+```
+
+⚠️ **`~/.claude/skills/` 에는 다른 프로젝트 스킬도 산다** (`ku` 에 `bewe-*` 가
+있다). 통째로 비우지 말고 **이름을 짚어** 지워라.
+
+### 다른 PC 에 반영
+
+푸시한 뒤 각 PC 에서 `git pull` + 링크 재연결이다. **계정명이 호스트마다
+다르다** ([ACCESS.md](../gcs/ACCESS.md)):
+
+```bash
+ssh ku@100.99.120.110 'cd ~/SHADE01 && git pull && \
+  for s in shade01-test shade01-log shade01-live shade01-sync; do \
+    ln -sfn ~/SHADE01/skills/$s ~/.claude/skills/$s; done'
+```
+
+| PC | 상태 (2026-09-06) |
+|---|---|
+| `rim3` | ✅ 반영 |
+| `ku` | ✅ 반영 |
+| `rim` | ⛔ **rim3 에서 SSH 가 안 된다** — 그 PC 에서 직접 돌려라 |
+| `gram` | ⛔ **SSH 자체가 막혀 있다** — 그 PC 에서 직접 돌려라 |
+
 **정본은 이 리포다.** `~/.claude/skills/` 에 사본을 두면 두 곳이 갈라진다 —
 기체 문서·임계값과 함께 버전 관리되어야 하므로 여기가 맞는 위치다.
 
