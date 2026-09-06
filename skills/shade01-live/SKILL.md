@@ -19,8 +19,13 @@ description: 지금 날고 있는 기체를 브라우저로 본다. "qgc live on
 <SHADE01>/qgc                     진입점 — ./qgc live ...
 <SHADE01>/tools/live/livectl      본체 (bash) — systemd --user 를 몬다
 <SHADE01>/web/live/mav_live.py    UDP MAVLink 수신 → 로컬 HTTP
+<SHADE01>/web/live/livepush.py    웹 중계 (rim3 → shade01.bewe.co.kr, 한 방향)
+<SHADE01>/web/live/_selftest.py   서버쪽 자체검사 (FAIL 0 이어야 배포)
 <SHADE01>/web/live/README.md      설계·함정 전문
 ```
+
+유닛 셋이 같이 돈다: `shade-live`(화면) · `shade-backpack`(백팩 깨우기) ·
+`shade-livepush`(웹 중계).
 
 ## 🔴 읽기 전용이다
 
@@ -192,6 +197,37 @@ ss -ulnp | grep 1455                   # 5. 누가 포트를 쥐었나
 ⚠️ 재생 중에는 실시간이 화면에 안 나온다 (주황 띠가 그것을 말한다).
 **기록은 재생 중에도 계속된다** — 지난 비행을 보는 사이 실제 비행이 벌어질 수
 있다.
+
+## 웹으로도 본다 — shade01.bewe.co.kr/live (2026-09-06)
+
+목록 화면 상단 **실시간** 버튼. 로컬 화면과 **같은 HUD·같은 차트**다.
+
+🔴 **현장 노트북은 `rim3` 다.** 비행 나갈 때 들고 나가는 PC 가 rim3 이고 FC 는
+거기에 붙는다. 랩서버는 FC 를 직접 못 본다 — rim3 의 `shade-livepush.service`
+가 1초마다 밀어 올리는 것을 받을 뿐이다.
+
+**「웹에 안 뜬다」 고 하면 순서대로 본다:**
+
+```bash
+./qgc live status                      # 1. 로컬은 받고 있나 ('웹 중계 중' 이 있나)
+systemctl --user status shade-livepush # 2. 중계가 떠 있나
+journalctl --user -u shade-livepush -n 20   # 3. 왜 안 되나
+curl -s https://shade01.bewe.co.kr/api/live/state?track=0 | head -c 200
+```
+
+| 증상 | 원인 |
+|---|---|
+| 점이 회색 | rim3 가 꺼졌거나 인터넷이 없다. **정상 동작이다** |
+| `403` · `error code: 1010` | Cloudflare 가 UA 를 막은 것 — 키 문제가 아니다 |
+| `403` (본문이 JSON) | 키가 진짜로 다르다. `~/.config/shade-live.env` ↔ 서버 `web/.env` |
+| 웹만 「끊김」 | 중계가 죽었다. 로컬(:4400)은 멀쩡할 수 있다 |
+
+🔴 **중계를 다른 PC 에 켜지 마라.** 그 PC 에는 기체가 안 붙어 있어 「끊김」만
+올라가고, 서로 덮어써서 rim3 가 올린 것을 지운다.
+
+🔴 **한 방향이다.** 웹에서 기체로 가는 경로는 없다 — 서버에 소켓 코드가 없고,
+중계는 FC 를 향해 아무것도 안 연다. 사용자가 웹으로 조작해 달라고 하면
+**안 된다고 말하고** QGC 를 쓰라고 안내한다.
 
 ## 반드시 지킬 것
 

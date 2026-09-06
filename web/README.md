@@ -9,8 +9,45 @@
 목록      https://shade01.bewe.co.kr/
 분석      https://shade01.bewe.co.kr/log/<id>          ?t=113.5 로 그 순간부터
 비교      https://shade01.bewe.co.kr/compare?a=<id>&b=<id>
+실시간    https://shade01.bewe.co.kr/live              지금 뜬 기체 (아래)
 상태      https://shade01.bewe.co.kr/api/health
 ```
+
+## 실시간 (2026-09-06)
+
+목록 화면 상단의 **실시간** 버튼. 현장 노트북이 밀어 올리는 동안에만 점이
+초록이고, 누르면 로컬 화면(`localhost:4400`)과 **같은 HUD·같은 차트**가 뜬다.
+
+🔴 **현장 노트북은 `rim3` 다.** 비행 나갈 때 들고 나가는 PC 가 rim3 이고, FC 는
+거기에 USB 나 ELRS 백팩으로 붙는다. **랩서버는 FC 를 직접 못 본다** — rim3 가
+올려 주는 것을 받아 들고 있을 뿐이다. 그래서:
+
+- rim3 가 꺼져 있거나 인터넷이 없으면 **점은 회색이고 그게 정상이다.**
+  서버 잘못이 아니라 올려 줄 PC 가 없는 것이다.
+- 중계를 **다른 PC 에 켜 봐야 소용없다.** 그 PC 에는 기체가 안 붙어 있다.
+
+```
+[FC] ──USB/ELRS──> [rim3 :4400] ──HTTPS POST 1초──> [랩서버] ──> /live
+      현장                현장 노트북                    ku-labserver
+```
+
+🔴 **한 방향뿐이다.** rim3 가 밀어 올리기만 하고, 웹에서 기체로 가는 경로는
+**없다.** `server.js` 에 소켓 코드가 없고, `livepush.py` 는 FC 를 향해 아무것도
+안 열며, 트래커(`mav_live.py`)는 여전히 소켓에 쓰는 코드가 0줄이다. 웹에서
+ARM·모드변경을 할 길이 구조적으로 존재하지 않는다.
+
+| | |
+|---|---|
+| 보기 | **공개** — 사이트의 나머지와 같다 |
+| 올리기 | `LIVE_PUSH_KEY` 가 있어야 한다 (`web/.env` ↔ rim3 의 `~/.config/shade-live.env`) |
+| 끊기면 | 12초 뒤 「끊김」. 마지막 값은 남지만 `live=false` 라 화면이 얼었다고 말한다 |
+
+⚠️ **화면 파일은 한 벌뿐이다** (`web/live/public/`). `live.js` 가 경로를 보고
+어느 API 를 쓸지만 고른다 — 사본을 만들면 한쪽만 고쳐져 두 화면이 갈라진다.
+
+⚠️ **Cloudflare 가 `Python-urllib` User-Agent 를 막는다** (`error code: 1010`).
+키가 틀린 것처럼 403 이 오는데 키와 무관하다 — `livepush.py` 가 자기 UA 를
+보내는 이유다.
 
 ## 왜 만들었나
 

@@ -1,0 +1,27 @@
+[Unit]
+# 라이브 중계 — 이 PC 의 트래커 상태를 shade01.bewe.co.kr 로 밀어 올린다.
+#
+# 🔴 **현장 노트북(rim3)에서만 의미가 있다.** 비행 나갈 때 들고 나가는 PC 가
+#    rim3 이고 FC 는 거기에 붙는다. 다른 PC 에 켜 두면 기체가 없으므로
+#    "끊김" 만 올라간다.
+#
+# 🔴 한 방향이다. 트래커에게 GET 해서 서버로 POST 할 뿐, 서버에서 FC 로
+#    가는 경로는 없다 — web/live/livepush.py 참조.
+Description=SHADE01 live relay (rim3 -> shade01.bewe.co.kr, one way)
+After=network-online.target shade-live.service
+Wants=network-online.target
+
+# 인터넷이 없으면 스크립트가 스스로 물러서며 계속 시도한다. 재시작 제한을
+# 걸면 이동 중 신호가 끊길 때마다 systemd 가 포기해 버린다.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+# LIVE_PUSH_KEY 가 여기 있다. 🔴 리포에 커밋하지 마라 (public 이다).
+EnvironmentFile=-%h/.config/shade-live.env
+ExecStart=%h/SHADE01/.venv/bin/python %h/SHADE01/web/live/livepush.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

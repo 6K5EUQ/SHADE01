@@ -24,6 +24,9 @@ ENV_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/shade-live.env"
 HTTP_PORT="${LIVE_HTTP:-4400}"
 POKE_UNIT=shade-backpack.service
 POKE_SRC="$HERE/web/live/shade-backpack.service"
+# 웹 중계. 🔴 현장 노트북(rim3)에서만 의미가 있다 — FC 가 붙는 PC 가 거기다.
+PUSH_UNIT=shade-livepush.service
+PUSH_SRC="$HERE/web/live/shade-livepush.service"
 
 # 백팩 AP 주소. 붙어 있으면 이 IP 가 응답한다.
 BACKPACK_IP="${BACKPACK_IP:-10.0.0.1}"
@@ -46,6 +49,10 @@ install_unit() {
   if [[ -f "$POKE_SRC" ]] && ! cmp -s "$POKE_SRC" "$UNIT_DIR/$POKE_UNIT"; then
     cp "$POKE_SRC" "$UNIT_DIR/$POKE_UNIT"; changed=1
     echo "유닛 설치: $UNIT_DIR/$POKE_UNIT"
+  fi
+  if [[ -f "$PUSH_SRC" ]] && ! cmp -s "$PUSH_SRC" "$UNIT_DIR/$PUSH_UNIT"; then
+    cp "$PUSH_SRC" "$UNIT_DIR/$PUSH_UNIT"; changed=1
+    echo "유닛 설치: $UNIT_DIR/$PUSH_UNIT"
   fi
   [[ $changed -eq 1 ]] && systemctl --user daemon-reload || true
 }
@@ -112,12 +119,18 @@ cmd_on() {
   #    열고, 떠나면 닫는다 (mav_live.py 의 Listeners). 여기서 정하면 `on` 을
   #    친 그 순간의 상태로 굳어서, AP 를 나중에 켜면 또 `on` 을 쳐야 했다.
   #    그것을 없애는 게 이번 작업의 목적이다.
+  # 🔴 이 파일을 통째로 덮어쓰지 마라. 여기에는 우리가 정하는 값(LIVE_UDP 등)
+  #    말고 **손으로 넣은 것**도 산다 — LIVE_PUSH_KEY 가 그렇다. 덮어쓰면
+  #    `on` 을 칠 때마다 웹 중계가 조용히 죽는다 (실측 2026-09-06).
+  #    우리가 관리하는 줄만 갈아 끼우고 나머지는 그대로 둔다.
   mkdir -p "$(dirname "$ENV_FILE")"
   {
+    grep -vE '^(LIVE_UDP|LIVE_HTTP|LIVE_LISTEN|LIVE_BIND)=' "$ENV_FILE" 2>/dev/null || true
     printf 'LIVE_UDP=%s\n' "$want"
     printf 'LIVE_HTTP=%s\n' "$HTTP_PORT"
     printf 'LIVE_LISTEN=%s\n' "$want"
-  } > "$ENV_FILE"
+  } > "$ENV_FILE.tmp"
+  mv -f "$ENV_FILE.tmp" "$ENV_FILE"
 
   # 브리지 경로 포트가 남에게 잡혀 있으면 미리 말해 준다. 백팩 쪽은 주소에
   # 못박으므로 안 부딪힌다.
@@ -149,6 +162,15 @@ cmd_on() {
   #    띄웠는데, 그러면 나중에 조종기를 켰을 때 아무도 안 깨워서 조용했다.
   systemctl --user reset-failed "$POKE_UNIT" 2>/dev/null || true
   systemctl --user restart "$POKE_UNIT" 2>/dev/null || true
+
+  # 웹 중계는 키가 있을 때만 띄운다. 키가 없는 PC 에서 띄우면 403 만 찍는다.
+  if grep -q '^LIVE_PUSH_KEY=.' "$ENV_FILE" 2>/dev/null; then
+    systemctl --user reset-failed "$PUSH_UNIT" 2>/dev/null || true
+    systemctl --user restart "$PUSH_UNIT" 2>/dev/null || true
+    echo "   웹 중계: shade01.bewe.co.kr/live 로 올린다"
+  else
+    systemctl --user stop "$PUSH_UNIT" 2>/dev/null || true
+  fi
 
   # 지금 실제로 무엇이 들어오는지까지 본다. 켜졌다는 것과 데이터가 온다는
   # 것은 다른 말이다.
@@ -185,6 +207,11 @@ cmd_on() {
     # poker 도 같이 부팅에 건다. AP 가 없는 동안은 조용히 기다릴 뿐이라
     # 켜 둬서 손해가 없고, 켜 둬야 조종기를 켰을 때 저절로 붙는다.
     systemctl --user enable "$POKE_UNIT" >/dev/null 2>&1 || true
+    if grep -q '^LIVE_PUSH_KEY=.' "$ENV_FILE" 2>/dev/null; then
+      systemctl --user enable "$PUSH_UNIT" >/dev/null 2>&1 || true
+    else
+      systemctl --user disable "$PUSH_UNIT" >/dev/null 2>&1 || true
+    fi
     if ! loginctl show-user "$(whoami)" 2>/dev/null | grep -q 'Linger=yes'; then
       loginctl enable-linger "$(whoami)" >/dev/null 2>&1 || true
     fi
@@ -212,6 +239,8 @@ cmd_off() {
   have_systemd || die "systemd --user 를 쓸 수 없다. 직접 띄운 프로세스는 Ctrl-C 로 끝내라."
   systemctl --user stop "$POKE_UNIT" 2>/dev/null || true
   systemctl --user disable "$POKE_UNIT" >/dev/null 2>&1 || true
+  systemctl --user stop "$PUSH_UNIT" 2>/dev/null || true
+  systemctl --user disable "$PUSH_UNIT" >/dev/null 2>&1 || true
   if systemctl --user is-active --quiet "$UNIT"; then
     systemctl --user stop "$UNIT"
     echo "⏹  라이브 트래킹 OFF"
@@ -236,6 +265,7 @@ cmd_status() {
     systemctl --user is-enabled --quiet "$UNIT" 2>/dev/null && persist="  · 부팅 자동시작"
     local via=""
     systemctl --user is-active --quiet "$POKE_UNIT" 2>/dev/null && via="  · 백팩 깨우는 중"
+    systemctl --user is-active --quiet "$PUSH_UNIT" 2>/dev/null && via="${via}  · 웹 중계 중"
     echo "● ON    http://localhost:${HTTP_PORT}   (UDP ${udp})${persist}${via}"
     # 실제로 프레임이 들어오는지까지 본다. 켜져만 있고 링크가 없는 경우가 흔하다.
     if command -v curl >/dev/null 2>&1; then

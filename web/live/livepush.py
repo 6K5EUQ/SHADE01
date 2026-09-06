@@ -48,9 +48,17 @@ IDLE_STOP_S = 120.0
 def _get_local(base, since):
     """트래커에서 상태 하나를 읽는다. 항적은 증분으로 받는다."""
     url = '%s/api/state?since=%d' % (base.rstrip('/'), since)
-    req = urllib.request.Request(url, headers={'Cache-Control': 'no-store'})
+    req = urllib.request.Request(url, headers={'Cache-Control': 'no-store',
+                                               'User-Agent': USER_AGENT})
     with urllib.request.urlopen(req, timeout=LOCAL_TIMEOUT) as r:
         return json.loads(r.read().decode('utf-8'))
+
+
+# 🔴 User-Agent 를 반드시 우리 것으로 바꾼다. 기본값(`Python-urllib/3.x`)은
+#    **Cloudflare 가 막는다** — 서버에 닿지도 못하고 `error code: 1010` 과
+#    함께 403 이 돌아온다 (실측 2026-09-06). 키가 틀린 것처럼 보이는데
+#    키와 아무 상관이 없어서, 모르면 한참 헤맨다.
+USER_AGENT = 'shade01-livepush/1.0'
 
 
 def _push(to, key, payload):
@@ -59,6 +67,7 @@ def _push(to, key, payload):
     req = urllib.request.Request(
         to.rstrip('/') + '/api/live/push', data=body, method='POST',
         headers={'Content-Type': 'application/json',
+                 'User-Agent': USER_AGENT,
                  'X-Live-Key': key})
     with urllib.request.urlopen(req, timeout=PUSH_TIMEOUT) as r:
         raw = r.read().decode('utf-8') or '{}'
