@@ -1055,7 +1055,7 @@ async function pbStart(name) {
       ulpb.on = true; ulpb.t = 0; ulpb.dur = info.dur; ulpb.name = info.name;
       ulpb.series = await (await fetch('/api/playback/series', { cache: 'no-store' })).json();
       // 반대 방향도 막는다 — tlog 재생이 돌고 있으면 서버에서 내린다.
-      if (!pb.bar.hidden) { try { await pbApi('unload'); } catch (e) {} pb.bar.hidden = true; }
+      if (!pb.bar.hidden) { try { await pbApi('unload'); } catch (e) {} pb.bar.hidden = true; pbPlaying = false; }
       document.body.classList.add('playback');
       $('pbBar').hidden = false;
       $('pbPick').hidden = true;
@@ -1233,6 +1233,7 @@ async function recStart(name, label, kind) {
   setText($('playName'), label + ' · ' + kind);
   pb.bar.hidden = false;
   $('pbPick').hidden = true;
+  pbPlaying = true;          // 이제부터 상태는 재생 서버에서 받는다
   await pbApi('play');
 }
 
@@ -1252,7 +1253,12 @@ async function poll() {
   try {
     // track=0 — 지도를 뺐으므로 항적은 안 받는다. 긴 비행에서 폴마다 수백 KB 가
     // 오가는 것을 막는다 (서버는 개수만 알려 준다).
-    const r = await fetch(API_STATE + '?track=0', { cache: 'no-store' });
+    // 🔴 tlog 재생 중에는 **재생 서버**의 상태를 본다. 웹에서 평소 폴하는
+    //    `/api/live/state` 는 rim3 가 밀어 올린 **실시간** 값이라, 재생을
+    //    틀어도 화면이 지금 기체를 계속 그린다 (2026-09-07 수정).
+    //    로컬은 한 프로세스가 둘 다 쥐고 있어 `/api/state` 하나로 끝난다.
+    const src = (ON_WEB && pbPlaying) ? '/api/play-state' : API_STATE;
+    const r = await fetch(src + '?track=0', { cache: 'no-store' });
     if (r.ok) render(await r.json());
   } catch (e) {
     // 서버가 죽었을 때도 점으로 말한다 — 깜빡이는 빨강.
@@ -1353,6 +1359,9 @@ const pb = {
 // mmss() 는 위 로그 재생 절에 함수 선언으로 하나만 둔다 — 두 재생 기능이
 // 같은 이름을 각각 선언하면 SyntaxError 로 페이지가 통째로 죽는다.
 
+// tlog 재생이 열려 있나. 웹에서 상태를 어느 서버에서 받을지 가른다.
+let pbPlaying = false;
+
 async function pbApi(path) {
   try {
     const r = await fetch('/api/play/' + path, { cache: 'no-store' });
@@ -1376,6 +1385,7 @@ pb.speed.onchange = () => pbApi('speed?v=' + pb.speed.value);
 pb.exit.onclick = async () => {
   await pbApi('unload');
   pb.bar.hidden = true;
+  pbPlaying = false;
   setText(pb.name, '');
 };
 

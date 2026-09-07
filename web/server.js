@@ -636,6 +636,18 @@ async function route(req, res) {
   //    내용도 같은 랩서버의 .ulg 라 프론트가 그대로 쓸 수 있다.
   //    `/api/recordings` 는 웹서버에 없던 것이라 넘긴다 (현장 .tlog 자리).
   if (p === '/api/recordings') return proxyLive(req, res);
+  // 실시간 기록(.tlog) 재생. ulg 재생(/api/playback/*)과 **다른 엔진**이다 —
+  // 서버가 프레임을 시간대로 흘리고 프론트는 /api/play/state 를 폴한다.
+  // 접두사를 `/api/play/` 로 못박는다: `/api/play` 로 시작만 보면
+  // `/api/playback/*` 까지 삼킨다 (mav_live.py 에 같은 주석이 있다).
+  if (p === '/api/play' || p.startsWith('/api/play/')) return proxyLive(req, res);
+  // 🔴 tlog 재생 중의 상태. `/api/state` 는 이 웹서버가 자기 것으로 쓰므로
+  //    (rim3 가 밀어 올린 실시간) 프록시할 수 없다. 재생 상태는 이름을 달리해
+  //    4401 의 `/api/state` 로 넘긴다 — 프론트는 재생 중에만 이쪽을 폴한다.
+  if (p === '/api/play-state') {
+    req.url = '/api/state' + (url.search || '');
+    return proxyLive(req, res);
+  }
   if (/^\/compare\b/.test(p)) return serveStatic(req, res, '/compare.html');
   return serveStatic(req, res, p);
 }
