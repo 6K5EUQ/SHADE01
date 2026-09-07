@@ -7,6 +7,7 @@
 #   ./shade01 sync --all          삭제 기록까지 무시하고 FC 전체를 다시 본다
 #   ./shade01 sync --keep-ground  지상 시험도 남긴다
 #   ./shade01 sync --min-size=MB  크기 문턱 (기본 1.0)
+#   ./shade01 sync --no-tlog      실시간 기록(.tlog) 업로드를 건너뛴다
 #
 # 일곱 단계가 한 번에 돈다:
 #   1 브리지 정지 → 2 FC 목록 ↔ 랩서버 대조 → 3 없는 것만 받기 → 4 회수 →
@@ -71,10 +72,14 @@ KEEP_BADGES="${SYNC_BADGES:-flight hover}"
 VOTE_N="${SYNC_VOTE:-0}"
 
 DRY=0; ALL=0
+# 실시간 기록(.tlog)도 같이 올린다. 야외 ARM · 1MB 이상만 남아 있으므로
+# 개수가 적고, 링크가 실제로 무엇을 봤는지는 .ulg 로 알 수 없다.
+TLOG="${SYNC_TLOG:-1}"
 for a in "$@"; do
   case "$a" in
     --dry) DRY=1 ;;
     --all) ALL=1 ;;
+    --no-tlog) TLOG=0 ;;
     --keep-ground) KEEP_BADGES="flight hover ground" ;;
     --min-size=*) MIN_MB="${a#*=}" ;;
     --verify) VOTE_N=5 ;;
@@ -378,6 +383,39 @@ if [ ${#FETCHED[@]} -gt 0 ]; then
       for f in "${up[@]}"; do scp -q "$f" "$SERVER:$SERVER_LOGS/" || fail "업로드 실패: $f"; done
     fi
     say "  ${#up[@]}개 올렸다"
+  fi
+fi
+
+# ═══ 5b. 실시간 기록(.tlog) 업로드 ══════════════════════════════════
+#
+# 🔴 **.ulg 와 성격이 다르다.** .ulg 는 FC 가 SD 에 적은 전체 텔레메트리이고,
+#    .tlog 은 이 PC 가 ELRS·USB 로 **넘어온 것만** 받아 적은 것이다 (백팩은
+#    285 B/s — 링크가 끊긴 구간은 통째로 비어 있다). 그래서 같은 비행이라도
+#    .ulg 쪽이 언제나 낫고, .tlog 은 링크가 실제로 무엇을 봤는지를 남긴다.
+#
+# 🔴 **6단계 판정을 태우지 않는다.** uploadable.py 는 ULog 파서라 .tlog 을 못
+#    읽는다. 대신 mav_live.py 가 적을 때 이미 걸렀다 — 야외(fix≥3·위성≥6)에
+#    ARM 한 구간만, 1MB 이상만 남긴다. 여기서 다시 판정할 것이 없다.
+#
+# 🔴 --ignore-existing 이다. 같은 이름이 이미 서버에 있으면 덮지 않는다.
+if [ "$TLOG" = 1 ] && [ "$DRY" = 0 ]; then
+  step "5b/7 실시간 기록(.tlog) 업로드"
+  tl=()
+  # 1MB 문턱은 mav_live.py 가 이미 적용했지만, 손으로 넣은 파일이 있을 수
+  # 있어 여기서도 건다. 기준은 한 곳(REC_MIN_KEEP_BYTES)에서 온다.
+  while IFS= read -r f; do [ -n "$f" ] && tl+=("$f")
+  done < <(find "$REPO/logs/live" -maxdepth 1 -name '*.tlog' -size +1000k 2>/dev/null | sort)
+  if [ ${#tl[@]} -eq 0 ]; then
+    say "  올릴 .tlog 이 없다 (1MB 이상 · 야외 ARM 구간만 남는다)"
+  else
+    "${SSH[@]}" "$SERVER" "mkdir -p '$SERVER_LOGS/live'" || fail "서버 live 폴더 생성 실패"
+    if command -v rsync >/dev/null && "${SSH[@]}" "$SERVER" 'command -v rsync' >/dev/null 2>&1; then
+      rsync -a --ignore-existing --info=stats1 "${tl[@]}" "$SERVER:$SERVER_LOGS/live/" \
+        && say "  ${#tl[@]}개 올렸다" || fail ".tlog 업로드 실패"
+    else
+      for f in "${tl[@]}"; do scp -q "$f" "$SERVER:$SERVER_LOGS/live/" || fail "업로드 실패: $f"; done
+      say "  ${#tl[@]}개 올렸다"
+    fi
   fi
 fi
 
