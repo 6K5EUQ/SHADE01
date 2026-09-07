@@ -294,17 +294,33 @@ journalctl --user -u shade-playback -n 30
 재생 서버가 죽어도 **라이브 화면은 살아 있다** — 별개 경로이고 프록시가 503 을
 JSON 으로 돌려준다.
 
-### 아직 안 되는 것 — ELRS `.tlog`
+### ELRS `.tlog` 도 웹에서 본다 (2026-09-07)
 
-목록 창은 `.ulg`(비행 로그)와 `.tlog`(현장 기록) 둘을 같이 읽지만, **랩서버에
-`.tlog` 이 0개다.** `./shade01 sync` 가 FC 의 `.ulg` 만 올리기 때문이다.
-`.tlog` 은 지금 rim3 의 `web/live/logs/live/` 에만 쌓인다.
+`./shade01 sync` 5b 단계가 `logs/live/*.tlog` 을 랩서버
+`~/shade01-data/logs/live/` 로 올린다. 웹 재생 목록에 뜨고 재생도 된다.
 
-올리려면 **둘 다** 필요하다:
+🔴 **`.ulg` 와 재생 엔진이 다르다.** `.ulg` 는 `playback.py`(ULog 파서)가
+통째로 읽어 커서를 옮기고, `.tlog` 은 MAVLink 프레임 열이라 서버가 시간대로
+흘린다. 그래서 경로도 갈린다:
 
-1. `flightsync` 가 `.tlog` 도 랩서버로 보낸다
-2. `playback.py` 가 `.tlog` 을 읽는다 — 지금은 `.ulg`(ULog)만 판다.
-   `.tlog` 은 MAVLink 프레임 열이라 파서가 아예 다르다
+| | `.ulg` | `.tlog` |
+|---|---|---|
+| 여는 곳 | `/api/playback/open` | `/api/play/load` |
+| 상태 | `/api/playback/state?t=` | `/api/play-state` (웹) · `/api/state` (로컬) |
+
+🔴 **웹에서 재생 상태를 `/api/live/state` 에서 받으면 안 된다.** 그것은 rim3 가
+밀어 올린 **실시간** 값이라 재생을 틀어도 화면이 지금 기체를 계속 그린다.
+4401 의 `/api/state` 가 재생 상태인데 그 이름은 웹서버가 이미 쓰고 있어
+`/api/play-state` 로 이름을 달리해 넘긴다. 프론트는 재생이 열린 동안
+(`pbPlaying`)만 이쪽을 폰다. 로컬은 한 프로세스가 둘 다 쥐고 있어 갈릴 일이 없다.
+
+⚠️ **`.tlog` 은 `.ulg` 의 대체가 아니다.** FC 가 SD 에 적은 `.ulg` 는 전체
+텔레메트리이고, `.tlog` 은 링크로 넘어온 것만(ELRS 285 B/s) 받아 적은 것이라
+끊긴 구간이 비어 있다. **링크가 실제로 무엇을 봤는지**를 남기는 용도다.
+
+남는 조건은 `mav_live.py` 가 적을 때 이미 건다 — 야외(fix≥3·위성≥6)에서 ARM 한
+구간만, 1MB 이상만, 90일. sync 는 다시 판정하지 않는다 (`uploadable.py` 는
+ULog 파서라 `.tlog` 을 못 읽는다).
 
 ## 🔴 화면을 고쳤으면 — 배포 절차 (2026-09-06 확립)
 
