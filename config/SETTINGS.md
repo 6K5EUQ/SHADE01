@@ -218,7 +218,7 @@ PX4 는 `RC_MAP_*_SW` 에서 **1500 초과를 ON** 으로 본다 → **내리면
 
 | 슬롯 | 조작 | 실측 PWM | 슬롯 여유 | 파라미터 | 모드 | FC 실제 |
 |---|---|---|---|---|---|---|
-| 1 | SC 위 + SF 딸칵 | **988** | 119us | `COM_FLTMODE1=4` | 🔴 **Hold** — Mission 이 아니다 | `AUTO:LOITER` |
+| 1 | SC 위 + SF 딸칵 | **988** | 119us | `COM_FLTMODE1=`**`3`** | **Mission** ✅ (9/9 수정) | `AUTO:MISSION` |
 | 2 | **SB 위** | **1173** | 66 / 109us | `COM_FLTMODE2=8` | **Stabilized** | `STABILIZED` |
 | 3 | SB 중간 | **1347** | 65 / 110us | `COM_FLTMODE3=1` | **Altitude** | `ALTCTL` |
 | 4 | SB 아래 | **1520** | 63 / 112us | `COM_FLTMODE4=2` | **Position** | `POSCTL` |
@@ -229,7 +229,10 @@ PX4 는 `RC_MAP_*_SW` 에서 **1500 초과를 ON** 으로 본다 → **내리면
 동시 관측). 경계는 1107/1282/1457/1632/1807 — **가장 좁은 여유가 63us** 로 전 슬롯 안전하다.
 옛 "2단이 경계에서 7us" 경고는 위 폐기된 P3 로터리 표를 전제한 것이라 무효다.
 
-🔴 **`COM_FLTMODE1=4` 는 Mission 이 아니라 Hold 다.** 값 표는 펌웨어 빌드 산출물
+> ✅ **2026-09-09 10:05 해결** — `COM_FLTMODE1` 을 `3`(Mission)으로 되돌렸다.
+> 저장·되읽기 확인. 아래는 원인 기록이다.
+
+🔴 **`COM_FLTMODE1=4` 는 Mission 이 아니라 Hold 였다.** 값 표는 펌웨어 빌드 산출물
 [`module_params.c:7400-7431`](../PX4-Autopilot/build/px4_fmu-v6c_default/generated_params/module_params.c#L7400)
 이 정본이다 — `3` Mission, **`4` Hold**, `5` Return, `8` Stabilized.
 (`COM_FLTMODE` 값은 `VehicleStatus.msg` 의 `NAVIGATION_STATE_*` 와 **다른 enum** 이다.
@@ -246,9 +249,10 @@ nav_state `8` 은 `ALTITUDE_CRUISE`, 파라미터 `8` 은 Stabilized 다.)
 ("SC 위 + SF → 슬롯1 Mission ✅", 2026-09-05)은 **당시 `COM_FLTMODE1=3` 이었을 때의
 실측이라 그때는 맞았다.** 9/6 에 `4` 로 바뀌면서 동작이 달라졌고 검증은 갱신되지 않았다.
 
-⚠️ **지금 SC 위 + SF 를 걸면 미션이 시작되지 않고 그 자리에서 Hold 한다.**
-Mission 으로 되돌리려면 `COM_FLTMODE1` 을 `3` 으로 써야 한다 — FC 파라미터 변경이라
-[FC_CHANGELOG](../FC_CHANGELOG.md) 기록 대상이다. 아직 바꾸지 않았다.
+✅ **2026-09-09 에 `3` 으로 되돌렸다.** 이제 SC 위 + SF 는 미션을 건다.
+같은 날 미션 로드를 13회 반복 실측해 6항목이 0.01~0.04초에 매번 동일하게 나오는 것을
+확인했다 — #184 의 `No valid mission` 은 재현되지 않는다
+([FC_CHANGELOG](../FC_CHANGELOG.md)).
 
 박서 화면에 이 모드를 띄우는 스크립트는
 [`shade.lua`](../components/transmitters/radiomaster-boxer/telemetry-screen.md) 다.

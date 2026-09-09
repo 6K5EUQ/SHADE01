@@ -292,9 +292,13 @@ Telem Ratio 는 **1:2 가 이미 최대**이므로, 더 늘리려면 Packet Rate
 | 스위치 | 채널 | 용도 |
 |---|---|---|
 | SA | CH5 | ARM |
-| **P3 (S3 6단)** | **CH6** | **비행모드** — 1 STAB(1000) / 2 ALT(1275) / 3·4 POS(1425·1575) / 5 Mission(1725) / 6 RTL(2000) |
+| **SB (3단)** | **CH6** | **비행모드** — 위 STAB(1173) / 중간 ALT(1347) / 아래 POS(1520) |
+| **SC + SF 래치** | **CH6 덮어쓰기** | SC위+SF → 988 = 슬롯1 **Mission** · SC아래+SF → 2011 = 슬롯6 **RTL** |
 | SD | CH7 | ✅ **미매핑** (`RC_MAP_TRANS_SW=0`, 2026-09-04). 조종기에서는 움직이나 FC 가 무시한다 |
-| SE | CH8 | KILL |
+| SE | CH9 | KILL (`RC_MAP_KILL_SW=9`) |
+
+⚠️ **P3(S3) 6단 로터리는 이 조종기에 없다.** 그렇게 적힌 옛 기록은 틀렸다 — CH6 은
+SB(3단) + SC/SF 래치가 만든다. PWM 은 전부 2026-09-09 실측이다.
 
 [상세·실측 PWM](components/transmitters/radiomaster-boxer/switch-mapping.md)
 
@@ -311,8 +315,8 @@ Telem Ratio 는 **1:2 가 이미 최대**이므로, 더 늘리려면 Packet Rate
 | 항목 | 상태 |
 |---|---|
 | 링크 | ✅ 지상: `rim3` USB 직결 브리지 (ku·rim·gram 중계). **비행 중: ELRS 백팩** — 트래커가 USB·백팩을 동시에 듣고 USB 가 빠지면 2초 안에 백팩으로 넘어간다 ([상세](web/live/README.md#어디서-데이터를-받나)). 9/5 야외 3편이 이 구성으로 날았다. raspb1 은 **휴면**(2026-09-04 부터 오프라인) — 필수 아님 |
-| 비행모드 | ✅ S3 6단, 실링크로 6단 전부 검증 (2026-09-02 재측정 1000/1275/1425/1575/1725/2000) |
-| 🟡 2단 여유 | Altitude(1275us)가 슬롯 경계 1282us 에서 **7us**. 지금은 값이 고정이라 무해하나 **CH6 RC 캘리브레이션 금지** ([상세](components/transmitters/radiomaster-boxer/switch-mapping.md#px4-슬롯-경계--1500us-가-아니다)) |
+| 비행모드 | ✅ **STAB / ALT / POS / MSN / RTL 6슬롯 전부 의도대로** (2026-09-09 실측·수정). `COM_FLTMODE1` 이 `4`(Hold)라 미션이 안 걸리던 것을 **`3`(Mission)으로 되돌렸다** ([경위](components/transmitters/radiomaster-boxer/switch-mapping.md#-슬롯1-이-mission-이-아니라-hold-로-걸린다-2026-09-09)) |
+| ✅ 슬롯 여유 | 2026-09-09 실측 988/1173/1347/1520/2011 — **가장 좁은 곳도 63us**. 옛 "2단 7us" 경고는 없는 P3 로터리 기준이라 무효였다. **CH6 RC 캘리브레이션은 여전히 금지** |
 | GPS | ✅ 위성 21~32, fix 4, eph 0.15~0.23m (야외 실측) |
 | 진동 | ✅ 평균 2.5 / 최대 5.0 (8/25 세션 8~10 대비 개선) |
 | 미션 | ✅ `TAKEOFF`(22) → WP×4 → `LAND`(21), 경로 163.6m ([백업](config/)). `MIS_TAKEOFF_ALT=20` (9/5, 5→20) |

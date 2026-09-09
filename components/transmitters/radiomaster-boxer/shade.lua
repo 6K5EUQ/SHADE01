@@ -13,7 +13,7 @@
 -- is no 6-position rotary on this radio, so only five of the six PX4 slots
 -- are reachable:
 --
---   SC up   + SF    988us   slot 1   Hold (COM_FLTMODE1=4, not Mission)
+--   SC up   + SF    988us   slot 1   Mission (COM_FLTMODE1=3)
 --   SB up          1173us   slot 2   Stabilized
 --   SB middle      1347us   slot 3   Altitude
 --   SB down        1520us   slot 4   Position
@@ -21,11 +21,12 @@
 --
 -- Slot 5 (also Position) cannot be reached and is left out.
 --
--- Slot 1 reads HOLD, not MISN. COM_FLTMODE1 is 4, and 4 is Hold in the
--- parameter's own value list (3 is Mission) -- see the generated metadata in
--- build/px4_fmu-v6c_default/generated_params/module_params.c. The banner has
--- to say what the aircraft will actually do; calling it MISN would promise a
--- mission start that does not happen.
+-- Slot 1 reads MISN. COM_FLTMODE1 was 4 (Hold) until 2026-09-09, when it was
+-- set back to 3 (Mission) on the aircraft -- see FC_CHANGELOG.md. The value
+-- list lives in the generated metadata at
+-- build/px4_fmu-v6c_default/generated_params/module_params.c: 3 is Mission,
+-- 4 is Hold. Read the aircraft before trusting this line; the banner has to
+-- say what the aircraft will actually do.
 --
 -- The boundaries below are PX4's own slot edges rather than midpoints between
 -- the readings, so the banner changes exactly when the FC changes mode. PX4
@@ -43,7 +44,7 @@
 -- the outer bounds are opened rather than clipped: 988us measures -1049 and
 -- 2011us measures +1047, and a value falling off either end would print "?".
 local MODES = {
-  {-2048, -805, "HOLD"},
+  {-2048, -805, "MISN"},
   { -805, -447, "STAB"},
   { -447,  -88, "ALT"},
   {  -88,  270, "POS"},

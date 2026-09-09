@@ -42,7 +42,7 @@
 
 | 조작 | 실측 CH6 | `getValue("ch6")` | PX4 슬롯 | 배너 |
 |---|---|---|---|---|
-| SC 위 + SF 딸칵 | 988us | −1049 | 1 | `HOLD` 🔴 |
+| SC 위 + SF 딸칵 | 988us | −1049 | 1 | `MISN` |
 | **SB 위** | **1173us** | **−670** | 2 | **`STAB`** |
 | SB 중간 | 1347us | −313 | 3 | `ALT` |
 | SB 아래 | 1520us | +41 | 4 | `POS` |
@@ -51,17 +51,19 @@
 PWM 은 2026-09-09 실측(`RC_CHANNELS` ↔ `HEARTBEAT` 동시 관측)이다.
 
 ⚠️ **래치 두 값은 EdgeTX 공칭 범위 ±1024 를 넘는다** (−1049 / +1047). `MODES` 의
-바깥 경계를 ±2048 로 열어 둔 이유다 — 범위를 ±1025 로 조이면 `HOLD` 와 `RTL` 이
+바깥 경계를 ±2048 로 열어 둔 이유다 — 범위를 ±1025 로 조이면 `MISN` 과 `RTL` 이
 구간에 못 들어가 배너가 `?` 로 뜬다.
 
 슬롯 5(Position)는 어떤 조작으로도 닿지 않아 표에서 뺐다.
 
-🔴 **슬롯 1 은 `HOLD` 다 — Mission 이 아니다.** `COM_FLTMODE1=4` 이고 이 파라미터의
-값 표에서 `4` 는 Hold, Mission 은 `3` 이다 (펌웨어 빌드 산출물
-[`module_params.c:7400-7431`](../../../PX4-Autopilot/build/px4_fmu-v6c_default/generated_params/module_params.c#L7400)).
-2026-09-05 스위치 검증 때는 `3` 이라 Mission 이 맞았고, 9/6 에 `4` 로 바뀌었다.
-배너는 기체가 **실제로 할 일**을 적어야 하므로 `MISN` 이라 쓰지 않는다 —
-시작되지 않을 미션을 약속하는 셈이다. 경위는 [SETTINGS.md](../../../config/SETTINGS.md).
+✅ **슬롯 1 은 `MISN` 이다.** `COM_FLTMODE1` 이 `4`(Hold)였던 동안은 배너도 `HOLD` 였으나,
+**2026-09-09 에 `3`(Mission)으로 되돌리면서** 배너도 함께 돌렸다. 값 표는 펌웨어 빌드
+산출물 [`module_params.c:7400-7431`](../../../PX4-Autopilot/build/px4_fmu-v6c_default/generated_params/module_params.c#L7400)
+이 정본이다 — `3` Mission, `4` Hold.
+
+⚠️ **배너는 기체가 실제로 할 일을 적는다.** `COM_FLTMODE1` 을 다시 만졌다면 이 줄과
+`shade.lua` 의 `MODES` 첫 항목을 같이 고쳐라. 경위는
+[FC_CHANGELOG](../../../FC_CHANGELOG.md) · [SETTINGS.md](../../../config/SETTINGS.md).
 
 ### 구간 경계는 PX4 것을 그대로 쓴다
 
