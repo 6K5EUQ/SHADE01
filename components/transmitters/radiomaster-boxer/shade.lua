@@ -57,10 +57,13 @@ local MODES = {
 -- full, so 1750us, which is +512 in EdgeTX units. Down is 2000us on this
 -- radio, so flipping SE down kills.
 --
--- CH9 is only carried over the real ELRS link: a USB joystick connection
--- stops at CH8, so this reads nil on the bench and the banner simply keeps
--- showing the flight mode. Guessing KILL from a missing channel would cry
--- wolf every time the link hiccups, which is worse than not showing it.
+-- getValue reads the radio's own mixer output, so CH9 is here whether or not
+-- the aircraft is listening -- this says the switch is down, not that the
+-- motors are actually cut. The web HUD answers the other question from the
+-- FC's own HEARTBEAT; a telemetry script has no such channel to ask.
+--
+-- A nil still means the model has no CH9 mixed at all, and then the banner
+-- keeps showing the flight mode rather than inventing a kill.
 local KILL_CH = "ch9"
 local KILL_ON = 512
 

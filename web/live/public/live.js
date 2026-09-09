@@ -810,8 +810,9 @@ function render(s) {
   //    PX4 는 actuator_armed 의 kill·termination·lockdown 중 하나라도 서면
   //    HEARTBEAT.system_status 를 MAV_STATE_FLIGHT_TERMINATION(8) 으로 덮는다
   //    (PX4-Autopilot/src/modules/mavlink/streams/HEARTBEAT.hpp:122).
-  //    CH9 의 PWM 을 보는 쪽은 "스위치가 눌렸나" 지 "모터가 죽었나" 가 아니다 —
-  //    조종기 링크가 끊기면 오지도 않는다. 화면은 기체 상태를 보여야 한다.
+  //    CH9 의 PWM 을 보는 쪽은 "스위치가 눌렸나" 지 "모터가 죽었나" 가 아니다.
+  //    (채널이 안 와서가 아니다 — rc_chan 은 CH1~16 이 다 온다. 질문이 다르다.
+  //    페일세이프·FC 쪽 termination 은 스위치를 거치지 않는다.)
   const killed = d.system_status === 8;
   show(h.kill, killed);
   if (killed) setText(h.killTxt, 'EMERGENCY STOP');
