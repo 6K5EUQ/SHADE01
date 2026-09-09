@@ -43,6 +43,15 @@ main {
    달라져 45° 뱅크가 30° 로 보이고, meet 는 레터박스, slice 는 테이프를 잘라 먹는다. */
 #hud { display: block; width: 100%; height: 100%; }
 
+/* 배터리 온도 오버레이 — HUD 좌측 하단. 하늘/땅 어느 쪽에 걸쳐도 읽히도록
+   글자에 그림자를 준다. 평소에는 조용히 있다가 뜨거워지면 색으로 말한다. */
+#hudTemp { position: absolute; left: 8px; bottom: 6px;
+           font-size: 13px; font-weight: 700; letter-spacing: .3px;
+           color: #cbd5e1; text-shadow: 0 0 3px #000, 0 0 6px #000;
+           pointer-events: none; font-variant-numeric: tabular-nums; }
+#hudTemp.warn { color: var(--warn); }
+#hudTemp.bad  { color: var(--bad); }
+
 /* SVG 요소에는 HTML 의 [hidden] 이 안 먹는다(UA 스타일시트가 HTML 전용).
    반드시 클래스로 껐다 켠다. */
 #hud .off { display: none; }

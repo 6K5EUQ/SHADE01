@@ -885,8 +885,18 @@ function render(s) {
     : d.batt_pct != null && d.batt_pct < 35 ? 'warn' : '');
 
   // 6S 리튬 기준. 45도를 넘으면 수명이 급히 깎이고 60도는 위험 구간이다.
-  setText($('st-btemp'), fmt(d.batt_temp));
-  sc('sc-btemp', d.batt_temp > 60 ? 'bad' : d.batt_temp > 45 ? 'warn' : '');
+  // 배터리 온도는 계기판이 아니라 HUD 좌측 하단에 겹쳐 둔다 — 평소 볼 일이
+  // 없고 뜨거워질 때만 눈에 들어오면 되는 값이라, 계기판 칸을 하나 쓰기에는
+  // 아깝다. 6S 리튬 기준 45도를 넘으면 수명이 급히 깎이고 60도는 위험이다.
+  const bt = $('hudTemp');
+  const t = d.batt_temp;
+  if (t == null) {
+    bt.hidden = true;
+  } else {
+    bt.hidden = false;
+    setText(bt, t.toFixed(1) + '°C');
+    bt.className = t > 60 ? 'bad' : t > 45 ? 'warn' : '';
+  }
 
   setText($('st-spd'), fmt(d.groundspeed));
   setText($('st-alt'), fmt(d.alt));
