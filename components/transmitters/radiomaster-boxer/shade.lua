@@ -219,6 +219,17 @@ local function fmtInt(v)
   return whole(v)
 end
 
+-- Satellite count, padded to two digits. Values are right-aligned to a fixed
+-- column edge, so a single digit would start 8px further right than every
+-- other row and read as misaligned next to Eph beside it. Padding keeps the
+-- column steady; the count never usefully exceeds two digits anyway.
+local function fmtSats(v)
+  if v == nil then return "--" end
+  local n = whole(v)
+  if #n < 2 then return " " .. n end
+  return n
+end
+
 -- Geometry. The default font is 8x8, MIDSIZE 8x12. The banner is one 14px
 -- row; three label/value rows of 16px fill the 50px below it with two pixels
 -- to spare, which leaves each row a little breathing space.
@@ -268,7 +279,9 @@ end
 -- would drop the only digit that separates a 12.4m fix from a 12m one, and a
 -- fixed width keeps the value from jittering sideways as it crosses 10.
 local function fmtEph()
-  if ephDm == nil then return "--" end
+  -- Three characters like Cur and Spd above it, so the decimal point lines up
+  -- down the column instead of shifting when the value is missing.
+  if ephDm == nil then return " --" end
   return string.format("%.1f", ephDm / 10)
 end
 
@@ -292,7 +305,7 @@ local function run(event)
   -- neighbour used to be, the accuracy on the right in the slot Tmp left.
   -- They belong side by side -- 21 satellites with eph 6m is still a bad fix,
   -- and the count on its own would say the opposite.
-  row(1, 3, "Sat", fmtInt(val("Sats")))
+  row(1, 3, "Sat", fmtSats(val("Sats")))
   row(2, 3, "Eph", fmtEph())
 
   -- Column divider, drawn last so it sits on top of nothing important.
