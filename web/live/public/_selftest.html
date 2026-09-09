@@ -51,6 +51,7 @@ function load(q, w, h) {
   });
 }
 const num = (e, a) => parseFloat(e.getAttribute(a));
+const MOT = ['LF', 'RF', 'LB', 'RB'];
 
 (async () => {
   // ── 기하: viewBox 가 실측 픽셀과 1:1 ─────────────────────────────
@@ -235,14 +236,51 @@ const num = (e, a) => parseFloat(e.getAttribute(a));
   const spCell = D.getElementById('sc-mspread');
   ok('큰 편차는 bad', spCell.classList.contains('bad'),
      D.getElementById('st-mspread').textContent + '%p');
-  // 튄 놈에게만 색이 간다 — 넷 다 칠하면 어느 것이 문제인지 도로 못 읽는다.
-  const colored = ['LF', 'RF', 'LB', 'RB']
-    .filter((k) => D.getElementById('rot-' + k).classList.contains('bad'));
-  ok('색은 최대·최소 둘에만', colored.length === 2, colored.join(',') || '(없음)');
+  // 🔴 편차는 **숫자 칸만** 칠한다. 로터 색은 그 모터 자신의 부하가 정한다.
+  //    편차가 26%p 로 크더라도 넷 다 70% 미만이면 로터에는 색이 없어야 한다.
+  //    (위 spread=26 은 평균 62 라 최대가 75% → 그건 부하 때문에 칠해지는 게
+  //     맞다. 그래서 평균을 낮춰 부하 요인을 걷어내고 편차만 남긴다.)
+  f = await load('spread=26&mavg=50'); D = f.contentDocument;
+  ok('큰 편차라도 부하가 낮으면 로터는 무채색',
+     !MOT.some((k) => {
+       const c = D.getElementById('rot-' + k).classList;
+       return c.contains('warn') || c.contains('bad');
+     }),
+     MOT.map((k) => D.getElementById('mv-' + k).textContent).join(','));
+  ok('그때도 편차 숫자는 bad',
+     D.getElementById('sc-mspread').classList.contains('bad'),
+     D.getElementById('st-mspread').textContent + '%p');
 
   f = await load('spread=14'); D = f.contentDocument;
   ok('중간 편차는 warn', D.getElementById('sc-mspread').classList.contains('warn'),
      D.getElementById('st-mspread').textContent + '%p');
+
+  // ── 모터 개별 부하 색 — 70%↑ 노랑 / 80%↑ 빨강 ────────────────────
+  note('■ 모터 부하 색 — 그 모터 자신의 값이 색을 정한다');
+  // 평균 74%·편차 0 → 넷 다 warn 이고 bad 는 없다.
+  f = await load('mavg=74&spread=0'); D = f.contentDocument;
+  const cls = (k) => D.getElementById('rot-' + k).classList;
+  ok('74% 는 넷 다 노랑',
+     MOT.every((k) => cls(k).contains('warn')) && !MOT.some((k) => cls(k).contains('bad')),
+     MOT.map((k) => D.getElementById('mv-' + k).textContent).join(','));
+  // 평균 84% → 넷 다 bad.
+  f = await load('mavg=84&spread=0'); D = f.contentDocument;
+  const cls2 = (k) => D.getElementById('rot-' + k).classList;
+  ok('84% 는 넷 다 빨강', MOT.every((k) => cls2(k).contains('bad')),
+     MOT.map((k) => D.getElementById('mv-' + k).textContent).join(','));
+  // 문턱을 사이에 두고 갈린다 — 한 화면에 두 색이 같이 있는 것이 정상이다.
+  // 평균 75%·편차 14%p → 최대 82%(빨강) 최소 68%(무채색) 이 섞인다.
+  f = await load('mavg=75&spread=14'); D = f.contentDocument;
+  const cls3 = (k) => D.getElementById('rot-' + k).classList;
+  const anyBad = MOT.some((k) => cls3(k).contains('bad'));
+  const anyPlain = MOT.some((k) => !cls3(k).contains('bad') && !cls3(k).contains('warn'));
+  ok('문턱을 사이에 두면 색이 섞인다', anyBad && anyPlain,
+     MOT.map((k) => D.getElementById('mv-' + k).textContent
+       + (cls3(k).contains('bad') ? '!' : cls3(k).contains('warn') ? '?' : '')).join(' '));
+  // 부하가 큰 모터가 실제로 더 큰 원이어야 한다 — 크기 매핑이 색과 별개로 산다.
+  const rr3 = (k) => parseFloat(D.getElementById('rot-' + k).getAttribute('r'));
+  ok('색이 붙어도 크기 순서는 유지', rr3('LF') > rr3('RB'),
+     `LF r=${rr3('LF')} > RB r=${rr3('RB')}`);
 
   // 평균이 높으면 추력 여유가 없다는 뜻 — 그 경로도 확인한다.
   f = await load('mavg=93&spread=2'); D = f.contentDocument;

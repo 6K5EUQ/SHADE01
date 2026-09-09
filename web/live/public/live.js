@@ -930,9 +930,13 @@ function render(s) {
 //   2. **치우침**: 편차가 벌어졌을 때 **최대·최소인 놈만** 색을 받는다.
 //      한쪽만 무리하는 것이 무게중심·프롭 손상·모터 열화의 첫 신호다.
 const MOTORS = ['LF', 'RF', 'LB', 'RB'];
-// 실측 근거 (2026-09-09 강풍 세션 6편): 무풍 3~4%p, 강풍 8~10%p.
+// 편차 임계 — 실측 근거 (2026-09-09 강풍 세션 6편): 무풍 3~4%p, 강풍 8~10%p.
 // 20%p 는 그 두 배가 넘는 값이라 "기체가 한쪽을 억지로 붙들고 있다" 로 읽는다.
 const SPREAD_WARN = 10, SPREAD_BAD = 20;
+// 🔴 개별 모터 부하 임계. 호버가 65%(MPC_THR_HOVER=0.65)인 기체라
+//    70% 는 "여유가 줄기 시작했다", 80% 는 "여유가 얼마 안 남았다" 다.
+//    그 위 20%p 안에서 제어 여력이 끝나므로 80% 부터가 실제 경계다.
+const MOT_WARN = 70, MOT_BAD = 80;
 
 function renderMotors(mt) {
   // render() 의 sc 는 그 함수 안의 지역 상수다 — 여기서는 안 보인다.
@@ -940,12 +944,10 @@ function renderMotors(mt) {
   const sc = (id, cls) => { const e = $(id); if (e) e.className = 'sc' + (cls ? ' ' + cls : ''); };
   const vals = MOTORS.map((k) => mt[k]).filter((v) => v != null);
   const has = vals.length > 0;
-  const mmax = has ? Math.max(...vals) : null;
-  const mmin = has ? Math.min(...vals) : null;
-  const spread = has ? mmax - mmin : null;
+  const spread = has ? Math.max(...vals) - Math.min(...vals) : null;
   const avg = has ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
 
-  // 편차 등급이 곧 이 계기의 판정이다.
+  // 편차 등급 — 오른쪽 숫자 칸이 이 색으로 경고한다. 로터 색과는 별개다.
   const lvl = spread == null ? '' : spread > SPREAD_BAD ? 'bad'
             : spread > SPREAD_WARN ? 'warn' : '';
 
@@ -955,26 +957,39 @@ function renderMotors(mt) {
     if (!rot) continue;
     if (v == null) {
       // 값이 없어도 자리는 남긴다 — 사라지면 "모터가 없다" 로 오독된다.
-      rot.setAttribute('r', 11);
+      rot.setAttribute('r', 16);
       rot.style.fill = ''; arm.style.strokeWidth = '';
       rot.classList.remove('warn', 'bad'); arm.classList.remove('warn', 'bad');
+      txt.classList.remove('warn', 'bad');
       setText(txt, '—');
       continue;
     }
-    // 0~100% 를 반지름 8~17 로. 값이 작아도 원이 사라지지 않게 하한을 둔다.
-    const f = Math.max(0, Math.min(100, v)) / 100;
-    rot.setAttribute('r', (8 + f * 9).toFixed(1));
-    // 밝기로도 부하를 준다. 무채색 회색조라 색 예산을 안 쓴다 —
-    // 15%(어두움) ~ 62%(밝음) 사이를 오간다.
-    rot.style.fill = `hsl(210 9% ${(15 + f * 47).toFixed(0)}%)`;
+    // 🔴 크기는 **비행에 쓰는 구간만** 편다. 0~100% 를 그대로 반지름에
+    //    걸면 실제로 오가는 55~75% 구간이 반지름 2~3px 차이라 눈에 안 띈다.
+    //    40~90% 를 반지름 9~22 로 펴서 그 구간의 차이를 크게 만든다.
+    //    (하한·상한 밖은 잘라 붙인다 — 원이 사라지거나 칸을 넘지 않게.)
+    const f = Math.max(0, Math.min(1, (v - 40) / 50));
+    rot.setAttribute('r', (9 + f * 13).toFixed(1));
+    // 밝기로도 부하를 준다. 평소엔 무채색 회색조라 색 예산을 안 쓴다 —
+    // 14%(어두움) ~ 66%(밝음) 사이를 오간다.
+    // 임계를 넘으면 채움도 그 색조로 옮겨간다. 테두리만 칠하면 작은 화면에서
+    // 눈에 안 걸린다 — 다만 채도를 낮게 둬서 원 안 숫자가 계속 읽힌다.
+    const L = 14 + f * 52;
+    rot.style.fill = v >= MOT_BAD ? `hsl(3 42% ${(L * 0.62).toFixed(0)}%)`
+                   : v >= MOT_WARN ? `hsl(38 40% ${(L * 0.60).toFixed(0)}%)`
+                   : `hsl(210 9% ${L.toFixed(0)}%)`;
     // 팔은 부하에 비례해 굵어진다. 그림을 곁눈질할 때 먼저 잡히는 신호다.
-    arm.style.strokeWidth = (3 + f * 4).toFixed(1);
-    // 색은 **튄 놈에게만**. 넷 다 칠하면 어느 것이 문제인지 도로 못 읽는다.
-    const hot = lvl && (v === mmax || v === mmin);
-    rot.classList.toggle('warn', hot && lvl === 'warn');
-    rot.classList.toggle('bad', hot && lvl === 'bad');
-    arm.classList.toggle('warn', hot && lvl === 'warn');
-    arm.classList.toggle('bad', hot && lvl === 'bad');
+    arm.style.strokeWidth = (3 + f * 6).toFixed(1);
+    // 🔴 색은 **그 모터 자신의 부하**가 정한다 — 70%↑ 노랑, 80%↑ 빨강.
+    //    편차로 칠하던 것을 걷어냈다: 한 로터가 상황마다 다른 이유로
+    //    칠해지면 색의 뜻이 흔들린다. 편차는 오른쪽 숫자 칸이 경고한다.
+    const ml = v >= MOT_BAD ? 'bad' : v >= MOT_WARN ? 'warn' : '';
+    rot.classList.toggle('warn', ml === 'warn');
+    rot.classList.toggle('bad',  ml === 'bad');
+    arm.classList.toggle('warn', ml === 'warn');
+    arm.classList.toggle('bad',  ml === 'bad');
+    txt.classList.toggle('warn', ml === 'warn');
+    txt.classList.toggle('bad',  ml === 'bad');
     setText(txt, v.toFixed(0));
   }
 

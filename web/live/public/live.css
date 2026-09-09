@@ -124,11 +124,12 @@ main {
 #sc-spd  { grid-area: 2 / 1 / 3 / 3; }
 #sc-cur  { grid-area: 2 / 3 / 3 / 5; }
 #sc-eph  { grid-area: 2 / 5 / 3 / 7; }
-/* 3~4행: 왼쪽 절반이 기체 그림(두 행을 세로로 관통), 오른쪽이 요약 숫자 둘.
-   그림은 정사각에 가까워야 형상이 안 눌리므로 두 행을 통째로 준다. */
-#sc-frame   { grid-area: 3 / 1 / 5 / 4; }
-#sc-mspread { grid-area: 3 / 4 / 4 / 7; }
-#sc-mavg    { grid-area: 4 / 4 / 5 / 7; }
+/* 3~4행: 왼쪽 3, 오른쪽 1. 그림이 주인공이라 가로를 넉넉히 준다 —
+   6열 중 4열(1~5)이 그림, 2열(5~7)이 요약 숫자 둘이다.
+   그림은 두 행을 세로로 관통하고, 숫자는 위아래로 나눠 갖는다. */
+#sc-frame   { grid-area: 3 / 1 / 5 / 5; }
+#sc-mspread { grid-area: 3 / 5 / 4 / 7; }
+#sc-mavg    { grid-area: 4 / 5 / 5 / 7; }
 #strip .sc {
   background: var(--panel);
   padding: 10px 12px 12px;
@@ -203,17 +204,23 @@ main {
 }
 /* 값은 로터 안에. dominant-baseline 으로 원 중심에 세로 정렬한다. */
 #mframe .mv {
-  font-family: var(--mono); font-size: 9px; font-weight: 700;
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
   fill: var(--text); text-anchor: middle; dominant-baseline: central;
   font-variant-numeric: tabular-nums;
 }
-/* 튄 모터만 색을 준다 — 넷 다 칠하면 어느 것이 문제인지 도로 못 읽는다. */
-#mframe .rot.warn { stroke: var(--warn); }
+/* 🔴 색은 **그 모터 자신의 부하**가 정한다 (2026-09-09): 70%↑ 노랑, 80%↑ 빨강.
+   편차로 칠하던 것을 걷어냈다 — 한 로터가 상황마다 다른 이유로 칠해지면
+   색의 뜻이 흔들린다. 편차는 오른쪽 숫자 칸이 색으로 계속 경고한다.
+   테두리뿐 아니라 채움도 물들여야 작은 화면에서 눈에 걸린다. */
+#mframe .rot.warn { stroke: var(--warn); stroke-width: 2.5; }
 #mframe .arm.warn { stroke: var(--warn); }
-#mframe .rot.bad  { stroke: var(--bad); }
+#mframe .rot.bad  { stroke: var(--bad);  stroke-width: 3; }
 #mframe .arm.bad  { stroke: var(--bad); }
-/* 요약 숫자 둘은 다른 계기보다 조금 작게 — 그림이 주인공이다. */
-#sc-mspread b, #sc-mavg b { font-size: 28px; }
+/* 값 글자는 흰색을 지킨다 — 채움이 이미 색을 가지므로 글자까지 물들이면
+   원 안에서 대비가 떨어져 숫자가 안 읽힌다. 색은 테두리·채움이 낸다. */
+#mframe .mv.warn, #mframe .mv.bad { fill: #fff; }
+/* 요약 숫자는 크게. 칸이 좁아진 만큼 글자로 채운다 — 곁눈질로 읽는 값이다. */
+#sc-mspread b, #sc-mavg b { font-size: 40px; }
 #sc-mspread .k, #sc-mavg .k { color: var(--dim); }
 
 /* ── 헤더 배지 ───────────────────────────────────────────── */
