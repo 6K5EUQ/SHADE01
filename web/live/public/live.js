@@ -180,6 +180,17 @@ function buildHUD() {
   //    (실측 2026-09-05: hudBot=439 인데 warnBot=495).
   //    y=78·108 이면 −13°·−18° 자리다 — 그 구간 가로대는 짧은 대(30px)뿐이라
   //    폭 400px 판이 통째로 덮는다. 판이 겹침을 해결하므로 y 를 더 내릴 이유가 없다.
+  // 🔴 비상정지. arm/모드 위에 겹쳐 놓는 것이 아니라 **둘을 숨기고 대신** 뜬다
+  //    (아래 update 참조). 모터가 끊긴 상태에서 ARMED 와 비행모드를 같이
+  //    보여주면 읽는 사람이 무엇이 참인지 재느라 시간을 쓴다. 여기서 필요한
+  //    정보는 하나다 — 지금 모터가 죽어 있다.
+  h.kill = el('g', { class: 'off' }, h.center);
+  el('rect', { x: -200, y: -34, width: 400, height: 46, rx: 4,
+               fill: '#0d1117', opacity: .95,
+               stroke: 'var(--bad)', 'stroke-width': 3 }, h.kill);
+  h.killTxt = el('text', { x: 0, y: 2, 'text-anchor': 'middle', class: 'killTxt',
+                           fill: 'var(--bad)' }, h.kill);
+
   h.vtol = el('g', { class: 'off' }, h.center);
   el('rect', { x: -200, y: 56, width: 400, height: 32, rx: 4,
                fill: '#0d1117', opacity: .92,
@@ -795,6 +806,19 @@ function render(s) {
   // ── 중앙 상태 블록
   // 🔴 ARMED 를 빨갛게 쓰지 않는다 — 지상 대기·정상 비행은 이상 상태가 아니고,
   //    매 비행마다 빨강을 보면 빨강의 의미가 닳는다 (색 예산).
+  // 🔴 KILL 은 FC 가 직접 말해 준다 — 스위치 채널을 보고 짐작하지 않는다.
+  //    PX4 는 actuator_armed 의 kill·termination·lockdown 중 하나라도 서면
+  //    HEARTBEAT.system_status 를 MAV_STATE_FLIGHT_TERMINATION(8) 으로 덮는다
+  //    (PX4-Autopilot/src/modules/mavlink/streams/HEARTBEAT.hpp:122).
+  //    CH9 의 PWM 을 보는 쪽은 "스위치가 눌렸나" 지 "모터가 죽었나" 가 아니다 —
+  //    조종기 링크가 끊기면 오지도 않는다. 화면은 기체 상태를 보여야 한다.
+  const killed = d.system_status === 8;
+  show(h.kill, killed);
+  if (killed) setText(h.killTxt, 'EMERGENCY STOP');
+  // arm·모드는 KILL 판에 자리를 내준다.
+  show(h.arm, !killed);
+  show(h.mode, !killed);
+
   const tail = d.landed === 2 ? ' · 공중' : d.landed === 1 ? ' · 지상' : '';
   setText(h.arm, d.armed ? 'ARMED' + tail : 'DISARMED');
   // 🔴 DISARMED 를 --muted(#6e7681) 로 두면 갈색 지면 위에서 거의 안 보인다.
@@ -828,8 +852,10 @@ function render(s) {
   setText(h.warn, warnStr);
   show(h.warnBg, !!warnStr);          // 글자 없을 때 빈 판이 떠 있으면 안 된다
   // 점멸은 우선순위 상위 하나에만 — 동시에 여럿 깜빡이면 아무것도 안 튄다.
-  h.vtol.classList.toggle('blink', !!vtBad);
-  h.warn.classList.toggle('blink', !vtBad && !!crit);
+  // KILL 이 사슬의 맨 위다. 모터가 끊긴 것보다 급한 상태는 없다.
+  h.kill.classList.toggle('blink', killed);
+  h.vtol.classList.toggle('blink', !killed && !!vtBad);
+  h.warn.classList.toggle('blink', !killed && !vtBad && !!crit);
 
   // ── HUD 아래 한 줄. 전류밴드·상태밴드·숫자스트립 3층을 통합했다.
   //    비행 중 곁눈질로 읽는 값만 남긴다 — 나머지는 우측 차트에 있다.
@@ -937,7 +963,8 @@ function demoState(n) {
       armed: (n % 300) > 60, landed: (n % 300) > 100 ? 2 : 1,
       mode: fx('auto', 0) ? 'AUTO.MISSION' : 'POSCTL',
       vtol: (n % 400) > 340 ? 'TRANSITION_TO_FW' : 'MC',
-      system_status: 4,
+      // ?sys=8 로 비상정지 화면을 띄운다 — 자체검사가 그렇게 확인한다.
+      system_status: fx('sys', 4),
       lat: 37.5 + Math.sin(t / 20) * 3e-4, lon: 127.0 + Math.cos(t / 20) * 3e-4,
            alt: fx('alt', 45 + 40 * Math.sin(t / 9)),
       vx: Math.cos(t / 7) * gs, vy: Math.sin(t / 7) * gs,

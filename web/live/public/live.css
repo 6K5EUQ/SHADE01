@@ -64,6 +64,9 @@ main {
   font-size: 26px; font-weight: 700;
   stroke: #0d1117; stroke-width: 6px; paint-order: stroke;
 }
+#hud .killTxt { font-size: 30px; font-weight: 700; letter-spacing: 1px;
+                stroke: #0d1117; stroke-width: 6px; paint-order: stroke; }
+#hud.small .killTxt { font-size: 22px; stroke-width: 5px; }
 #hud .vtolTxt { font-size: 20px; font-weight: 700; }
 #hud .warnTxt { font-size: 15px; }
 #hud.small .armTxt  { font-size: 28px; stroke-width: 6px; }

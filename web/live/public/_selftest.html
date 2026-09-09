@@ -158,6 +158,41 @@ const num = (e, a) => parseFloat(e.getAttribute(a));
   ok('전류 50A → .warn', /\bwarn\b/.test(D.getElementById('sc-cur').className),
      D.getElementById('sc-cur').className);
 
+  // ── 비상정지 ────────────────────────────────────────────────────
+  note('■ 비상정지 — 모터가 끊긴 것보다 급한 상태는 없다');
+  f = await load('sys=8'); D = f.contentDocument; svg = D.getElementById('hud');
+  {
+    const kt = svg.querySelector('.killTxt');
+    const kg = kt && kt.parentNode;
+    ok('KILL 이면 EMERGENCY STOP 이 뜬다',
+       !!kt && kt.textContent === 'EMERGENCY STOP' && !/\boff\b/.test(kg.getAttribute('class') || ''),
+       kt ? `"${kt.textContent}" class="${kg.getAttribute('class')}"` : '없음');
+    ok('KILL 이면 판이 빨간 테두리', (kg.querySelector('rect') || {}).getAttribute &&
+       kg.querySelector('rect').getAttribute('stroke') === 'var(--bad)');
+    ok('KILL 이면 점멸한다', /\bblink\b/.test(kg.getAttribute('class') || ''),
+       kg.getAttribute('class'));
+    // 모터가 끊긴 상태에서 ARMED 와 비행모드를 같이 보여주면 무엇이 참인지
+    // 읽는 사람이 재야 한다. 자리를 내주는 것이 설계다.
+    const armEl = svg.querySelector('.armTxt'), modeEl = svg.querySelector('.modeTxt');
+    ok('KILL 이면 ARM 표시가 숨는다', /\boff\b/.test(armEl.getAttribute('class') || ''),
+       armEl.getAttribute('class'));
+    ok('KILL 이면 모드 표시가 숨는다', /\boff\b/.test(modeEl.getAttribute('class') || ''),
+       modeEl.getAttribute('class'));
+    // HUD 밖으로 나가면 통째로 안 보인다 — vtol 경고가 실제로 겪은 실패다.
+    const hb = D.getElementById('hudBox').getBoundingClientRect();
+    const kb = kt.getBoundingClientRect();
+    ok('KILL 글자가 HUD 안', kb.top >= hb.top - 1 && kb.bottom <= hb.bottom + 1,
+       `kill=${kb.top.toFixed(0)}~${kb.bottom.toFixed(0)} hud=${hb.top.toFixed(0)}~${hb.bottom.toFixed(0)}`);
+  }
+  f = await load(''); D = f.contentDocument; svg = D.getElementById('hud');
+  {
+    const kg = svg.querySelector('.killTxt').parentNode;
+    ok('평상시엔 EMERGENCY STOP 이 안 뜬다', /\boff\b/.test(kg.getAttribute('class') || ''),
+       kg.getAttribute('class'));
+    ok('평상시엔 ARM 표시가 보인다',
+       !/\boff\b/.test(svg.querySelector('.armTxt').getAttribute('class') || ''));
+  }
+
   // ── 조건부 표시 ─────────────────────────────────────────────────
   note('■ 조건부 표시 — 멈춘 숫자는 없는 숫자보다 나쁘다');
   f = await load(''); D = f.contentDocument; W = f.contentWindow;
