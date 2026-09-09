@@ -13,7 +13,7 @@
 ├──────────────┼──────────────┤
 │ Cur     3.4  │ Bat      87  │
 │ Spd     1.5  │ Alt      12  │
-│ Tmp      31  │ Sat      14  │
+│ Sat      14  │ Eph     0.2  │
 └──────────────┴──────────────┘
 ```
 
@@ -23,8 +23,17 @@
 | Bat | `Bat%` | 배터리 잔량 (%) |
 | Spd | `GSpd` | 대지속도 (m/s) |
 | Alt | `GAlt` | 고도 (m) |
-| Tmp | `Temp` | 온도 (℃) |
 | Sat | `Sats` | GPS 위성 수 |
+| Eph | (센서 아님 — 아래) | GPS 수평 정확도 (m) |
+
+**값은 전부 세 글자 폭으로 맞춰 찍는다.** 값이 `VALUE_R` 에 우측 정렬되므로
+자릿수가 다르면 왼쪽 끝이 행마다 달라지고, 한 칸씩 어긋난 것이 눈에 띈다.
+`pad3()` 가 정수 쪽을 소수 표시(`3.4`)의 폭에 맞춰 여섯 값을 같은 세로선에
+세운다.
+
+`Tmp`(`Temp` 센서)는 뺐다 — 2026-09-09 에 조종기에서 그 센서를 지웠고, 그
+자리에 `Eph` 를 넣었다. 위성 수만으로는 fix 품질을 알 수 없다: 21기가 잡혀도
+eph 6m 면 나쁜 fix 다. 둘을 나란히 둬야 같이 읽힌다.
 | 배너 좌 | (CH6 / CH9) | **KILL** 이면 `KILL`, 아니면 비행모드 — 텔레메트리가 아니라 **채널값에서 읽는다** |
 | 배너 우 | `RQly` | 링크 품질 |
 
@@ -144,6 +153,49 @@ cp shade.lua /media/$USER/<SD>/SCRIPTS/TELEMETRY/shade.lua
 rm -f /media/$USER/<SD>/SCRIPTS/TELEMETRY/shade.luac
 sync
 ```
+
+## `Eph` — CRSF 센서에 없는 값을 원시 프레임에서 읽는다 (2026-09-09)
+
+eph(GPS 수평 정확도)는 **CRSF GPS 센서 프레임에 칸이 없다.** `crsf_protocol.h` 의
+`crsf_sensor_gps_t` 는 위도·경도·대지속도·방위·고도·위성수뿐이다. 그래서
+`getValue("...")` 로는 영원히 못 읽는다 — 등록될 센서 자체가 없다.
+
+**그런데 TX 는 이미 보내고 있다.** `GPS_RAW_INT` 를 받을 때마다 CRSF GPS 프레임과
+별도로 ArduPilot passthrough(appid `0x5002`)를 함께 내보내는데, 거기
+`format_gps_status(fix_type, alt, eph, sats)` 로 eph 가 실려 있다
+(`ExpressLRS/src/lib/MAVLink/MAVLink.cpp:172`). 그 프레임은
+`CRSF_FRAMETYPE_ARDUPILOT_RESP`(`0x80`) 이고,
+**`crossfireTelemetryPop()` 은 프레임 타입을 가리지 않고 원시 바이트를 그대로 준다.**
+Yaapu 스크립트가 쓰는 것과 같은 경로다 — 전용 API 가 아니다.
+
+따라서 **펌웨어 변경도 바인딩 재설정도 필요 없다.** 파서만 붙이면 된다.
+
+### `0x5002` 비트 배치
+
+`ardupilot_custom_telemetry.cpp:334` 의 `format_gps_status()`:
+
+| 비트 | 내용 |
+|---|---|
+| 0–3 | 위성 수 |
+| 4–5 | fix_type (0–3) |
+| **6–13** | **eph** — `prep_number(eph/10, 2, 1)` |
+| 14+ | advanced fix status (fix_type > 3 일 때) |
+| 22+ | 고도 MSL |
+
+🔴 **8비트만 읽어야 한다.** `prep_number` 의 9번째 비트는 부호인데, 그 자리가
+`advstatus` 의 bit 0 과 **겹친다.** `advstatus` 는 `fix_type > 3` 일 때 non-zero 이고
+그건 **모든 RTK fix** — 이 기체가 실제로 나는 조건이다. 9비트를 읽으면
+eph 0.14m 가 **−0.1m** 로 나온다. eph 는 거리라 음수가 없으므로 겹치는 비트를 버린다.
+
+🔴 **`bit32` 를 쓰지 마라.** Lua 5.2 표준이지만 EdgeTX 빌드가 포함하는지 보장이 없고,
+없으면 첫 redraw 에서 nil 인덱스로 죽는다 — 현장에서, 비행 중에.
+`math.floor(v / 2^n)` 과 `v % (mask+1)` 로 충분하다.
+
+⚠️ **0.1m 해상도로 잘린다.** passthrough 가 `eph/10` 을 싣기 때문이고 받는 쪽에서
+되살릴 수 없다. 실측 대조(2026-09-09): 웹 `7.12m` → 조종기 `7.1`, `6.64m` → `6.6`.
+
+⚠️ **`crossfireTelemetryPop()` 은 파괴적이다.** 큐를 공유하므로 여기서 꺼낸 것은 다른
+스크립트가 못 본다. 이 페이지가 화면에 떠 있을 때만 돌므로 실사용에는 문제없다.
 
 ## 화면 제약 — 128×64 흑백
 
