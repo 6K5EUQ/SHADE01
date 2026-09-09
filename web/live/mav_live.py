@@ -157,7 +157,30 @@ REC_MIN_SATS = 6
 #    둘 다 맞아야 남는다. 하나라도 아니면 지운다 — 실내 벤치 arm 과
 #    즉시 disarm 이 목록을 덮는 것을 막는 것이 원래 목적이고, 그 목적은
 #    파일을 **안 여는 것**이 아니라 **안 남기는 것**으로 달성된다.
-REC_MIN_KEEP_BYTES = 1_000_000        # 1MB
+#    🔴 문턱은 **링크마다 다르다** (2026-09-09 실측으로 물렸다).
+#    1MB 하나를 두 경로에 똑같이 걸었더니, 그 값이 "비행의 가치" 가 아니라
+#    "링크 대역폭" 을 재고 있었다. 그날 야외 실비행 9편이 전부 버려졌다:
+#
+#      지상시험  22초  USB   1.17MB  → 남음
+#      실비행   388초  ELRS  0.50MB  → 버려짐   ← 6.5분을 날고도
+#
+#    ELRS 백팩은 USB 의 1/5 도 안 되는 속도로 흐른다(실측 아래). 그래서
+#    백팩으로 나간 비행은 **아무리 길어도 1MB 를 못 넘긴다** — 구조적으로
+#    절대 안 남는 경로였다.
+#
+#    ELRS 실측 (2026-09-09 야외, 전부 fix≥3·위성≥6 통과):
+#       92초 0.1MB · 124초 0.1MB · 136초 0.2MB
+#      223초 0.3MB · 271초 0.3MB · 388초 0.5MB
+#    같은 날 실내·미연결 ELRS 는 19~40초에 0.0MB 였다 — 백팩이 안 붙으면
+#    바이트가 아예 안 쌓이므로, 낮은 문턱으로도 지상 arm 은 그대로 걸러진다.
+#
+#    야외 판정(fix≥3, 위성≥6)이 이미 실내를 막고 있으므로, 크기 문턱은
+#    "링크가 실제로 흐르고 있었나" 만 보면 된다.
+REC_MIN_KEEP_BYTES = {
+    'FC':   1_000_000,    # USB 직결 — 1MB. 22초 지상시험이 1.17MB 다
+    'ELRS': 50_000,       # 백팩 — 50KB. 실비행 최소가 92초 0.1MB 였다
+}
+REC_MIN_KEEP_DEFAULT = 1_000_000      # 모르는 경로는 보수적으로
 
 # 오래된 기록은 지운다. 몇 달을 켜 두면 ARM 마다 파일이 생기는데 아무도 안
 # 지운다 — git 에도 안 올라가니(.gitignore) 조용히 디스크만 먹는다.
@@ -272,8 +295,10 @@ class _Sink:
         """버릴 이유. 남길 것이면 None."""
         if not self.outdoor:
             return '실내 — GPS 야외 판정을 한 번도 못 넘었다'
-        if self.bytes < REC_MIN_KEEP_BYTES:
-            return '%.1fMB < %.1fMB' % (self.bytes / 1e6, REC_MIN_KEEP_BYTES / 1e6)
+        # 문턱은 링크마다 다르다 — REC_MIN_KEEP_BYTES 주석 참조.
+        floor = REC_MIN_KEEP_BYTES.get(self.kind, REC_MIN_KEEP_DEFAULT)
+        if self.bytes < floor:
+            return '%.2fMB < %.2fMB(%s)' % (self.bytes / 1e6, floor / 1e6, self.kind)
         return None
 
 

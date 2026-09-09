@@ -158,7 +158,7 @@ def t_toggle(cycles=25):
 
 
 # ── 4. 기록 보존 규칙 ─────────────────────────────────────────────────
-def _record(gps_seq, target_bytes):
+def _record(gps_seq, target_bytes, link='USB'):
     """합성 비행 하나를 적고, 남은 파일 개수를 돌려준다."""
     d = tempfile.mkdtemp()
     try:
@@ -166,7 +166,7 @@ def _record(gps_seq, target_bytes):
         r.on_arm(True)
         frame = b'\xfd' + b'x' * 200
         for i in range(max(1, target_bytes // (len(frame) + 8))):
-            r.write(frame, 'USB', gps_seq[min(i, len(gps_seq) - 1)])
+            r.write(frame, link, gps_seq[min(i, len(gps_seq) - 1)])
         r.on_arm(False)
         r._closing_at = time.monotonic() - 1
         r.tick()
@@ -181,6 +181,22 @@ def t_recording():
     check('야외 + 0.2MB → 지운다 (너무 작다)', _record([OUT], 200_000), 0)
     check('실내 + 2MB → 지운다 (GPS 없음)', _record([IN], 2_000_000), 0)
     check('실내 + 0.2MB → 지운다', _record([IN], 200_000), 0)
+
+    # 🔴 ELRS 백팩은 문턱이 다르다 (2026-09-09). 1MB 를 두 경로에 똑같이
+    #    걸었더니 그 값이 링크 대역폭을 재고 있었고, 야외 실비행 9편이
+    #    전부 버려졌다 — 388초를 날고도 0.5MB 였다.
+    #    실측 최소가 92초 0.1MB 이므로 그 아래(0.2MB)도 남아야 한다.
+    check('ELRS 야외 + 0.2MB → 남긴다', _record([OUT], 200_000, 'ELRS'), 1)
+    check('ELRS 야외 + 0.1MB → 남긴다', _record([OUT], 100_000, 'ELRS'), 1)
+    # 백팩이 안 붙으면 바이트가 아예 안 쌓인다 — 실측 19~40초에 0.0MB.
+    # 그 지상 arm 은 낮아진 문턱으로도 계속 걸러져야 한다.
+    check('ELRS 야외 + 0.01MB → 지운다 (링크가 안 흘렀다)',
+          _record([OUT], 10_000, 'ELRS'), 0)
+    # 야외 판정은 링크와 무관하게 그대로다.
+    check('ELRS 실내 + 0.2MB → 지운다 (GPS 없음)',
+          _record([IN], 200_000, 'ELRS'), 0)
+    # USB 는 1MB 문턱을 지킨다 — 낮춘 것은 ELRS 뿐이다.
+    check('USB 야외 + 0.2MB → 여전히 지운다', _record([OUT], 200_000, 'USB'), 0)
     # 🔴 fix 가 늦게 잡혀도 남아야 하고, **이륙 순간이 파일에 있어야** 한다.
     check('늦게 fix → 남긴다', _record([IN] * 2000 + [OUT], 2_000_000), 1)
 
