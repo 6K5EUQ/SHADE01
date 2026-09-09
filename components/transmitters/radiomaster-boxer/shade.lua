@@ -202,32 +202,39 @@ local function whole(v)
   return string.format("%d", (v >= 0) and math.floor(v + 0.5) or -math.floor(-v + 0.5))
 end
 
+-- Every value is padded to three characters.
+--
+-- Values are right-aligned to VALUE_R, so their left edge moves with the
+-- character count: "3.4" starts 8px further left than "75", and a bare "9"
+-- 8px further right again. Read down the page that put Sat one cell right of
+-- Cur/Spd and Eph one cell left of Bat/Alt -- close enough to look like a
+-- mistake, far enough to make the eye re-find the number on every row.
+--
+-- Three is the width the decimal readings already need (Cur, Spd, Eph), so
+-- padding the integers to match lines all six values up at the same left
+-- edge. A four-character reading (a 1000+ altitude, eph past 10m) still
+-- right-aligns from there and simply extends one cell further left.
+local function pad3(s)
+  while #s < 3 do s = " " .. s end
+  return s
+end
+
 -- Curr, GSpd, Temp and RxBt carry prec: 1 in the model. Printing those as
 -- plain integers rounds a 3.4A hover draw down to "3" and anything under 1A
 -- to a flat "0", which reads as a dead sensor. Show the decimal while the
 -- value is small enough to need it and drop it once the whole number carries
 -- the information.
 local function fmt(v)
-  if v == nil then return "--" end
+  if v == nil then return pad3("--") end
   if v > -10 and v < 10 then return string.format("%.1f", v) end
-  return whole(v)
+  return pad3(whole(v))
 end
 
 -- Sensors that are whole numbers to begin with never get a decimal.
+-- Sensors that are whole numbers to begin with never get a decimal.
 local function fmtInt(v)
-  if v == nil then return "--" end
-  return whole(v)
-end
-
--- Satellite count, padded to two digits. Values are right-aligned to a fixed
--- column edge, so a single digit would start 8px further right than every
--- other row and read as misaligned next to Eph beside it. Padding keeps the
--- column steady; the count never usefully exceeds two digits anyway.
-local function fmtSats(v)
-  if v == nil then return "--" end
-  local n = whole(v)
-  if #n < 2 then return " " .. n end
-  return n
+  if v == nil then return pad3("--") end
+  return pad3(whole(v))
 end
 
 -- Geometry. The default font is 8x8, MIDSIZE 8x12. The banner is one 14px
@@ -279,9 +286,7 @@ end
 -- would drop the only digit that separates a 12.4m fix from a 12m one, and a
 -- fixed width keeps the value from jittering sideways as it crosses 10.
 local function fmtEph()
-  -- Three characters like Cur and Spd above it, so the decimal point lines up
-  -- down the column instead of shifting when the value is missing.
-  if ephDm == nil then return " --" end
+  if ephDm == nil then return pad3("--") end
   return string.format("%.1f", ephDm / 10)
 end
 
@@ -305,7 +310,7 @@ local function run(event)
   -- neighbour used to be, the accuracy on the right in the slot Tmp left.
   -- They belong side by side -- 21 satellites with eph 6m is still a bad fix,
   -- and the count on its own would say the opposite.
-  row(1, 3, "Sat", fmtSats(val("Sats")))
+  row(1, 3, "Sat", fmtInt(val("Sats")))
   row(2, 3, "Eph", fmtEph())
 
   -- Column divider, drawn last so it sits on top of nothing important.
