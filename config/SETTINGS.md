@@ -157,17 +157,17 @@ PX4 는 `RC_MAP_*_SW` 에서 **1500 초과를 ON** 으로 본다 → **내리면
 | SE | 2POS | 2단 |
 | SF | **TOGGLE** | 🔴 **모멘터리** — 손 떼면 복귀. KILL 같은 래치 기능에 부적합 |
 | P1 / P2 | with_detent | 다이얼 (노치) |
-| **P3 (S3)** | **multipos_switch** | **6단** — 비행모드 6슬롯에 1:1 대응 |
+| **P3 (S3)** | **multipos_switch** | 🔴 **실물에 없다** — `radio.yml` 에만 있는 항목. 2026-09-05 확인 |
 
 ### 채널 배정
 
 | 스위치 | 채널 | 박서 믹스명 | FC 파라미터 | 위(1000) | 아래(2000) |
 |---|---|---|---|---|---|
 | SA | CH5 | ARM | `RC_MAP_ARM_SW=5` | 해제 | **ARM** |
-| **P3 (S3)** | **CH6** | MOD | `RC_MAP_FLTMODE=6` | 6단 로터리 — 아래 표 ||
+| **SB** (3단) | **CH6** | MOD | `RC_MAP_FLTMODE=6` | 비행모드 — SB + SC/SF 래치, 아래 표 ||
 | **SD** | CH7 | BP(TRA) | `RC_MAP_TRANS_SW=0` ✅ | 멀티로터 | **미매핑** (2026-09-04 변경, 스냅샷 이후) |
-| SE | CH8 | TUR(KIL) | `RC_MAP_KILL_SW=8` | 해제 | **KILL** |
-| SC | CH9 | RTL | `RC_MAP_RETURN_SW=9` | 🟡 CH9 는 1500 고정 ||
+| SE | CH8 | TUR(KIL) | `RC_MAP_KILL_SW=8` → **현행 `9` (CH9)** | 해제 | **KILL** |
+| SC | CH9 | RTL | `RC_MAP_RETURN_SW=9` → **현행 `0`** (RTL 은 `COM_FLTMODE6` 슬롯으로) | 🟡 CH9 는 1500 고정 ||
 
 스틱: `Ail`→CH1, `Ele`→CH2, `Thr`→CH3, `Rud`→CH4
 (`RC_MAP_ROLL` / `PITCH` / `THROTTLE` / `YAW` = 1 / 2 / 3 / 4). `RC_CHAN_CNT=16`.
@@ -188,9 +188,17 @@ PX4 는 `RC_MAP_*_SW` 에서 **1500 초과를 ON** 으로 본다 → **내리면
 
 ---
 
-### 비행모드 6단 — P3(S3) on CH6
+### 비행모드 6단 — CH6
 
-2026-08-31 에 CH6 을 **SB(3단) → P3/S3(6단 로터리)** 로 교체했다. 6모드를 각각 쓰기 위해서다.
+> 🔴 **아래 9/2 표는 폐기된 P3 6단 로터리 전제다.** 2026-09-04 에 CH6 이 **SB(3단) +
+> SC/SF 래치**로 바뀌었고, `COM_FLTMODE1~6` 도 같이 재배치됐다. 현행은 그 아래
+> [현행](#현행--sb-3단--scsf-래치-2026-09-04) 표를 봐라. 정본은
+> [`FC_CHANGELOG.md`](../FC_CHANGELOG.md) 와 [스위치 매핑](../components/transmitters/radiomaster-boxer/switch-mapping.md).
+
+#### 9/2 스냅샷 시점 (P3 6단 로터리 — 폐기)
+
+2026-08-31 에 CH6 을 **SB(3단) → P3/S3(6단 로터리)** 로 교체했다고 기록돼 있으나,
+**실물에 그런 스위치가 없다** (2026-09-05 확인). 슬롯 여유 계산만 유효하다.
 
 | 단 | 실측 PWM | 슬롯 여유 | 파라미터 | 모드 | GPS |
 |---|---|---|---|---|---|
@@ -203,6 +211,27 @@ PX4 는 `RC_MAP_*_SW` 에서 **1500 초과를 ON** 으로 본다 → **내리면
 
 2026-09-02 재측정 — ELRS 실링크로 `RC_CHANNELS` 1800 샘플을 받으며 각 단을 5~7초씩
 유지하고, FC 의 `HEARTBEAT` 보고 모드를 함께 기록했다. 6단 전부 의도한 슬롯에 들어갔다.
+
+#### 현행 — SB 3단 + SC/SF 래치 (2026-09-04~)
+
+`params/px4_params_20260906-185941.params` 기준. 6슬롯 중 **5개만 도달 가능**하다.
+
+| 슬롯 | 조작 | 실측 PWM | 파라미터 | 모드 | GPS |
+|---|---|---|---|---|---|
+| 1 | SC 위 + SF 딸칵 | 1000 | `COM_FLTMODE1=4` | **Mission** | 필요 |
+| 2 | **SB 위** | **1275** | `COM_FLTMODE2=8` | **Stabilized** | 불필요 |
+| 3 | SB 중간 | **1425** | `COM_FLTMODE3=1` | **Altitude** | 불필요 |
+| 4 | SB 아래 | **1500** | `COM_FLTMODE4=2` | **Position** | 필요 |
+| 5 | — **도달 불가** | — | `COM_FLTMODE5=2` | Position (안전값) | — |
+| 6 | SC 아래 + SF 딸칵 | 2000 | `COM_FLTMODE6=5` | **RTL** | 필요 |
+
+⚠️ `COM_FLTMODE1` 은 [FC_CHANGELOG](../FC_CHANGELOG.md) 9/4 기록에 `3`(Position)으로
+적혀 있었으나 실기는 `4`(Mission)였다. **실기가 맞다** — 스위치 매핑 검증 9번
+("SC 위 + SF → 슬롯1 Mission")과 일치한다. 기록 쪽이 틀렸고 값은 그대로 뒀다.
+
+박서 화면에 이 모드를 띄우는 스크립트는
+[`shade.lua`](../components/transmitters/radiomaster-boxer/telemetry-screen.md) 다.
+같은 경계를 쓴다.
 
 ### PX4 슬롯 경계는 1500us 가 아니다
 

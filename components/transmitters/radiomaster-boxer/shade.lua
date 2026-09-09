@@ -1,20 +1,44 @@
 -- SHADE VTOL telemetry page
--- Flight mode as text (read from CH6 / S3 6-position) plus the values that
--- matter in flight. The mode comes from the channel, not from CRSF telemetry,
--- so it stays correct even though the FC speaks MAVLink rather than CRSF.
+-- Flight mode as text (read from CH6) plus the values that matter in flight.
+-- The mode comes from the channel, not from CRSF telemetry, so it stays
+-- correct even though the FC speaks MAVLink rather than CRSF.
 --
 -- Layout is sized for the Boxer's 128x64 mono LCD and follows the stock
 -- telemetry pages: a mode banner, then two columns of labelled rows. Each row
 -- is a small label on the left and the value right-aligned to a fixed column
 -- edge, so a digit appearing or dropping never shifts anything sideways.
 
+-- CH6 carries the flight mode. SB (3-position) sets it on its own, and an
+-- SC + SF latch replaces the channel outright for the two auto modes. There
+-- is no 6-position rotary on this radio, so only five of the six PX4 slots
+-- are reachable:
+--
+--   SC up   + SF   1000us   slot 1   Mission
+--   SB up          1275us   slot 2   Stabilized
+--   SB middle      1425us   slot 3   Altitude
+--   SB down        1500us   slot 4   Position
+--   SC down + SF   2000us   slot 6   RTL
+--
+-- Slot 5 (also Position) cannot be reached and is left out.
+--
+-- The boundaries below are PX4's own slot edges rather than midpoints between
+-- the readings, so the banner changes exactly when the FC changes mode. PX4
+-- splits the channel at slot_min -1.05, slot_max +1.05 and slot_width_half
+-- 1/6 (rc_update.cpp), which with RC6_MIN/MAX/TRIM at 1000/2000/1500 puts the
+-- edges at 1107, 1282, 1457, 1632 and 1807us. getValue returns EdgeTX units,
+-- where 1000/1500/2000us map to -1024/0/+1024, hence the values used here.
+--
+-- Slot 2 sits only 7us above the 1282us edge, so the banner will follow the
+-- FC into Position if an RC calibration or a mix change moves that reading.
+-- That is the intent: the screen should show what the FC flies, not what the
+-- switch is labelled.
 local MODES = {
-  {-1024, -700, "STAB"},
-  { -700, -350, "ALT"},
-  { -350,    0, "POS"},
-  {    0,  350, "POS"},
-  {  350,  700, "MISN"},
-  {  700,  1025, "RTL"},
+  {-1025, -805, "MISN"},
+  { -805, -447, "STAB"},
+  { -447,  -88, "ALT"},
+  {  -88,  270, "POS"},
+  {  270,  629, "POS"},
+  {  629, 1025, "RTL"},
 }
 
 local function modeText()
