@@ -45,7 +45,10 @@ main {
 
 /* 배터리 온도 오버레이 — HUD 좌측 하단. 하늘/땅 어느 쪽에 걸쳐도 읽히도록
    글자에 그림자를 준다. 평소에는 조용히 있다가 뜨거워지면 색으로 말한다. */
+/* 자리를 고정 폭으로 잡고 그 안에서 가운데 정렬한다. 왼쪽 끝에 붙여 두면
+   9.9 -> 10.0 처럼 자릿수가 늘 때 글자가 오른쪽으로 자라 흔들려 보인다. */
 #hudTemp { position: absolute; left: 8px; bottom: 6px;
+           width: 60px; text-align: center;
            font-size: 13px; font-weight: 700; letter-spacing: .3px;
            color: #cbd5e1; text-shadow: 0 0 3px #000, 0 0 6px #000;
            pointer-events: none; font-variant-numeric: tabular-nums; }
