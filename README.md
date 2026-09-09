@@ -262,12 +262,18 @@ QGC 대신(또는 같이) **브라우저로 볼 수 있다** — 지도 한쪽, 
 | RX RP4TD-M | **3.5.6** (ee188b) ISM2G4 | Serial = **MAVLink**, Bound UID `45,5,9,157,112,199` |
 | 백팩 | **1.5.9** | Telemetry = **wifi** |
 
-**링크 설정 (2026-09-04 실측)** — `Packet Rate 250Hz` / `Telem Ratio 1:2` / **4921bps**
+**링크 설정 (2026-09-09 조종기 실측)** — `Packet Rate 333Hz Full` / `Telem Ratio 1:2` / **13211bps**
 
-하향 텔레메트리 상한이 **615 B/s** 다. 이 값이 "Sensor lost" 와 백팩 QGC 로딩 속도를
-동시에 좌우한다 — [대역폭 분석](components/receivers/radiomaster-rp4td-m/README.md#-링크-대역폭-포화--sensor-lost-의-원인-2026-09-04-규명).
-Telem Ratio 는 **1:2 가 이미 최대**이므로, 더 늘리려면 Packet Rate 를 500Hz 로 올려야
-한다 (⚠️ 수신 거리는 줄어든다).
+하향 텔레메트리 상한이 **1651 B/s** 다. 현재 `MAV_0_RATE=1400` 으로 그 **85%** 를 예산으로
+잡고, 실제 송신은 **900~1080 B/s** (상한의 55~65%) 다. `txbuf` 100, `rate_multiplier` 1.000
+— 지금은 깎이지 않는다.
+
+⚠️ **옛 "250Hz / 615 B/s / 96% 포화" 서술은 무효다.** 그 값으로 대역폭을 병목이라
+오진해 2026-09-05 에 `MAV_0_RATE` 를 300 으로 내렸다가 되돌린 일이 있다. 진짜 원인은
+`MAV_0_FORWARD=1` 이었다 — [경위](FC_CHANGELOG.md#-2026-09-09--sensor-lost-원인-규명과-해결-mav_0_forward--extrastxt--mav_0_rate).
+
+Telem Ratio 는 **1:2 가 이미 최대**다. 더 늘리려면 Packet Rate 를 500Hz 로 올려야 한다
+(⚠️ 수신 거리는 줄어든다) — 지금 여유로는 필요 없다.
 
 > **TX 는 커스텀 펌웨어다.** 공식 4.1.0 은 `BATTERY_STATUS.id != 0` 을 버려 조종기 화면에
 > 배터리가 안 뜬다. 재플래시하면 바인딩도 다시 해야 한다 —
@@ -318,6 +324,7 @@ SB(3단) + SC/SF 래치가 만든다. PWM 은 전부 2026-09-09 실측이다.
 | 링크 | ✅ 지상: `rim3` USB 직결 브리지 (ku·rim·gram 중계). **비행 중: ELRS 백팩** — 트래커가 USB·백팩을 동시에 듣고 USB 가 빠지면 2초 안에 백팩으로 넘어간다 ([상세](web/live/README.md#어디서-데이터를-받나)). 9/5 야외 3편이 이 구성으로 날았다. raspb1 은 **휴면**(2026-09-04 부터 오프라인) — 필수 아님 |
 | 비행모드 | ✅ **STAB / ALT / POS / MSN / RTL 6슬롯 전부 의도대로** (2026-09-09 실측·수정). `COM_FLTMODE1` 이 `4`(Hold)라 미션이 안 걸리던 것을 **`3`(Mission)으로 되돌렸다** ([경위](components/transmitters/radiomaster-boxer/switch-mapping.md#-슬롯1-이-mission-이-아니라-hold-로-걸린다-2026-09-09)) |
 | ✅ 슬롯 여유 | 2026-09-09 실측 988/1173/1347/1520/2011 — **가장 좁은 곳도 63us**. 옛 "2단 7us" 경고는 없는 P3 로터리 기준이라 무효였다. **CH6 RC 캘리브레이션은 여전히 금지** |
+| ✅ 텔레메트리 | **"Sensor lost" 해결** (2026-09-09). 원인은 대역폭이 아니라 `MAV_0_FORWARD=1` — USB 브리지 트래픽 2736 B/s 가 조종기 링크로 넘어가고 있었다. `0` 으로 끄고 `MAV_0_RATE` 990→**1400**, `extras.txt` 로 TELEM1 스트림 재배분. 배터리 최대공백 **40.02s → 0.81s**, `BAD_DATA` **253 → 0** ([경위](FC_CHANGELOG.md#-2026-09-09--sensor-lost-원인-규명과-해결-mav_0_forward--extrastxt--mav_0_rate)) |
 | GPS | ✅ 위성 21~32, fix 4, eph 0.15~0.23m (야외 실측) |
 | 진동 | ✅ 평균 2.5 / 최대 5.0 (8/25 세션 8~10 대비 개선) |
 | 미션 | ✅ `TAKEOFF`(22) → WP×4 → `LAND`(21), 경로 163.6m ([백업](config/)). `MIS_TAKEOFF_ALT=20` (9/5, 5→20) |
@@ -400,6 +407,10 @@ VTOL 이착륙으로 저장되지 않도록 주의하라 — 고정익을 푼 �
 
 | 날짜 | 사건 |
 |---|---|
+| 2026-09-09 | ✅ **"Sensor lost" 해결 — 원인은 대역폭이 아니라 `MAV_0_FORWARD=1` 이었다.** TELEM1 송신 2868 B/s 중 **95%(2736)가 USB→TELEM1 포워딩**이고 스트림은 132 B/s 뿐이었다. USB 브리지를 붙일수록 조종기가 죽는 구조였다. 끄고 `MAV_0_RATE` 990→1400 + `extras.txt` 재배분 → 배터리 공백 **40.02s → 0.81s**, `BAD_DATA` **253 → 0** ([상세](FC_CHANGELOG.md#-2026-09-09--sensor-lost-원인-규명과-해결-mav_0_forward--extrastxt--mav_0_rate)) |
+| 2026-09-09 | ✅ **조종기 화면에 `Eph`(GPS 정확도) 추가.** CRSF 센서 프레임에 칸이 없는 값을 ArduPilot passthrough(`0x5002`) 원시 프레임에서 파싱한다 — 펌웨어·바인딩 변경 없음 ([원리](components/transmitters/radiomaster-boxer/telemetry-screen.md#eph--crsf-센서에-없는-값을-원시-프레임에서-읽는다-2026-09-09)) |
+| 2026-09-09 | ✅ **라이브 화면에서 수신 경로를 고정한다** (자동 → USB → ELRS). USB 가 붙어 있으면 ELRS 가 영영 안 보이던 것을 배지 클릭으로 전환. `shade01` 에서도 되고, 랩서버는 rim3 가 걸어 오는 push 의 **응답에 얹어** 전한다 — 인바운드 경로는 안 열었다 |
+| 2026-09-09 | ✅ **배터리 온도를 HUD 좌측 하단에 표시** (`BATTERY_STATUS.temperature`). ESC·모터 온도와 셀별 전압은 **하드웨어가 없다** (실측: `ESC_STATUS` 0회, `DSHOT_TEL_CFG=0`, `voltages[]` 가 팩 전압 하나) |
 | 2026-09-09 | ✅ **로그 손상의 원인 정정 — SD 카드가 아니라 MAVFTP 전송이다.** 매 회차 새 연결로 재니 FC 가 낸 CRC 는 4회 전부 같고 내려받은 바이트만 갈렸다. 9/6 진단은 한 연결에서 CRC 를 반복 호출해 생긴 착시였다(PX4 `_workCalcFileCRC32` 버퍼 재사용). **카드 교체 불필요** ([상세](FLIGHT-SYNC.md#-2026-09-09-정정--카드가-아니라-전송-경로다)) |
 | 2026-09-06 | 🔴 **같은 로그를 받을 때마다 내용이 다름을 발견** — 512바이트 섹터 단위로 어긋난다. 로그의 "구독 섹션 유실"·"포맷 정의 유실"·깨진 float 이 전부 여기서 온다. `--verify` 다수결로 복원한다. ~~SD 교체 필요~~ → **원인은 9/9 에 전송 경로로 정정됐다** |
 | 2026-09-06 | ✅ **`./qgc sync` — 비행 직후 한 줄로 FC → 웹.** 크기 게이트로 49개→10개(2.7배), 실비행·호버만 업로드 ([절차](FLIGHT-SYNC.md)) |
@@ -407,7 +418,7 @@ VTOL 이착륙으로 저장되지 않도록 주의하라 — 고정익을 푼 �
 | 2026-09-05 | ✅ **미션 사전 검토 후 3개 적용** — `RTL_RETURN_ALT` 60→20, `RTL_DESCEND_ALT` 30→10, `MPC_THR_HOVER` 0.50→0.65 ([상세](flights/2026-09-05-mission-preflight-review.md)) |
 | 2026-09-04 | ✅ **고정익 사용 중지 — 쿼드 전용으로 제한.** `RC_MAP_TRANS_SW` 7→0 을 FC 에 쓰고 저장했다. 천이 진입 경로 4곳을 점검해 전부 닫힌 것을 확인 |
 | 2026-09-04 | 🟡 **raspb1 링크 잠정 중단** — FC USB 를 `rim3` 로 옮겼다. `rim3` 직결 브리지가 ku·rim 까지 중계되는 것을 양방향 실측 확인 (28.4 KB/s, 상행 PARAM 왕복). README 링크 구성을 **3 경로**(raspb1 / PC 직결 / ELRS 백팩)로 정정 — "raspb1 단독, 대체 경로 없다" 는 백팩 링크 구축(9/3) 이후 낡은 서술이었다 |
-| 2026-09-04 | 🔴 **"Sensor lost" 원인 규명 — ELRS 대역폭 96% 포화** (250Hz/1:2 = 615 B/s 상한, PX4 가 593 B/s 송신). `MAV_0_RATE` 0 → **490** + FC 재부팅 완료 ([상세](components/receivers/radiomaster-rp4td-m/README.md#-링크-대역폭-포화--sensor-lost-의-원인-2026-09-04-규명)) |
+| 2026-09-04 | ~~"Sensor lost" 원인 규명 — ELRS 대역폭 96% 포화~~ ⚠️ **오진이었다.** 250Hz 전제가 틀렸고(실제 333Hz), 진짜 원인은 `MAV_0_FORWARD` 다 — 2026-09-09 항목 참조. `MAV_0_RATE` 0 → 490 은 이때 적용 |
 | 2026-09-04 | 백팩 링크 로딩 지연 규명·완화 — `noInitialDownloadWhenFlying` ([상세](gcs/qgroundcontrol/README.md#-백팩-링크는-왜-로딩이-느린가-2026-09-04-규명)) |
 | 2026-09-02 | 🔴 **CH7 천이가 실제로는 매핑돼 있음을 발견** (`RC_MAP_TRANS_SW=7`) — 문서 3곳이 "미매핑"으로 잘못 적고 있었다 |
 | 2026-09-02 | 브리지 보안 수정 — Tailscale 주소에만 바인딩 + 송신자 화이트리스트 ([상세](shade-bridge/README.md#노출-범위--반드시-읽어라)) |

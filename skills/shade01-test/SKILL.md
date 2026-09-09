@@ -132,7 +132,7 @@ Tailscale 에서 온라인인 `rim3`·`raspb1`·`ku`·`rim` 순으로 훑는다.
 - **육안**: 프레임·모터 마운트·프롭 균열
 - **손**: 착륙 후 커넥터 발열
 - **arm 뒤**: QGC 지도에서 **H 아이콘이 기체 위**인지 — RTL 이 그리로 간다
-- **조종기**: 모드 스위치 6단, `CH6 RC 캘리브레이션 금지` (슬롯 경계 여유 7us)
+- **조종기**: SB(3단) + SC/SF 래치로 5슬롯, `CH6 RC 캘리브레이션 금지` (`shade.lua` 와 `COM_FLTMODE*` 가 실측 PWM 을 전제로 한다)
 
 관련: [`shade01-log`](../shade01-log/SKILL.md) 지나간 로그 · [`shade01-live`](../shade01-live/SKILL.md)
 실시간 화면 · [`FC_CHANGELOG.md`](../../FC_CHANGELOG.md) 파라미터가 왜 그 값인지

@@ -53,11 +53,29 @@
 | 파라미터 | 값 |
 |---|---|
 | `MAV_0_CONFIG` | 101 (TELEM1 — ELRS MAVLink) |
+| `MAV_0_MODE` | 0 (Normal) |
+| `MAV_0_RATE` | **1400** (2026-09-09. 실측 OTA 상한 1651 B/s 의 85%) |
+| `MAV_0_FORWARD` | **0** (2026-09-09 — 아래 🔴) |
+| `MAV_0_RADIO_CTL` | 1 (ELRS `txbuf` 로 PX4 가 송신률 자동 조절) |
 | `MAV_1_CONFIG` | 0 (비활성 — 2026-09-02 정리) |
 | `MAV_2_CONFIG` | 0 |
 | `SER_TEL1_BAUD` | 460800 |
 
 ⛔ TELEM2 는 물리적으로 사망(2026-08-31). GCS 링크는 **FC USB → raspb1** 이 유일 경로다.
+
+🔴 **`MAV_0_FORWARD=0` 이 "Sensor lost" 의 해결이다.** `1` 일 때 USB 인스턴스로
+들어온 트래픽이 TELEM1(조종기 링크)로 통째로 넘어갔다 — TELEM1 송신 2868 B/s 중
+**2736(95%)이 포워딩**이고 스트림은 132 B/s 뿐이었다. USB 브리지를 붙일수록 조종기
+텔레메트리가 죽는 구조였다. USB 인스턴스는 `mavlink_main.cpp:2193` 에서 포워딩이
+**강제 ON** 이라 이 파라미터로만 끊을 수 있다.
+
+⚠️ **대가**: raspb1 컴패니언이 TELEM2 로 복귀하면 그 메시지가 조종기 쪽으로 안 나간다.
+지금은 휴면이라 무해하나 **복귀 시 확인할 것.**
+
+⚠️ TELEM1 스트림 레이트는 파라미터가 아니라 SD 카드 `/fs/microsd/etc/extras.txt` 에
+있다. `SET_MESSAGE_INTERVAL` 은 인스턴스별이고 재부팅하면 사라진다
+(`mavlink_receiver.cpp:2249` — 저장 코드가 없다).
+[스트림 구성과 함정](../FC_CHANGELOG.md#-2026-09-09--sensor-lost-원인-규명과-해결-mav_0_forward--extrastxt--mav_0_rate)
 
 ---
 
@@ -479,5 +497,10 @@ S3 를 CH9 에 뒀을 때 USB 로 아무리 돌려도 안 잡혔던 원인이 �
 | 🟡 8 | **자기 간섭 저감** — GPS 마스트 높이기, 전력선 이격·트위스트 | `mag_field` 3축 이상 |
 | 🟡 9 | **기압계 −14m** — GPS 없는 고도유지에 영향 | `EKF2_HGT_REF=1` |
 | 🟡 10 | **지상테스트 임시값 원복** | `COM_DISARM_PRFLT` · `COM_PREARM_MODE` · `SYS_HAS_NUM_ASPD` |
+| 🟡 11 | **`VSpd` 가 야외에서 살아나는지** — 실내는 EKF 전역위치 미수렴이라 0 Hz 가 정상 | `GLOBAL_POSITION_INT` |
+| 🟡 12 | **비행 중 `rate_multiplier` 가 1.000 을 지키는지** — 지상 실측이라 거리·자세로 링크가 나빠지면 PX4 가 다시 깎는다 | `MAV_0_RADIO_CTL=1` |
 
-⚠️ **CH6 RC 캘리브레이션은 하지 마라** — 2단 여유가 7us 뿐이다.
+⚠️ **CH6 RC 캘리브레이션은 하지 마라.** ~~2단 여유가 7us 뿐이다~~ — 그 경고는 존재하지
+않는 P3 6단 로터리를 전제한 것이라 **무효였다**. 2026-09-09 실측 슬롯은
+988/1173/1347/1520/2011 이고 **가장 좁은 곳도 63us** 다. 그래도 캘리브레이션은 금지다 —
+`shade.lua` 배너와 `COM_FLTMODE*` 가 이 PWM 값을 전제로 짜여 있다.
