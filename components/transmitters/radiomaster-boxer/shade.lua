@@ -98,6 +98,104 @@ local function val(name)
   return v
 end
 
+-- ---------------------------------------------------------------------------
+-- eph (GPS horizontal accuracy) -- read from the raw CRSF passthrough frame.
+--
+-- eph has no field in the CRSF GPS sensor frame (crsf_protocol.h: latitude,
+-- longitude, groundspeed, gps_heading, altitude, satellites_in_use), so
+-- getValue("...") can never see it -- there is no sensor to register.
+--
+-- The TX does send it, though. Alongside every GPS_RAW_INT it emits an
+-- ArduPilot passthrough frame carrying appid 0x5002, which packs eph into
+-- bits 6..14 (MAVLink.cpp: ap_send_crsf_passthrough_single(0x5002,
+-- format_gps_status(fix_type, alt, eph, sats))). That frame reaches us as
+-- CRSF_FRAMETYPE_ARDUPILOT_RESP (0x80), which crossfireTelemetryPop() hands
+-- over verbatim -- it filters nothing.
+--
+-- 🔴 Popping is destructive and the queue is shared. Anything we take here is
+--    gone for every other script, so pop only while this page is on screen
+--    and put nothing back.
+local ARDUPILOT_RESP = 0x80
+local AP_SINGLE      = 0xF0   -- sub_type: one appid/data pair
+local AP_MULTI       = 0xF2   -- sub_type: count, then that many pairs
+local APPID_GPS      = 0x5002
+
+local ephDm = nil             -- last eph in decimetres, nil until one arrives
+
+-- Undo prep_number(value, digits=2, power=1) from
+-- ardupilot_custom_telemetry.cpp: 7 bits of mantissa, low bit says whether to
+-- multiply by 10, bit 8 is the sign. eph is never negative but the sign bit is
+-- decoded anyway so a garbled frame cannot read as a huge positive number.
+-- 🔴 Plain arithmetic, no bit32. bit32 is a Lua 5.2 library and whether a
+--    given EdgeTX build compiles it in is not something this script can rely
+--    on -- a missing bit32 would be a nil-index error at the first redraw, on
+--    the radio, in the field. Shifts are exact in doubles at these widths.
+local function rshift(v, n) return math.floor(v / (2 ^ n)) end
+local function band(v, mask) return v % (mask + 1) end   -- mask must be 2^k-1
+
+-- prep_number(value, digits=2, power=1) inverted: 7 bits of mantissa with the
+-- low bit saying "x10". The producer's 9th bit is a sign, but we never read
+-- it -- see below.
+local function unprep21(v)
+  local mant = rshift(v, 1)
+  if v % 2 == 1 then return mant * 10 end
+  return mant
+end
+
+-- Bits 6..13 of the 0x5002 payload.
+--
+-- 🔴 Eight bits, not nine. format_gps_status() writes the eph field at offset
+--    6 and the advanced-fix status at offset 14, so prep_number's 9th bit
+--    (its sign) and advstatus bit 0 are the same bit. advstatus is non-zero
+--    exactly when fix_type > 3 -- which is every RTK fix, what this aircraft
+--    flies on -- and reading nine bits then decodes that as "negative",
+--    turning eph 0.14m into -0.1m. eph is a distance and never negative, so
+--    drop the overlapping bit and take eight.
+local function ephFromGpsStatus(data)
+  return unprep21(band(rshift(data, 6), 0xFF))
+end
+
+-- Little-endian reads. crossfireTelemetryPop gives a 1-based byte table.
+local function u16(p, i)
+  if p[i] == nil or p[i + 1] == nil then return nil end
+  return p[i] + p[i + 1] * 256
+end
+
+local function u32(p, i)
+  if p[i] == nil or p[i + 3] == nil then return nil end
+  return p[i] + p[i + 1] * 256 + p[i + 2] * 65536 + p[i + 3] * 16777216
+end
+
+-- Drain whatever has queued since the last redraw. Several frames can pile up
+-- between draws, so keep the newest 0x5002 rather than stopping at the first.
+-- The bound is a guard against a busy queue starving the draw, not a count of
+-- anything meaningful.
+local function pollEph()
+  for _ = 1, 8 do
+    local cmd, packet = crossfireTelemetryPop()
+    if cmd == nil then return end
+    if cmd == ARDUPILOT_RESP and packet ~= nil then
+      local sub = packet[1]
+      if sub == AP_SINGLE then
+        if u16(packet, 2) == APPID_GPS then
+          local d = u32(packet, 4)
+          if d ~= nil then ephDm = ephFromGpsStatus(d) end
+        end
+      elseif sub == AP_MULTI then
+        -- sub_type, count, then count x (appid u16, data u32)
+        local count = packet[2] or 0
+        for n = 0, count - 1 do
+          local base = 3 + n * 6
+          if u16(packet, base) == APPID_GPS then
+            local d = u32(packet, base + 2)
+            if d ~= nil then ephDm = ephFromGpsStatus(d) end
+          end
+        end
+      end
+    end
+  end
+end
+
 -- %d rejects a non-integer outright on newer Lua, and the decimal sensors can
 -- hand us one at any moment, so round before formatting.
 local function whole(v)
@@ -165,8 +263,18 @@ local function centred(col, y, text, w, flags)
   lcd.drawText((col - 1) * COL_W + math.floor((COL_W - #text * w) / 2), y, text, flags)
 end
 
+-- eph in metres, always to one decimal. The decoded value is decimetres, so
+-- the tenth is exactly what the link carries -- rounding it away above 10m
+-- would drop the only digit that separates a 12.4m fix from a 12m one, and a
+-- fixed width keeps the value from jittering sideways as it crosses 10.
+local function fmtEph()
+  if ephDm == nil then return "--" end
+  return string.format("%.1f", ephDm / 10)
+end
+
 local function run(event)
   lcd.clear()
+  pollEph()
 
   -- Banner: flight mode centred in the left column, link quality in the
   -- right, both inverted so the row reads as one bar.
@@ -180,8 +288,12 @@ local function run(event)
   row(1, 2, "Spd", fmt(val("GSpd")))
   row(2, 2, "Alt", fmtInt(val("GAlt")))
 
-  row(1, 3, "Tmp", fmt(val("Temp")))
-  row(2, 3, "Sat", fmtInt(val("Sats")))
+  -- Sat and Eph share the bottom row: the count on the left where Tmp's
+  -- neighbour used to be, the accuracy on the right in the slot Tmp left.
+  -- They belong side by side -- 21 satellites with eph 6m is still a bad fix,
+  -- and the count on its own would say the opposite.
+  row(1, 3, "Sat", fmtInt(val("Sats")))
+  row(2, 3, "Eph", fmtEph())
 
   -- Column divider, drawn last so it sits on top of nothing important.
   lcd.drawLine(COL_W - 1, BANNER_H, COL_W - 1, LCD_H - 1, DOTTED, FORCE)
