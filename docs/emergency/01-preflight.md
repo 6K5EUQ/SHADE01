@@ -1,8 +1,8 @@
 # 이륙 전 점검 — SHADE01
 
 > Striver Mini VTOL (4+1) · PX4 v1.17.0 커스텀 · **쿼드 전용 운용**
-> 기준 스냅샷 `params/px4_params_20260905-140408.params` (2026-09-05)
-> 정본은 언제나 FC 다. 값이 다르면 이 종이가 아니라 FC 를 믿어라.
+> **아래 표는 2026-09-09 FC 실측 대조본이다.** 정본은 언제나 FC 다 —
+> 값이 다르면 이 종이가 아니라 FC 를 믿어라.
 
 ## 🔴 이 기체의 지금 제한
 
@@ -89,22 +89,24 @@ SC 중립 복귀 = 즉시 취소, SB 값으로 돌아감.
 | `COM_RC_IN_MODE` | **3** | RC 또는 MAVLink |
 | `COM_LOW_BAT_ACT` | **3** | 저전압 → RTL |
 | `BAT_LOW / CRIT / EMERGEN` | **0.15 / 0.07 / 0.05** | 경고 / 위험 / 비상 |
-| `GF_MAX_HOR_DIST` | **150** m | 수평 펜스 |
-| `GF_MAX_VER_DIST` | **50** m | 수직 펜스 |
-| `GF_ACTION` | **2** | 펜스 이탈 → **Hold** |
-| `RTL_RETURN_ALT` | **60** m | RTL 복귀 고도 |
-| `RTL_DESCEND_ALT` | **30** m | 하강 시작 고도 |
+| 🔴 `GF_ACTION` | **0** | **지오펜스 꺼짐 — 의도한 것.** 거리 관리는 조종자 몫 |
+| 🔴 `GF_MAX_HOR_DIST` | **0** | 수평 펜스 **없음** |
+| 🔴 `GF_MAX_VER_DIST` | **0** | 수직 펜스 **없음** |
+| `RTL_RETURN_ALT` | **20** m | RTL 복귀 고도 |
+| `RTL_DESCEND_ALT` | **10** m | 하강 시작 고도 |
 | `MIS_TAKEOFF_ALT` | **20** m | 미션 이륙 고도 |
-| `NAV_ACC_RAD` | **10** m | 웨이포인트 도달 반경 |
+| `NAV_ACC_RAD` | **3** m | 웨이포인트 도달 반경 |
 | `COM_POS_FS_EPH` | **10** m | GPS 정확도 failsafe |
 | `RC_MAP_KILL_SW` | **9** | SE = KILL |
 | `RC_MAP_TRANS_SW` | **0** | 천이 차단 |
-| `NAV_FORCE_VT` | **1** | 미션 이착륙 VTOL 강제 |
+| `NAV_FORCE_VT` | **1** | 기체가 이미 FW 일 때만 동작 — 84 를 막지 못한다 |
 | `VT_ELEV_MC_LOCK` | **1** | MC 중 제어면 잠금 |
-| 🟡 `NAV_DLL_ACT` | **0** | 데이터링크 상실 시 동작 없음 — **의도된 상태** |
+| `NAV_DLL_ACT` | **2** | 데이터링크 상실 → **RTL** |
+| `COM_FLTMODE1` | **3** | 슬롯1 = Mission (2026-09-09 수정) |
 
-- [ ] 미션 `.plan` 의 이착륙이 **84 (`VTOL_TAKEOFF`) / 85 (`VTOL_LAND`)** 인지
-      22/21 로 저장돼 있으면 VTOL 명시가 풀린 것. 실제로 한 번 바뀐 적 있다
+- [ ] 미션 `.plan` 의 이착륙이 **22 (`TAKEOFF`) / 21 (`LAND`)** 인지.
+      🔴 **84/85 는 고정익 전환을 건다** — 쿼드 전용인 동안은 22/21 이어야 한다.
+      `NAV_FORCE_VT=1` 로도 안 막힌다 (기체가 이미 FW 일 때만 동작한다)
 - [ ] 지상테스트용 임시값 원복: `COM_DISARM_PRFLT`, `COM_PREARM_MODE`, `SYS_HAS_NUM_ASPD`
 
 ## H. 지상 작동 시험 (프롭 장착 상태, 사람 이탈)
