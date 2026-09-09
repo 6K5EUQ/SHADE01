@@ -13,8 +13,7 @@
 **정본은 언제나 FC 다.** [`FC_CHANGELOG.md`](../../FC_CHANGELOG.md) 에 그 이후 변경이 있으면
 이 문서보다 그쪽이 최신이다. FC 값을 바꿨으면 여기 표도 같이 고쳐라.
 
-🔴 **`.pdf` 는 아직 2026-09-05 판이다 — 인쇄본을 들고 나가기 전에 다시 만들어라.**
-9/9 대조에서 `.md` 를 크게 고쳤다. 그 전 판은 이렇게 틀려 있었다:
+`.pdf` 도 2026-09-09 판으로 다시 뽑아 뒀다. 9/9 대조 전에는 이렇게 틀려 있었다:
 
 | 항목 | 옛 판(틀림) | 실제 |
 |---|---|---|
@@ -26,8 +25,16 @@
 
 ## PDF 다시 만들기
 
+`.md` 를 고쳤으면 셋 다 다시 뽑는다:
+
 ```bash
-python3 tools/md2pdf.py docs/emergency/01-preflight.md /tmp/out.html
-google-chrome --headless --disable-gpu --no-pdf-header-footer \
-  --print-to-pdf=docs/emergency/01-preflight.pdf file:///tmp/out.html
+for f in 01-preflight 02-postlaunch 03-emergency; do
+  python3 tools/md2pdf.py docs/emergency/$f.md /tmp/$f.html
+  google-chrome --headless --disable-gpu --no-sandbox --no-pdf-header-footer \
+    --print-to-pdf=docs/emergency/$f.pdf "file:///tmp/$f.html"
+done
 ```
+
+⚠️ **[`tools/md2pdf.py`](../../tools/md2pdf.py) 는 이 문서 전용이다.** 2026-09-07
+정리 때 "참조 0곳" 으로 판단해 지워졌는데, 실제로는 이 README 가 부르고 있었다 —
+그때 `docs/emergency/` 가 git 에 안 들어가 있어서 grep 에 안 걸렸다. 9/9 에 복원했다.
