@@ -61,6 +61,30 @@ def _get_local(base, since):
 USER_AGENT = 'shade01-livepush/1.0'
 
 
+def _apply_pin(base, want):
+    """웹에서 고른 수신 경로를 트래커에 전한다.
+
+    🔴 이것이 서버 -> 트래커로 흐르는 **유일한** 값이고, 담기는 것은
+       'USB' / 'ELRS' / 'auto' 셋뿐이다. 여기서 검사해 그 밖의 것은 버린다 —
+       서버가 무엇을 돌려주든 이 프로세스가 트래커에 거는 요청은 세 가지로
+       고정된다.
+
+    🔴 FC 와는 무관하다. 트래커가 이미 듣고 있는 두 스트림 중 무엇을 화면에
+       그릴지를 고르는 것뿐이고, 트래커는 여전히 소켓에 쓰는 코드가 0줄이다.
+
+    실패해도 조용히 넘어간다 — 중계가 멈추면 안 된다.
+    """
+    if want not in ('USB', 'ELRS', 'auto'):
+        return
+    try:
+        url = '%s/api/link?pin=%s' % (base.rstrip('/'), want)
+        req = urllib.request.Request(url, headers={'User-Agent': USER_AGENT})
+        with urllib.request.urlopen(req, timeout=LOCAL_TIMEOUT):
+            pass
+    except Exception:
+        pass
+
+
 def _push(to, key, payload):
     """서버로 올린다. 성공하면 서버 응답(dict), 실패하면 예외."""
     body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
@@ -145,6 +169,11 @@ def main():
             #    다시 보낸다 — 지도에 궤적이 통째로 빠지는 것을 막는다.
             nxt = resp.get('track_n')
             since = int(nxt) if isinstance(nxt, int) else st.get('track_n', since)
+            # 웹에서 수신 경로를 골랐으면 응답에 실려 온다. 서버는 이것을 한
+            # 번만 들려보내므로, 반영한 뒤 조종자가 여기 앞에서 직접 바꿔도
+            # 웹이 덮어쓰지 않는다.
+            if 'pin' in resp:
+                _apply_pin(args.src, resp['pin'])
         except urllib.error.HTTPError as e:
             if not warned_push:
                 print('서버가 거절했다 (%s %s) — 키가 맞나?'

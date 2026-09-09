@@ -463,6 +463,15 @@ const live = {
   pusher: null,     // 어느 PC 가 올렸나
 };
 
+// 웹에서 고른 수신 경로(USB/ELRS/auto). rim3 가 다음 push 응답으로 가져간다.
+// null 이면 전할 것이 없다.
+//
+// 🔴 이 값이 랩서버에서 rim3 로 흐르는 **유일한** 것이고, 랩서버가 rim3 로
+//    접속하는 것이 아니라 rim3 가 이미 걸어 오는 요청의 응답에 얹힐 뿐이다.
+//    인터넷에서 rim3 로 들어가는 문은 새로 열리지 않는다. 값도 세 가지뿐이고
+//    받는 쪽(livepush.py `_apply_pin`)에서 한 번 더 검사한다. FC 와는 무관하다.
+let livePinWanted = null;
+
 // 항적 상한. 트래커와 같은 값이다 — 5Hz 로 40분이면 12000 점.
 const LIVE_TRACK_MAX = 12000;
 
@@ -526,7 +535,35 @@ async function handleLivePush(req, res) {
   live.pusher = typeof snap.pusher === 'string' ? snap.pusher.slice(0, 40) : null;
 
   // 다음에 어디서부터 보내면 되는지 알려 준다.
-  return sendJson(req, res, 200, { ok: true, track_n: live.dropped + live.track.length });
+  //
+  // 🔴 웹에서 고른 수신 경로를 여기 실어 돌려보낸다. 이것이 랩서버가 rim3 에
+  //    무언가를 전하는 **유일한** 방법이다 — 랩서버는 rim3 로 접속하지 않고,
+  //    rim3 가 이미 1초마다 걸어 오는 이 요청의 응답에 얹을 뿐이다. 인터넷에서
+  //    rim3 로 들어가는 문은 새로 열리지 않는다.
+  //
+  //    담기는 것은 'USB' / 'ELRS' / 'auto' 셋 중 하나뿐이고, rim3 쪽에서도
+  //    그 셋만 받는다. FC 와는 무관하다 — 트래커가 이미 듣고 있는 두 스트림
+  //    중 무엇을 그릴지를 고르는 것이다.
+  const out = { ok: true, track_n: live.dropped + live.track.length };
+  if (livePinWanted !== null) {
+    out.pin = livePinWanted;
+    // 한 번만 전한다. rim3 가 반영하면 그 상태가 다음 push 로 올라오므로,
+    // 계속 들려보내면 조종자가 rim3 앞에서 직접 바꾼 것을 웹이 덮어쓴다.
+    livePinWanted = null;
+  }
+  return sendJson(req, res, 200, out);
+}
+
+/** 라이브 페이지가 누른 경로 고정. 값만 적어 두고 rim3 가 가져가기를 기다린다. */
+function handleLinkPin(req, res, url) {
+  const want = url.searchParams.get('pin');
+  if (want !== 'USB' && want !== 'ELRS' && want !== 'auto') {
+    return sendJson(req, res, 400, { error: 'pin 은 USB / ELRS / auto 여야 한다' });
+  }
+  livePinWanted = want;
+  // 아직 반영 전이다 — 화면은 다음 push 가 올라올 때까지 옛 값을 보여 준다.
+  // 그 지연(최대 1초)이 원격이라는 사실을 그대로 드러내는 편이 낫다.
+  return sendJson(req, res, 200, { queued: want });
 }
 
 /** 라이브 페이지가 폴링한다. 트래커의 /api/state 와 **같은 모양**이어야 한다 —
@@ -618,6 +655,9 @@ async function route(req, res) {
   // 라이브 — rim3 가 밀어 올리고(POST), 브라우저가 폴링한다(GET).
   if (p === '/api/live/push' && req.method === 'POST') return handleLivePush(req, res);
   if (p === '/api/live/state' && req.method === 'GET') return handleLiveState(req, res, url);
+  // 로컬 트래커와 같은 경로 이름을 쓴다 — 같은 live.js 가 양쪽에서 돌기 때문에
+  // 프론트가 어디에 붙었는지 몰라도 같은 요청을 보내면 된다.
+  if (p === '/api/link' && req.method === 'GET') return handleLinkPin(req, res, url);
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return send(req, res, 405, '허용하지 않는 메서드', 'text/plain; charset=utf-8');
