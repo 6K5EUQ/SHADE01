@@ -285,25 +285,17 @@ end
 -- the tenth is exactly what the link carries -- rounding it away above 10m
 -- would drop the only digit that separates a 12.4m fix from a 12m one, and a
 -- fixed width keeps the value from jittering sideways as it crosses 10.
--- 🔴 Diagnostic, to be removed once the source is known. The radio showed
---    45.2 for an eph the FC reported as 4.52m: ten times the value, and a
---    number pollEph() cannot produce -- the passthrough packs eph/10, so
---    452cm arrives as 45 and no branch of unprep21() turns that back into
---    452. So the row was being filled from somewhere else, and guessing which
---    is how the last two fixes went wrong.
+-- Verified against the FC on 2026-09-09: web 7.12m read 7.1 here, 6.64m read
+-- 6.6. The 0.1m step is the passthrough's own -- it carries eph/10 -- and not
+-- something this end can recover.
 --
---    The suffix says who answered: "f" for the decoded 0x5002 frame, "s" for
---    a registered sensor named Eph, "-" for neither. Read it once on the
---    radio, then delete this and keep only the branch that spoke.
+-- ⚠️ The earlier readings of 45.2 and 41.0 were a stale shade.luac: EdgeTX
+--    compiles the script once and prefers the .luac afterwards, so editing
+--    only shade.lua leaves the old screen running. Delete the .luac when
+--    installing, or the next change will look like it did nothing.
 local function fmtEph()
-  local sensor = val("Eph")
-  if ephDm ~= nil then
-    return string.format("%.1ff", ephDm / 10)
-  end
-  if sensor ~= nil and sensor ~= 0 then
-    return string.format("%.0fs", sensor)
-  end
-  return pad3("-")
+  if ephDm == nil then return pad3("--") end
+  return string.format("%.1f", ephDm / 10)
 end
 
 local function run(event)
