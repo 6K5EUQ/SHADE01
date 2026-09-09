@@ -216,18 +216,39 @@ PX4 는 `RC_MAP_*_SW` 에서 **1500 초과를 ON** 으로 본다 → **내리면
 
 `params/px4_params_20260906-185941.params` 기준. 6슬롯 중 **5개만 도달 가능**하다.
 
-| 슬롯 | 조작 | 실측 PWM | 파라미터 | 모드 | GPS |
-|---|---|---|---|---|---|
-| 1 | SC 위 + SF 딸칵 | 1000 | `COM_FLTMODE1=4` | **Mission** | 필요 |
-| 2 | **SB 위** | **1275** | `COM_FLTMODE2=8` | **Stabilized** | 불필요 |
-| 3 | SB 중간 | **1425** | `COM_FLTMODE3=1` | **Altitude** | 불필요 |
-| 4 | SB 아래 | **1500** | `COM_FLTMODE4=2` | **Position** | 필요 |
-| 5 | — **도달 불가** | — | `COM_FLTMODE5=2` | Position (안전값) | — |
-| 6 | SC 아래 + SF 딸칵 | 2000 | `COM_FLTMODE6=5` | **RTL** | 필요 |
+| 슬롯 | 조작 | 실측 PWM | 슬롯 여유 | 파라미터 | 모드 | FC 실제 |
+|---|---|---|---|---|---|---|
+| 1 | SC 위 + SF 딸칵 | **988** | 119us | `COM_FLTMODE1=4` | 🔴 **Hold** — Mission 이 아니다 | `AUTO:LOITER` |
+| 2 | **SB 위** | **1173** | 66 / 109us | `COM_FLTMODE2=8` | **Stabilized** | `STABILIZED` |
+| 3 | SB 중간 | **1347** | 65 / 110us | `COM_FLTMODE3=1` | **Altitude** | `ALTCTL` |
+| 4 | SB 아래 | **1520** | 63 / 112us | `COM_FLTMODE4=2` | **Position** | `POSCTL` |
+| 5 | — **도달 불가** | — | — | `COM_FLTMODE5=2` | Position (안전값) | — |
+| 6 | SC 아래 + SF 딸칵 | **2011** | 204us | `COM_FLTMODE6=5` | **RTL** | `AUTO:RTL` |
 
-⚠️ `COM_FLTMODE1` 은 [FC_CHANGELOG](../FC_CHANGELOG.md) 9/4 기록에 `3`(Position)으로
-적혀 있었으나 실기는 `4`(Mission)였다. **실기가 맞다** — 스위치 매핑 검증 9번
-("SC 위 + SF → 슬롯1 Mission")과 일치한다. 기록 쪽이 틀렸고 값은 그대로 뒀다.
+**PWM·FC 실제 모드는 2026-09-09 실측**이다 (조종기 조작 ↔ `RC_CHANNELS` + `HEARTBEAT`
+동시 관측). 경계는 1107/1282/1457/1632/1807 — **가장 좁은 여유가 63us** 로 전 슬롯 안전하다.
+옛 "2단이 경계에서 7us" 경고는 위 폐기된 P3 로터리 표를 전제한 것이라 무효다.
+
+🔴 **`COM_FLTMODE1=4` 는 Mission 이 아니라 Hold 다.** 값 표는 펌웨어 빌드 산출물
+[`module_params.c:7400-7431`](../PX4-Autopilot/build/px4_fmu-v6c_default/generated_params/module_params.c#L7400)
+이 정본이다 — `3` Mission, **`4` Hold**, `5` Return, `8` Stabilized.
+(`COM_FLTMODE` 값은 `VehicleStatus.msg` 의 `NAVIGATION_STATE_*` 와 **다른 enum** 이다.
+거기 `4` 는 `AUTO_LOITER` 라 결과는 같지만, 번호를 서로 대입하면 `8` 에서 어긋난다 —
+nav_state `8` 은 `ALTITUDE_CRUISE`, 파라미터 `8` 은 Stabilized 다.)
+
+이력이 엉켜 있다. [FC_CHANGELOG](../FC_CHANGELOG.md) 9/4 기록은 `3`(Mission)이라
+적었고, 9/6 스냅샷 대조 절은 실기가 `4` 인 것을 발견하고 **"9/4 기록이 틀렸다,
+`4` 가 Mission 이다"** 라고 결론지어 그대로 뒀다. **그 결론이 틀렸다** — 값 표를
+확인하지 않고 실기 값에 이름을 맞춰 붙인 것이다. 실기가 `4` 인 것은 사실이지만
+그 뜻은 Mission 이 아니라 Hold 다.
+
+[스위치 매핑](../components/transmitters/radiomaster-boxer/switch-mapping.md) 검증 9번
+("SC 위 + SF → 슬롯1 Mission ✅", 2026-09-05)은 **당시 `COM_FLTMODE1=3` 이었을 때의
+실측이라 그때는 맞았다.** 9/6 에 `4` 로 바뀌면서 동작이 달라졌고 검증은 갱신되지 않았다.
+
+⚠️ **지금 SC 위 + SF 를 걸면 미션이 시작되지 않고 그 자리에서 Hold 한다.**
+Mission 으로 되돌리려면 `COM_FLTMODE1` 을 `3` 으로 써야 한다 — FC 파라미터 변경이라
+[FC_CHANGELOG](../FC_CHANGELOG.md) 기록 대상이다. 아직 바꾸지 않았다.
 
 박서 화면에 이 모드를 띄우는 스크립트는
 [`shade.lua`](../components/transmitters/radiomaster-boxer/telemetry-screen.md) 다.

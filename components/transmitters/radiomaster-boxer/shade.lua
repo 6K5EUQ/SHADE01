@@ -13,13 +13,19 @@
 -- is no 6-position rotary on this radio, so only five of the six PX4 slots
 -- are reachable:
 --
---   SC up   + SF   1000us   slot 1   Mission
---   SB up          1275us   slot 2   Stabilized
---   SB middle      1425us   slot 3   Altitude
---   SB down        1500us   slot 4   Position
---   SC down + SF   2000us   slot 6   RTL
+--   SC up   + SF    988us   slot 1   Hold (COM_FLTMODE1=4, not Mission)
+--   SB up          1173us   slot 2   Stabilized
+--   SB middle      1347us   slot 3   Altitude
+--   SB down        1520us   slot 4   Position
+--   SC down + SF   2011us   slot 6   RTL
 --
 -- Slot 5 (also Position) cannot be reached and is left out.
+--
+-- Slot 1 reads HOLD, not MISN. COM_FLTMODE1 is 4, and 4 is Hold in the
+-- parameter's own value list (3 is Mission) -- see the generated metadata in
+-- build/px4_fmu-v6c_default/generated_params/module_params.c. The banner has
+-- to say what the aircraft will actually do; calling it MISN would promise a
+-- mission start that does not happen.
 --
 -- The boundaries below are PX4's own slot edges rather than midpoints between
 -- the readings, so the banner changes exactly when the FC changes mode. PX4
@@ -28,17 +34,21 @@
 -- edges at 1107, 1282, 1457, 1632 and 1807us. getValue returns EdgeTX units,
 -- where 1000/1500/2000us map to -1024/0/+1024, hence the values used here.
 --
--- Slot 2 sits only 7us above the 1282us edge, so the banner will follow the
--- FC into Position if an RC calibration or a mix change moves that reading.
--- That is the intent: the screen should show what the FC flies, not what the
--- switch is labelled.
+-- The readings above are measured (2026-09-09, RC_CHANNELS against HEARTBEAT).
+-- The narrowest margin to an edge is 63us, so no slot sits near a boundary.
+-- Should a calibration or mix change move a reading across an edge the banner
+-- follows the FC rather than the switch label, which is the intent: the screen
+-- shows what the aircraft will do, not what the switch is called.
+-- The two latched readings sit slightly outside the nominal -1024..+1024, so
+-- the outer bounds are opened rather than clipped: 988us measures -1049 and
+-- 2011us measures +1047, and a value falling off either end would print "?".
 local MODES = {
-  {-1025, -805, "MISN"},
+  {-2048, -805, "HOLD"},
   { -805, -447, "STAB"},
   { -447,  -88, "ALT"},
   {  -88,  270, "POS"},
   {  270,  629, "POS"},
-  {  629, 1025, "RTL"},
+  {  629, 2048, "RTL"},
 }
 
 local function modeText()
