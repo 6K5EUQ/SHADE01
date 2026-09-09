@@ -348,7 +348,13 @@ a.btn { display: inline-block; text-decoration: none; }
 .dot.warn { color: var(--warn); }
 .dot.bad  { color: var(--bad); animation: dotBlink 1s step-end infinite; }
 @keyframes dotBlink { 50% { opacity: .25; } }
-#msgs { overflow-y: auto; padding: 4px 8px; min-height: 0; }
+/* 스크롤은 살리고 **막대만** 감춘다 (2026-09-09). 서랍이 좁아 막대가
+   글자 폭을 먹고, 어두운 판 위에서 밝은 띠 하나가 계속 눈에 걸린다.
+   기능을 없애면 안 된다 — 새 메시지가 오면 아래로 따라가되(renderMsgs),
+   위로 올려 지난 것을 읽는 길은 남아 있어야 한다.
+   Firefox 는 scrollbar-width, WebKit 계열은 ::-webkit-scrollbar 를 쓴다. */
+#msgs { overflow-y: auto; padding: 4px 8px; min-height: 0; scrollbar-width: none; }
+#msgs::-webkit-scrollbar { width: 0; height: 0; }
 #msgs div {
   font-family: var(--mono); font-size: 11px; line-height: 1.5;
   padding: 1px 0; border-bottom: 1px solid var(--border);
