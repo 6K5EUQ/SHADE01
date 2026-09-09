@@ -285,9 +285,25 @@ end
 -- the tenth is exactly what the link carries -- rounding it away above 10m
 -- would drop the only digit that separates a 12.4m fix from a 12m one, and a
 -- fixed width keeps the value from jittering sideways as it crosses 10.
+-- 🔴 Diagnostic, to be removed once the source is known. The radio showed
+--    45.2 for an eph the FC reported as 4.52m: ten times the value, and a
+--    number pollEph() cannot produce -- the passthrough packs eph/10, so
+--    452cm arrives as 45 and no branch of unprep21() turns that back into
+--    452. So the row was being filled from somewhere else, and guessing which
+--    is how the last two fixes went wrong.
+--
+--    The suffix says who answered: "f" for the decoded 0x5002 frame, "s" for
+--    a registered sensor named Eph, "-" for neither. Read it once on the
+--    radio, then delete this and keep only the branch that spoke.
 local function fmtEph()
-  if ephDm == nil then return pad3("--") end
-  return string.format("%.1f", ephDm / 10)
+  local sensor = val("Eph")
+  if ephDm ~= nil then
+    return string.format("%.1ff", ephDm / 10)
+  end
+  if sensor ~= nil and sensor ~= 0 then
+    return string.format("%.0fs", sensor)
+  end
+  return pad3("-")
 end
 
 local function run(event)

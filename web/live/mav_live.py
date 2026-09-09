@@ -761,6 +761,9 @@ class State:
         #   {'USB': monotonic, 'ELRS': monotonic}
         self.link_seen = {}
 
+        # 조종자가 화면에서 고정한 경로. None 이면 자동(LINK_PRIORITY).
+        self.pin = None
+
         self.rec = None            # Recorder. main() 이 꽂는다
         self.player = None         # Player. main() 이 꽂는다
         # 🔴 기록기가 보는 arm 상태는 d['armed'] 와 **따로** 둔다. 재생 중에는
@@ -804,8 +807,16 @@ class State:
 
         LINK_PRIORITY 순서로 훑어 살아 있는 첫 경로를 고른다. 우선 경로가
         LINK_FALLBACK_AFTER 보다 오래 조용하면 다음 경로로 내려간다.
+
+        조종자가 경로를 고정해 두었으면 그것을 먼저 따른다. USB 가 붙어 있으면
+        ELRS 는 영영 화면에 안 나오는데, 정작 비행 중에 봐야 하는 것은 기체가
+        실제로 쓰는 ELRS 쪽이다 — 그 링크로 무엇이 몇 Hz 로 오는지는 USB 로는
+        볼 수 없다. 고정한 경로가 죽어 있어도 유지한다: 조용하다는 사실 자체가
+        보려던 정보이고, 말없이 다른 경로로 넘어가면 그것을 못 본다.
         """
         now = time.monotonic() if now is None else now
+        if self.pin in LINK_PRIORITY:
+            return self.pin
         for kind in LINK_PRIORITY:
             t = self.link_seen.get(kind)
             if t is not None and now - t < LINK_FALLBACK_AFTER:
@@ -849,6 +860,8 @@ class State:
                     k: round(time.monotonic() - t, 2)
                     for k, t in self.link_seen.items()
                 },
+                # 고정된 경로. None 이면 자동. 화면이 이 값으로 배지를 칠한다.
+                'pin': self.pin,
                 'sysid': self.sysid,
                 'uptime': round(time.time() - self.boot),
                 'd': dict(self.d),
@@ -1407,6 +1420,23 @@ class Handler(BaseHTTPRequestHandler):
                     want_track = False
             body = dumps_json(self.st.snapshot(since, want_track))
             return self._send(200, body, 'application/json; charset=utf-8')
+
+        # 화면에 쓸 수신 경로를 고정한다. FC 로 나가는 바이트는 여전히 0 이다 —
+        # 이미 듣고 있는 두 스트림 중 무엇을 그릴지만 고른다.
+        if path == '/api/link':
+            want = _qs(query, 'pin')
+            if want in ('auto', ''):
+                self.st.pin = None
+            elif want in LINK_PRIORITY:
+                self.st.pin = want
+            else:
+                return self._send(400, dumps_json(
+                    {'error': 'pin 은 %s 또는 auto 여야 한다'
+                              % ' / '.join(LINK_PRIORITY)}),
+                    'application/json; charset=utf-8')
+            return self._send(200, dumps_json(
+                {'pin': self.st.pin, 'link': self.st.active_link()}),
+                'application/json; charset=utf-8')
 
         # ── 로그 재생 ──────────────────────────────────────────────
         # 🔴 전부 GET 이다. POST 를 열지 않는다 — "HTTP 는 do_GET 만 있다" 가

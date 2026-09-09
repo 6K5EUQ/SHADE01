@@ -245,10 +245,18 @@ a.btn { display: inline-block; text-decoration: none; }
 /* 움직임에 민감한 사람에게는 깜빡임을 끈다. 색만으로도 뜻이 통한다. */
 @media (prefers-reduced-motion: reduce) { #recSt.rec-on { animation: none; } }
 /* 데이터 원천 배지 — ELRS 는 느린 경로라 눈에 띄게, USB 는 평범하게. */
+/* 배지지만 버튼이다 — 눌러서 경로를 고정한다. 브라우저 기본 테두리를 지워
+   옆의 상태 표시들과 같은 줄에 같은 무게로 앉힌다. */
 #linkSrc { font-weight: 700; letter-spacing: .4px; padding: 0 5px;
-           border-radius: 4px; font-size: 11px; }
+           border-radius: 4px; font-size: 11px;
+           border: 0; background: none; color: inherit;
+           font-family: inherit; line-height: 1.6; cursor: pointer; }
+#linkSrc:hover { outline: 1px solid var(--bd); }
 #linkSrc.src-elrs { color: var(--warn); background: rgba(210,153,34,.14); }
 #linkSrc.src-usb  { color: var(--ok);   background: rgba(63,185,80,.14); }
+/* 고정 중에는 테두리를 둘러, 지금 보이는 경로가 자동 선택이 아니라 조종자가
+   세워 둔 것임을 값이 멈춰 있어도 알 수 있게 한다. */
+#linkSrc.pinned { outline: 1px solid currentColor; }
 .msgs .hd .grow { flex: 1; }
 .msgs .hd button { padding: 0 6px; font-size: 11px; line-height: 1.6; }
 .msgs .hd select {

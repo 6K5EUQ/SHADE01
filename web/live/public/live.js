@@ -661,15 +661,26 @@ function render(s) {
   // 크게 달라서(실측 백팩 285 B/s vs USB 28.4 KB/s) 화면에 드러나야 한다.
   const ls = $('linkSrc');
   const kind = s.link || null;
-  if (ls.dataset.k !== String(kind)) {
-    ls.dataset.k = String(kind);
-    setText(ls, kind || '—');
-    ls.className = kind === 'ELRS' ? 'src-elrs' : kind === 'USB' ? 'src-usb' : '';
-    ls.title = kind === 'ELRS' ? '조종기 ELRS 백팩 경유 (느리다)'
+  const pin = s.pin || null;
+  // 고정 여부까지 키에 넣는다 — 경로가 그대로여도 고정 상태가 바뀌면 다시 그린다.
+  const lkey = String(kind) + '/' + String(pin);
+  if (ls.dataset.k !== lkey) {
+    ls.dataset.k = lkey;
+    // 고정 중이면 자물쇠를 붙여, 지금 보이는 것이 자동 선택이 아니라 조종자가
+    // 세워 둔 경로임을 드러낸다. 고정한 경로가 죽어 값이 멈춰도 그것이 고장이
+    // 아니라 선택의 결과임을 알아야 한다.
+    setText(ls, (kind || '—') + (pin ? ' 🔒' : ''));
+    ls.className = (kind === 'ELRS' ? 'src-elrs' : kind === 'USB' ? 'src-usb' : '')
+                 + (pin ? ' pinned' : '');
+    const age = (s.links || {})[kind];
+    ls.title = (kind === 'ELRS' ? '조종기 ELRS 백팩 경유 (느리다)'
              : kind === 'USB' ? 'FC USB 직결 브리지 경유'
              // 🔴 재생은 실시간이 아니다. 같은 계기를 쓰므로 여기서 분명히 말한다.
              : kind === 'LOG' ? '로그 재생 중 — 실시간이 아니다'
-             : '데이터 없음';
+             : '데이터 없음')
+             + (pin ? ' — 고정됨' : ' — 자동')
+             + (age != null ? ' (' + age.toFixed(1) + 's 전)' : '')
+             + '\n눌러서 자동 → USB → ELRS';
   }
 
   // 기록 상태. 야외 판정(GPS 3D fix + 위성 6기)을 통과한 arm 구간만 적으므로
@@ -1339,6 +1350,26 @@ $('win').onchange = (e) => { winSec = +e.target.value; renderCharts(); };
 $('msgToggle').onclick = () => {
   const c = $('chartPane').classList.toggle('msgcollapsed');
   $('msgToggle').textContent = c ? '펴기' : '접기';
+};
+
+// 데이터 원천 배지를 누르면 경로를 고정한다: 자동 → USB → ELRS → 자동.
+// USB 가 붙어 있으면 자동 선택은 늘 USB 라 ELRS 가 화면에 안 나오는데,
+// 비행 중 기체가 실제로 쓰는 것은 ELRS 쪽이다. 그 링크로 무엇이 몇 Hz 로
+// 도착하는지는 그 경로를 직접 봐야만 알 수 있다.
+//
+// 🔴 읽기 전용은 그대로다. 이 요청은 서버가 이미 듣고 있는 두 스트림 중
+//    무엇을 그릴지만 바꾼다 — FC 로 나가는 바이트는 없다.
+$('linkSrc').onclick = async () => {
+  const cur = $('linkSrc').dataset.k || '';
+  const pin = cur.split('/')[1];
+  const next = pin === 'null' || pin === 'undefined' ? 'USB'
+             : pin === 'USB' ? 'ELRS' : 'auto';
+  try {
+    await fetch('/api/link?pin=' + next);
+  } catch (e) {
+    // 서버가 잠깐 안 받아도 화면은 계속 돌아야 한다. 다음 폴에서 실제 상태가
+    // 다시 내려오므로 여기서 낙관적으로 고쳐 그리지 않는다.
+  }
 };
 
 // ── 재생 조작 ───────────────────────────────────────────────────────
