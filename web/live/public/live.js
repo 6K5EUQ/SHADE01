@@ -873,6 +873,10 @@ function render(s) {
   sc('sc-batt', d.batt_pct != null && d.batt_pct < 20 ? 'bad'
     : d.batt_pct != null && d.batt_pct < 35 ? 'warn' : '');
 
+  // 6S 리튬 기준. 45도를 넘으면 수명이 급히 깎이고 60도는 위험 구간이다.
+  setText($('st-btemp'), fmt(d.batt_temp));
+  sc('sc-btemp', d.batt_temp > 60 ? 'bad' : d.batt_temp > 45 ? 'warn' : '');
+
   setText($('st-spd'), fmt(d.groundspeed));
   setText($('st-alt'), fmt(d.alt));
 

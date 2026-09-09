@@ -988,6 +988,10 @@ def handle(msg, st):
             d['batt_pct_src'] = 'battery_status'
         if msg.current_consumed != -1:
             d['mah'] = msg.current_consumed
+        # PM08 이 주는 배터리 온도. cdegC(1/100 도) 이고 32767 이 "모름" 이다.
+        # ESC·모터 온도는 없다 — ESC 텔레메트리가 FC 로 안 올라온다(실측 ESC_STATUS 0회).
+        if msg.temperature != 32767:
+            d['batt_temp'] = round(msg.temperature / 100.0, 1)
 
     elif t == 'GPS_RAW_INT':
         d['fix'] = msg.fix_type

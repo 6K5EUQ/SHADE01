@@ -68,6 +68,8 @@ hostname
 
 | 일시 (KST) | PC | 경로 | 대상 | 변경 | 이유 |
 |---|---|---|---|---|---|
+| 2026-09-09 14:20 | `ku` | `rim3` USB 직결 | `MAV_0_RATE` · `extras.txt` | `990` → **`1400`** / 32B → **1726B** | "Sensor lost" 근본 해결 후 스트림 재배분. 진동·모터출력을 웹으로 올렸다. 아래 절 |
+| 2026-09-09 13:10 | `ku` | `rim3` USB 직결 | `MAV_0_FORWARD` · `extras.txt` | `1` → **`0`** / 신규 | 🔴 **"Sensor lost" 진짜 원인.** USB 브리지 트래픽이 조종기 링크로 넘어가고 있었다. 아래 절 |
 | 2026-09-09 10:05 | `ku` | `rim3` USB 직결 | `COM_FLTMODE1` | `4`(Hold) → **`3`(Mission)** | SC위+SF 가 미션이 아니라 Hold 를 걸고 있었다. 9/6 오판으로 4 가 된 것을 되돌림 |
 | 2026-09-06 18:59 | `rim3` | `rim3` USB 직결 | `EKF2_OF_CTRL` `EKF2_RNG_CTRL` `MPC_ALT_MODE` `SENS_EN_SF0X` | 아래 절 | 장착되지 않은 광류·거리센서를 EKF 가 쓰도록 켜져 있었다 |
 | 2026-09-05 17:22 | `ku` | `ku` USB 직결 | `MAV_0_RATE` | `300` → **`490`** | 아래 300 변경을 되돌렸다. 포화 오진이 근거였다 — **현재 값은 `490`** |
@@ -80,6 +82,131 @@ hostname
 | 2026-09-05 14:04 | `ku` | rim3 USB 직결 | 미션·RTL·failsafe 6개 | 아래 표 | 공개 로그 16대 대조에서 우리 값이 최저 이상치 |
 | 2026-09-04 16:37 | `ku` | rim3 USB 직결 | `RC_MAP_KILL_SW` `RC_MAP_RETURN_SW` `COM_FLTMODE1~6` | 아래 절 | 조종기 채널 재배치 (SB/SC/SF 구성) |
 | 2026-09-04 16:32 | `ku` | rim3 USB 직결 | `RC_MAP_TRANS_SW` | `7` → **`0`** | 고정익 사용 중지 — 쿼드 전용 제한 |
+
+### 🔴 2026-09-09 — "Sensor lost" 원인 규명과 해결 (`MAV_0_FORWARD` · `extras.txt` · `MAV_0_RATE`)
+
+**작업**: `ku` → `rim3` USB 직결 브리지(`udpin:0.0.0.0:14550`). **DISARM · 배터리 연결(24.4V)**
+상태에서 수행. 파라미터는 `PARAM_SET` → `PREFLIGHT_STORAGE` **ACCEPTED** → 되읽기 확인.
+SD 카드는 MAVFTP 로 올리고 되받아 **바이트 단위 대조**했다.
+
+| 대상 | 이전 | 이후 |
+|---|---|---|
+| `MAV_0_FORWARD` | `1` | **`0`** |
+| `MAV_0_RATE` | `990` | **`1400`** |
+| `/fs/microsd/etc/extras.txt` | 32 B (1줄) | **1726 B (32줄)** |
+
+#### 🔴 진짜 원인은 스트림 과다가 아니라 `MAV_0_FORWARD` 였다
+
+TELEM1 이 실제로 내보내던 양을 분해하니:
+
+| 요소 | B/s | 비중 |
+|---|---|---|
+| TELEM1 스트림 전부 | 132 | **5%** |
+| **USB → TELEM1 포워딩** | **2736** | **95%** |
+| 합 (`mavlink status` 의 `tx`) | 2868 | |
+
+**`rim3` USB 브리지로 들어온 트래픽이 통째로 조종기 링크로 밀려나가고 있었다.**
+지상에서 QGC·브리지를 붙일수록 조종기가 죽는 구조였다. `MAV_0_RATE=990` 상한을
+2.9 배 초과하니 PX4 가 `rate_multiplier` 를 **하한 0.050 까지** 조였고,
+`txbuf` 는 **0**(완전 포화)이었다.
+
+깎이는 방식이 증상을 만든다. 0.05 를 곱해도 고빈도 `ATTITUDE`(100Hz)는 5Hz 로 살아남지만
+저빈도 `BATTERY_STATUS`(0.5Hz)는 **0.025Hz = 40 초 간격**이 된다.
+**EdgeTX 임계는 20 초**(`TELEMETRY_SENSOR_TIMEOUT_START = 125` × 160ms,
+`radio/src/telemetry/telemetry_sensors.h`)이므로 배터리·GPS 가 먼저 죽고 자세만 남았다.
+
+⚠️ **초기 판단을 실측이 뒤집었다.** 처음에 `forward_message()` 의 `inst != self`
+(`mavlink_main.cpp:483`)만 보고 "포워딩은 효과 없다" 고 적었으나, **USB 인스턴스는
+강제 포워딩 ON** (`mavlink_main.cpp:2193-2194`, `// Always forward messages to/from the USB instance`)
+이라 USB→TELEM1 방향이 열려 있었다. 방향을 한쪽만 본 오판이었다.
+
+#### 🔴 `extras.txt` 의 `-r 0` 은 스트림을 끄지 않는다 — 반대로 켠다
+
+1 차 시도에서 `HIGHRES_IMU` `ODOMETRY` `TIMESYNC` `SYSTEM_TIME` 이 `inf`(무제한)로
+**켜져 버렸다.** `ODOMETRY` 는 245 B/프레임으로 가장 무겁다.
+
+`configure_stream()` (`mavlink_main.cpp:1155-1194`) 은 이름을 못 찾으면 아래로 내려가
+`create_mavlink_stream()` 으로 **새로 만들고** `set_interval(0)` 을 준다.
+주석대로 `0 means disabled` 는 **이미 목록에 있을 때만** 성립한다 — 없으면
+`interval = 0` 이 곧 **무제한**이다.
+
+**따라서 `-r 0` 대신 `-r 0.01`(= 100 초 주기)을 쓴다.** 실효 0.004 Hz 로 사실상 꺼진 것과
+같고 `inf` 도 안 만든다. 재부팅 후 `inf` 0 개를 확인했다.
+
+#### 결과 — 조종기 센서 실측 (ELRS 백팩 경로, EdgeTX 임계 20 초)
+
+| EdgeTX 센서 | 공급 MAVLink | 최초 최대공백 | **최종** | 여유 |
+|---|---|---|---|---|
+| `RxBt` `Curr` `Capa` `Bat` | `BATTERY_STATUS` | **40.02 s** 🔴 | **0.81 s** | 25 배 |
+| `GPS` `GSpd` `Hdg` `GAlt` `Sats` | `GPS_RAW_INT` | **22.29 s** 🔴 | **0.92 s** | 22 배 |
+| `FM` | `HEARTBEAT` | 11.00 s | **1.20 s** | 17 배 |
+| `Ptch` `Roll` `Yaw` | `ATTITUDE` | 1.31 s | **0.63 s** | 32 배 |
+
+`BAD_DATA` **253 → 0**. 조종자가 "Sensor lost 안 들린다" 로 확인했다.
+
+| 링크 | 최초 | 최종 |
+|---|---|---|
+| `tx` | 2868 B/s | **1081 B/s** |
+| `tx rate mult` | **0.050** (하한 고정) | **1.000** (무감산) |
+| `txbuf` | **0** (포화) | **100** (여유 100%) |
+
+#### `MAV_0_RATE` 990 → 1400 의 근거
+
+조종기 실측 링크는 **333 Hz Full / 1:2 / 13211 bps = 1651 B/s** 다
+(README 의 250 Hz·615 B/s 기술은 낡았다). 재배분한 스트림 수요가 1368 B/s 라
+990 으로는 다시 깎였다. 1400 은 **OTA 상한의 85%**, 실사용 `tx` 는 **65%** 다.
+
+#### `extras.txt` — 기존 줄은 보존했다
+
+🔴 첫 줄 `ms5525dso start -X -b 2 -a 0x76` 은 **에어스피드 센서 기동**이다.
+지우면 에어스피드가 안 뜬다. 업로드 전 원본을 받아 두고, 새 파일 첫 줄이
+원본과 바이트 단위로 같은지 `diff` 로 확인한 뒤 올렸다.
+
+살린 것 / 억제한 것:
+
+| 스트림 | Hz | 왜 |
+|---|---|---|
+| `ATTITUDE` | 5 | 조종기 자세 |
+| `BATTERY_STATUS` | 4 | 조종기 배터리 + 전류 첨두 |
+| `GPS_RAW_INT` `GLOBAL_POSITION_INT` | 3 | 조종기 GPS · `VSpd` |
+| `HEARTBEAT` | 3 | 모드 표시 |
+| **`VIBRATION`** | **5** | **웹 실시간 진동 3 축** |
+| **`SERVO_OUTPUT_RAW_0`** | **5** | **웹 실시간 모터 4 개 출력** |
+| `STATUSTEXT` | 5 | FC 경고를 조종기로 |
+| `HOME_POSITION` `SYS_STATUS` | 0.5 | |
+| `HIGHRES_IMU` `ODOMETRY` `TIMESYNC` `ATTITUDE_QUATERNION` 등 20종 | **0.01** | 조종기·웹 모두 미사용 |
+
+⚠️ 억제한 스트림도 **`.ulg`(SD 카드)에는 그대로 기록된다.** 비행 후 분석에는 영향이 없다.
+
+#### 알아 둘 것
+
+- 🔴 **웹(백팩)은 CRSF 12 종 제한을 받지 않는다.** `tx_main.cpp:1544-1550` 에서 조종기용은
+  `convert_mavlink_to_crsf_telem()` 화이트리스트를 거치지만, `sendMAVLinkTelemetryToBackpack()`
+  은 **MAVLink 원본을 그대로** 보낸다. 그래서 진동·모터출력이 웹에서만 보인다.
+- 🔴 **CRSF 변환은 `compid == 1`(autopilot)만 통과시킨다** (`MAVLink.cpp:103`).
+  실측에서 전체의 **65%** 가 여기서 탈락했다 — 대부분 RX 가 100Hz 로 만드는
+  `RADIO_STATUS`(`compid=68`, `SerialMavlink.cpp:93-105`)다.
+- 🟡 **`MAV_0_FORWARD=0` 의 대가**: raspb1 컴패니언이 TELEM2 로 복귀하면 그 메시지가
+  조종기 쪽으로 안 나간다. 지금은 휴면이라 무해하나 **복귀 시 확인할 것.**
+- 🟡 **`FM` 은 늘 `MANU`/`MANU*` 로 뜬다.** ELRS 가 `MAV_TYPE=22` 를 목록에서 못 찾아
+  `AP_VEHICLE_PLANE` 으로 떨어뜨리고(`ardupilot_protocol.h:240-265`), **ArduPlane 모드표**로
+  PX4 `custom_mode` 를 해석하기 때문이다. `*` 는 DISARM 표시다.
+  고치려면 TX 펌웨어에 PX4 분기를 넣어야 한다(재플래시 시 **바인딩 재설정** 필요).
+- 🟡 **eph(위치 오차)는 CRSF GPS 프레임 규격에 칸이 없다** (`crsf_protocol.h:352-361`).
+  다만 Yaapu passthrough `0x5002` 로 **이미 나가고 있으므로**(`MAVLink.cpp:172`),
+  조종기에 Yaapu 텔레메트리 스크립트를 깔면 펌웨어 변경 없이 볼 수 있다.
+- ❌ **ESC/모터별 온도와 셀별 전압은 하드웨어가 없다.** 실측: `ESC_STATUS` 0 회,
+  `ESC_INFO` 0 회, `DSHOT_TEL_CFG=0`, `voltages[]` 가 `[24234, 65535×9]` 로 팩 전압 하나뿐.
+  **배터리 온도는 PM08 이 준다** (`BATTERY_STATUS.temperature`) — 웹에 표시하도록 했다.
+
+**미검증 — 다음 야외 비행에서 확인할 것:**
+
+- `GLOBAL_POSITION_INT`(=`VSpd`)이 실내에서 0 Hz 다. EKF 전역 위치가 유효해야 발행되므로
+  **야외 fix 후에 살아나는지** 봐야 한다.
+- 비행 중 `rate_multiplier` 가 1.000 을 유지하는가. `MAV_0_RADIO_CTL=1` 이라 링크가 나빠지면
+  PX4 가 자동으로 깎는다. 지금 수치는 **지상 정지** 기준이다.
+
+**스냅샷**: 미갱신 — 다음 `./shade01 test` 또는 파라미터 덤프 때 갱신할 것.
 
 ### ✅ 2026-09-09 — `COM_FLTMODE1` 4 → 3 (Hold → Mission)
 
@@ -126,21 +253,10 @@ Hold 를 걸고 있었다. 아래 실측 참조. 9/4 의 원래 값 `3` 으로 �
 **고친 값**: `COM_FLTMODE1` **4 → 3** (위 참조). 슬롯5(`COM_FLTMODE5=2`)는 SB·래치 어느
 쪽도 그 PWM 대역(1632~1807)을 만들지 않아 **도달 불가**이므로 그대로 둔다.
 
-#### 같은 날 함께 확인한 것 — SD 손상은 그대로, 그러나 미션은 안전하다
+#### 같은 날 함께 확인한 것 — 미션은 안전하고, **SD 카드는 정상이다**
 
-**SD 비결정적 읽기는 재현됐다** (`fccrc.py`, 브리지 정지 후 시리얼 직결):
-
-| 대상 | 크기 | 결과 |
-|---|---|---|
-| `log/2026-09-05/09_17_20.ulg` | 1.17 MB | 🔴 **5회 5값 전부 다름** (9/6 과 동일) |
-| `log/2026-09-05/04_35_47.ulg` | 0.19 MB | ✅ 5회 전부 같음 |
-| **`/fs/microsd/dataman`** | **0.13 MB** | ✅ **8회 전부 같음** `0xf9d30b81` |
-
-**오류율이 읽은 바이트에 비례한다**는 9/6 가설이 재현됐다 — 큰 파일만 깨진다.
-**미션이 사는 `dataman` 은 0.13MB 로 안정 구간에 있다.**
-
-**미션 로드도 실측했다** — `MISSION_REQUEST_LIST` → 전 항목 수신을 13회
-(SD 시험 전 8회 + 후 5회) 반복해 내용을 해시 비교했다:
+**미션 로드를 실측했다** — `MISSION_REQUEST_LIST` → 전 항목 수신을 13회 반복해
+내용을 해시 비교했다:
 
 ```
 13/13 성공 · 소요 0.01~0.04초 · 고유 다이제스트 1개 (7f97ea4324726ddf)
@@ -149,8 +265,32 @@ Hold 를 걸고 있었다. 아래 실측 참조. 9/4 의 원래 값 `3` 으로 �
 **#184 의 `dataman timeout after 5000ms` / `No valid mission` 은 재현되지 않는다.**
 그때는 5초를 기다려도 못 읽었는데, 지금은 0.01초에 6항목이 매번 동일하게 나온다.
 
-⚠️ **그래도 SD 는 갈아야 한다.** 미션은 안전 구간에 있지만 **로그는 계속 깨진다**
-(1.17MB 파일 5회 5값). 로그 손상·복구 문제의 뿌리는 그대로다.
+**SD 카드도 같이 봤고, 여기서 기존 진단이 뒤집혔다.**
+
+처음에는 `fccrc.py` 로 CRC 만 보고 "1.17MB 파일이 5회 5값 — 9/6 과 동일" 이라 적었다.
+**그 판정이 틀렸다.** 매 회차 **새 연결**로 다시 재고 같은 회차에 파일을 실제로
+내려받아 대조하니:
+
+| 회차 | FC 가 낸 CRC | 받은 바이트 md5 | 일치 |
+|---|---|---|---|
+| 1 | `0xb436ecbc` | `83e3d893` | ✅ |
+| 2 | `0xb436ecbc` | `6f363beb` | ❌ |
+| 3 | `0xb436ecbc` | `83e3d893` | ✅ |
+| 4 | `0xb436ecbc` | `06458327` | ❌ |
+
+**FC 가 SD 에서 읽은 값은 4회 전부 같다.** 갈린 것은 내려받은 바이트뿐이다 —
+손상은 카드가 아니라 **MAVFTP 전송**에서 생긴다. `dataman` 은 4회 전부 CRC·md5 가
+완전히 같았다.
+
+CRC 가 흔들려 보인 것은 **한 연결에서 연속 호출**했기 때문이다. PX4 의
+`_workCalcFileCRC32()` 가 경로 버퍼 `_work_buffer2`(256B)를 그대로 읽기 버퍼로
+재사용한다 (`mavlink_ftp.cpp:875`). 값이 무작위가 아니라는 신호도 있었다 —
+`0xb436ecbc`·`0xb07bcdd5` 가 서로 다른 시행에서 재출현했다.
+
+✅ **SD 카드 교체는 필요 없다.** 로그 손상 자체는 실재하므로 `--verify` 다수결과
+`rsync --ignore-existing` 은 계속 필요하다 — 카드를 갈아도 안 없어졌을 문제다.
+바이트 대조 도구를 `tools/qgclog/sdverify.py` 로 넣었다.
+경위는 [FLIGHT-SYNC](FLIGHT-SYNC.md#-2026-09-09-정정--카드가-아니라-전송-경로다).
 
 ⚠️ **`fccrc.py` 는 그냥 돌리면 pymavlink 2.4.49 인스턴스 필드 버그로 죽는다.**
 `fcfetch.connect()` 안의 `MAVFTP()` 생성자에서 터지는데 `fcfetch` 의 재시도 루프
