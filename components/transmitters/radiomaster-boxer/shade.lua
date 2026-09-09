@@ -52,6 +52,24 @@ local MODES = {
   {  629, 2048, "RTL"},
 }
 
+-- SE (2-position) drives the kill switch on CH9. PX4 arms it above
+-- RC_KILLSWITCH_TH, which is 0.75 -- three quarters of the way from centre to
+-- full, so 1750us, which is +512 in EdgeTX units. Down is 2000us on this
+-- radio, so flipping SE down kills.
+--
+-- CH9 is only carried over the real ELRS link: a USB joystick connection
+-- stops at CH8, so this reads nil on the bench and the banner simply keeps
+-- showing the flight mode. Guessing KILL from a missing channel would cry
+-- wolf every time the link hiccups, which is worse than not showing it.
+local KILL_CH = "ch9"
+local KILL_ON = 512
+
+local function killed()
+  local v = getValue(KILL_CH)
+  if v == nil then return false end
+  return v > KILL_ON
+end
+
 local function modeText()
   local v = getValue("ch6")
   if v == nil then return "---" end
@@ -59,6 +77,14 @@ local function modeText()
     if v >= m[1] and v < m[2] then return m[3] end
   end
   return "?"
+end
+
+-- The motors are cut, so which flight mode the switches ask for no longer
+-- describes anything the aircraft is doing. KILL takes the banner outright
+-- rather than competing for the 64px column.
+local function bannerText()
+  if killed() then return "KILL" end
+  return modeText()
 end
 
 -- Telemetry values arrive by name; a missing sensor reads back as nil or 0.
@@ -142,7 +168,7 @@ local function run(event)
   -- Banner: flight mode centred in the left column, link quality in the
   -- right, both inverted so the row reads as one bar.
   lcd.drawFilledRectangle(0, 0, LCD_W, BANNER_H, SOLID)
-  centred(1, 1, modeText(), MID_W, MIDSIZE + INVERS)
+  centred(1, 1, bannerText(), MID_W, MIDSIZE + INVERS)
   centred(2, 1, fmtInt(val("RQly")), MID_W, MIDSIZE + INVERS)
 
   row(1, 1, "Cur", fmt(val("Curr")))
