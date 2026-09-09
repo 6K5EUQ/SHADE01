@@ -94,6 +94,38 @@ off** 다 (그래서 `always` 가 `on` 의 플래그가 아니라 별도 하위�
 거리 관리는 이제 전적으로 조종자 몫이다. HUD 의 **홈거리·홈 방향 벅**이 그 자리를
 대신한다 — 펜스가 대신 멈춰 주지 않으므로 오히려 더 봐야 하는 값이다.
 
+### 배터리 % 는 `BATTERY_STATUS` 것을 쓴다 (2026-09-09)
+
+**증상**: 비행 중 조종기 화면의 `Bat%` 와 웹의 배터리 % 가 서로 달랐다.
+
+**원인**: `d['batt_pct']` 한 칸을 **두 MAVLink 메시지가 조건 없이 번갈아
+덮어썼다.** `SYS_STATUS` 는 FC 가 고른 주 배터리 요약이고, `BATTERY_STATUS` 는
+PM08 인스턴스를 그대로 보고한다 — PX4 가 DroneCAN 노드 ID 124 를 배터리 id 로
+쓰기 때문에([battery.cpp:131](../../PX4-Autopilot/src/drivers/uavcan/sensors/battery.cpp#L131),
+하드코딩) 인스턴스 0 이 아니다. 두 값은 갱신 시점도 세는 대상도 다르다.
+그래서 웹 값이 마지막에 도착한 메시지를 따라 튀었다.
+
+조종기는 이 경쟁이 없다. ELRS 는 `SYS_STATUS` 핸들러가 **아예 없어서**
+`BATTERY_STATUS` 만 본다
+([ELRS 배터리 텔레메트리](../../components/transmitters/radiomaster-boxer/elrs-battery-telemetry-fix.md)).
+
+**해결**: `batt_pct_src` 로 출처를 기록해 **`BATTERY_STATUS` 가 이기게** 했다.
+`cur`·`volt` 는 원래 그렇게 배치돼 있었고 `batt_pct` 만 빠져 있었다.
+
+`not in d` 로 첫 값을 굳히는 방식은 쓰지 않았다 — `alt` 에서 이미 물렸던 함정이다
+(위 `alt_src` 주석). `SYS_STATUS` 가 먼저 도착하면 그 값이 영영 굳어 버린다.
+출처를 남기면 순서와 무관하게 옳은 쪽이 이기고, DroneCAN 이 아직 안 붙은
+지상에서는 `SYS_STATUS` 값이 그대로 보인다.
+
+**어느 쪽이 맞나 — `BATTERY_STATUS` 다.** PM08 실측이고 PX4 의 SoC 융합
+(전류적산 + 전압, [battery.cpp:287](../../PX4-Autopilot/src/lib/battery/battery.cpp#L287))
+을 거친다. 그 융합이 적산보다 현실적이라는 것은
+[09-05 리뷰](../../flights/2026-09-05-mission-preflight-review.md)에서 이미
+확인했다 — log_187 에서 적산 27.5% vs FC 15.2% 였고, 실제 소모가 6S 권장
+사용량의 91% 라 FC 쪽이 맞았다.
+
+`.tlog` 재생도 같은 `handle()` 을 지나므로 지난 비행 재생 화면도 함께 고쳐졌다.
+
 ### 아래 계기판 (2026-09-05)
 
 전류밴드 · 상태밴드 · 숫자스트립 3층을 하나로 합치고, **우측 2번째 차트

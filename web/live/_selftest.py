@@ -52,6 +52,57 @@ def t_arbitration():
     check('둘 다 조용 → 마지막에 말한 쪽', st.active_link(), 'ELRS')
 
 
+# ── 1-2. 배터리 % 출처 ────────────────────────────────────────────────
+# SYS_STATUS 와 BATTERY_STATUS 가 같은 칸을 두고 다툰다. 조종기(ELRS)는
+# BATTERY_STATUS 만 읽으므로 웹도 그쪽으로 굳어야 두 화면이 같은 숫자를 보인다.
+class _M:
+    def __init__(self, t, **kw):
+        self._t = t
+        self.__dict__.update(kw)
+
+    def get_type(self):
+        return self._t
+
+    def get_srcSystem(self):
+        return 1
+
+    def get_srcComponent(self):
+        return 1
+
+
+def _sys_status(pct):
+    return _M('SYS_STATUS', voltage_battery=24000, current_battery=1200,
+              battery_remaining=pct, load=250)
+
+
+def _batt_status(pct):
+    return _M('BATTERY_STATUS', current_battery=1200,
+              voltages=[24000] + [65535] * 9, voltages_ext=[],
+              battery_remaining=pct, current_consumed=5000, id=124)
+
+
+def _pct_after(seq):
+    st = M.State()
+    for m in seq:
+        M.handle(m, st)
+    return st.d.get('batt_pct')
+
+
+def t_battery_pct():
+    check('SYS 먼저 와도 BATTERY 가 이긴다',
+          _pct_after([_sys_status(80), _batt_status(62)]), 62)
+    check('BATTERY 뒤의 SYS 는 못 덮는다',
+          _pct_after([_batt_status(62), _sys_status(80)]), 62)
+    check('번갈아 와도 BATTERY 값만 보인다',
+          _pct_after([_sys_status(80), _batt_status(62),
+                      _sys_status(79), _batt_status(61),
+                      _sys_status(78)]), 61)
+    check('BATTERY 가 없으면 SYS 값이라도 보인다',
+          _pct_after([_sys_status(80), _sys_status(77)]), 77)
+    check('BATTERY 가 -1 이면 마지막 정상값을 지킨다',
+          _pct_after([_batt_status(62), _batt_status(-1)]), 62)
+
+
 # ── 2. --listen 파싱 ──────────────────────────────────────────────────
 def t_parse():
     check("'14551'", M.parse_listen('14551', 14550), ('0.0.0.0', 14551))
@@ -174,7 +225,7 @@ def t_prune():
 
 
 if __name__ == '__main__':
-    for fn in (t_arbitration, t_parse, t_toggle, t_recording,
+    for fn in (t_arbitration, t_battery_pct, t_parse, t_toggle, t_recording,
                t_recording_keeps_takeoff, t_prune):
         fn()
     print('\n%d PASS · %d FAIL' % (PASS, FAIL))

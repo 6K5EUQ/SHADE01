@@ -953,7 +953,12 @@ def handle(msg, st):
     elif t == 'SYS_STATUS':
         d['volt'] = msg.voltage_battery / 1000.0 if msg.voltage_battery != 65535 else None
         d['cur'] = msg.current_battery / 100.0 if msg.current_battery != -1 else None
-        d['batt_pct'] = msg.battery_remaining if msg.battery_remaining != -1 else None
+        # 🔴 잔량은 BATTERY_STATUS 가 이겨야 한다 — 아래 참조. 조건 없이 대입하던
+        #    때는 두 메시지가 이 칸을 번갈아 덮어써서, 웹의 % 가 조종기 화면과
+        #    어긋나 보였다. 조종기(ELRS)는 BATTERY_STATUS 만 읽는다.
+        if d.get('batt_pct_src') != 'battery_status':
+            d['batt_pct'] = msg.battery_remaining if msg.battery_remaining != -1 else None
+            d['batt_pct_src'] = 'sys_status'
         d['load'] = msg.load / 10.0
 
     elif t == 'BATTERY_STATUS':
@@ -972,8 +977,15 @@ def handle(msg, st):
         if cells:
             d['volt'] = round((sum(cells) + sum(ext)) / 1000.0, 2)
             d['cells'] = len(cells) + len(ext)
+        # 잔량은 두 메시지가 다른 것을 센다. BATTERY_STATUS 는 PM08 인스턴스를
+        # 그대로 보고하고(PX4 가 DroneCAN 노드 ID 124 를 배터리 id 로 쓴다),
+        # SYS_STATUS 는 FC 가 고른 주 배터리 요약이라 값도 갱신 시점도 다르다.
+        # 여기 값이 실측이고 PX4 의 SoC 융합(전류적산 + 전압)을 거친 것이라
+        # 한 번이라도 오면 이쪽으로 굳힌다. 링크가 끊겨 SYS_STATUS 만 남아도
+        # 마지막 값이 남지 낡은 소스로 되돌아가지는 않는다.
         if msg.battery_remaining != -1:
             d['batt_pct'] = msg.battery_remaining
+            d['batt_pct_src'] = 'battery_status'
         if msg.current_consumed != -1:
             d['mah'] = msg.current_consumed
 
