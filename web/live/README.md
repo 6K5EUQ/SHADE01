@@ -324,7 +324,17 @@ http://localhost:4400/?demo=1&auto=1              # AUTO 일 때만 뜨는 WP �
 브라우저 → /live            → server.js → web/live/public/  (로컬과 같은 파일)
          → /api/playback/*  → server.js → 127.0.0.1:4401 → mav_live.py
          → /api/live        → server.js 자신 (rim3 가 밀어 올린 텔레메트리)
+         → /api/link        → server.js 자신 → 다음 push 응답에 얹어 rim3 로
 ```
+
+🔴 **기능을 하나 더할 때마다 양쪽을 같이 맞춰라.** 프론트는 한 벌이므로
+`live.js` 가 부르는 경로는 **양쪽 서버에 모두 있어야 한다.** 한쪽에만 만들면
+그 버튼은 다른 화면에서 조용히 죽는다 — 눌러도 아무 일이 없고 에러도 안 난다.
+
+`/api/link`(수신 경로 고정)가 그 예다. 로컬은 `mav_live.py` 가 곧바로 반영하고,
+웹은 `server.js` 가 값을 적어 뒀다가 **rim3 가 걸어 오는 push 의 응답에 얹어**
+돌려보낸다 (`livepush.py` 의 `_apply_pin`). 경로 이름과 화면 동작은 같고,
+웹 쪽만 최대 1초 늦다 — 랩서버가 rim3 로 접속하지 않기 때문이다.
 
 🔴 **재생 로직을 node 로 옮겨 적지 않았다.** `mav_live.py` 가 ULog 파싱·시계열
 추출·커서 이동을 전부 갖고 있다. 옮겨 적으면 그 순간부터 두 벌이 따로 늙어

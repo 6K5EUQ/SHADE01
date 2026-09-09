@@ -888,15 +888,14 @@ function render(s) {
   // 배터리 온도는 계기판이 아니라 HUD 좌측 하단에 겹쳐 둔다 — 평소 볼 일이
   // 없고 뜨거워질 때만 눈에 들어오면 되는 값이라, 계기판 칸을 하나 쓰기에는
   // 아깝다. 6S 리튬 기준 45도를 넘으면 수명이 급히 깎이고 60도는 위험이다.
+  // 값이 없으면 0.0 을 찍는다. 배터리를 뽑으면 BATTERY_STATUS 가 발행되지
+  // 않아 이 칸이 비는데, 자리를 감췄다 되살리면 HUD 구석이 깜빡여 오히려
+  // 눈에 걸린다. 0.0 은 실제 온도로 읽힐 수 없는 값이라 "아직 안 온다" 로
+  // 통한다.
   const bt = $('hudTemp');
   const t = d.batt_temp;
-  if (t == null) {
-    bt.hidden = true;
-  } else {
-    bt.hidden = false;
-    setText(bt, t.toFixed(1) + '°C');
-    bt.className = t > 60 ? 'bad' : t > 45 ? 'warn' : '';
-  }
+  setText(bt, (t == null ? 0 : t).toFixed(1) + '°C');
+  bt.className = t == null ? '' : t > 60 ? 'bad' : t > 45 ? 'warn' : '';
 
   setText($('st-spd'), fmt(d.groundspeed));
   setText($('st-alt'), fmt(d.alt));
