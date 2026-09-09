@@ -198,18 +198,56 @@ const num = (e, a) => parseFloat(e.getAttribute(a));
   f = await load(''); D = f.contentDocument; W = f.contentWindow;
   // WP 칸은 통합하면서 뺐다. 대신 남긴 6칸이 전부 있는지 본다 —
   // 하나라도 없으면 render 가 조용히 죽은 것이다.
-  // 모터는 칸 하나가 아니라 기체 자리대로 넷이다 (2026-09-05).
+  // 모터는 칸 넷이 아니라 **기체 그림 하나 + 요약 둘**이다 (2026-09-09).
   const want = ['sc-spd', 'sc-alt', 'sc-batt', 'sc-cur', 'sc-sats', 'sc-eph',
-                'sc-mLF', 'sc-mRF', 'sc-mLB', 'sc-mRB'];
+                'sc-frame', 'sc-mspread', 'sc-mavg'];
   const missing = want.filter((id) => !D.getElementById(id));
-  ok('계기판 10칸이 전부 있다', missing.length === 0, missing.join(',') || 'ok');
-  // 모터 2×2 가 실제 기체 배치와 같은 자리에 있는지 — 좌전이 좌상단이어야 한다.
+  ok('계기판 9칸이 전부 있다', missing.length === 0, missing.join(',') || 'ok');
+  // 로터 4개가 실제 기체 배치와 같은 자리인지 — 좌전이 좌상단이어야 한다.
+  // getBoundingClientRect 는 SVG 요소에도 화면 좌표로 답한다.
   const cellBox = (id) => D.getElementById(id).getBoundingClientRect();
-  ok('모터 좌전이 우전 왼쪽', cellBox('sc-mLF').left < cellBox('sc-mRF').left);
-  ok('모터 좌후가 좌전 아래', cellBox('sc-mLB').top > cellBox('sc-mLF').top);
+  ok('로터 좌전이 우전 왼쪽', cellBox('rot-LF').left < cellBox('rot-RF').left);
+  ok('로터 좌후가 좌전 아래', cellBox('rot-LB').top > cellBox('rot-LF').top);
+  ok('기체 그림이 보인다', cellBox('mframe').width > 40 && cellBox('mframe').height > 40,
+     `${cellBox('mframe').width.toFixed(0)}x${cellBox('mframe').height.toFixed(0)}`);
+  // 부하가 큰 모터가 실제로 더 큰 원이어야 한다 — 이 계기의 존재 이유다.
+  // 데모는 LF 가 가장 크고 RB 가 가장 작다 (spread 기본 4%p).
+  const rr = (id) => parseFloat(D.getElementById(id).getAttribute('r'));
+  ok('부하 큰 모터가 더 큰 원', rr('rot-LF') > rr('rot-RB'),
+     `LF r=${rr('rot-LF')} > RB r=${rr('rot-RB')}`);
+  ok('모터 값이 원 안에 찍힌다',
+     (D.getElementById('mv-LF').textContent || '').trim() !== '—',
+     D.getElementById('mv-LF').textContent);
   const vals = ['st-cur', 'st-batt', 'st-spd', 'st-alt', 'st-sats', 'st-eph']
     .map((id) => (D.getElementById(id) || {}).textContent);
   ok('스트립 값이 채워진다', vals.every((v) => v && v !== ''), vals.join(' / '));
+  // 편차가 평소 범위면 색이 없어야 한다 — 평소에 색이 보이면 색이 신호가 아니게 된다.
+  ok('평소 편차엔 색이 없다',
+     !D.getElementById('sc-mspread').classList.contains('warn') &&
+     !D.getElementById('sc-mspread').classList.contains('bad'),
+     D.getElementById('st-mspread').textContent + '%p');
+
+  // ── 모터 편차 경고 ──────────────────────────────────────────────
+  // 이 계기의 존재 이유가 "한쪽만 무리하는 것을 잡는다" 이므로, 그 경로가
+  // 실제로 도는지 본다. 멀쩡한 실기에서는 한 번도 안 돌아 보는 코드다.
+  note('■ 모터 편차 — 한쪽만 무리하는 것을 잡는 경로');
+  f = await load('spread=26'); D = f.contentDocument;
+  const spCell = D.getElementById('sc-mspread');
+  ok('큰 편차는 bad', spCell.classList.contains('bad'),
+     D.getElementById('st-mspread').textContent + '%p');
+  // 튄 놈에게만 색이 간다 — 넷 다 칠하면 어느 것이 문제인지 도로 못 읽는다.
+  const colored = ['LF', 'RF', 'LB', 'RB']
+    .filter((k) => D.getElementById('rot-' + k).classList.contains('bad'));
+  ok('색은 최대·최소 둘에만', colored.length === 2, colored.join(',') || '(없음)');
+
+  f = await load('spread=14'); D = f.contentDocument;
+  ok('중간 편차는 warn', D.getElementById('sc-mspread').classList.contains('warn'),
+     D.getElementById('st-mspread').textContent + '%p');
+
+  // 평균이 높으면 추력 여유가 없다는 뜻 — 그 경로도 확인한다.
+  f = await load('mavg=93&spread=2'); D = f.contentDocument;
+  ok('평균 90% 초과는 bad', D.getElementById('sc-mavg').classList.contains('bad'),
+     D.getElementById('st-mavg').textContent + '%');
 
   // ── 좁은 화면 ───────────────────────────────────────────────────
   note('■ 좁은 화면 — 계기가 사라지는 건 계기가 틀린 것 다음으로 나쁘다');

@@ -124,10 +124,11 @@ main {
 #sc-spd  { grid-area: 2 / 1 / 3 / 3; }
 #sc-cur  { grid-area: 2 / 3 / 3 / 5; }
 #sc-eph  { grid-area: 2 / 5 / 3 / 7; }
-#sc-mLF  { grid-area: 3 / 1 / 4 / 4; }
-#sc-mRF  { grid-area: 3 / 4 / 4 / 7; }
-#sc-mLB  { grid-area: 4 / 1 / 5 / 4; }
-#sc-mRB  { grid-area: 4 / 4 / 5 / 7; }
+/* 3~4행: 왼쪽 절반이 기체 그림(두 행을 세로로 관통), 오른쪽이 요약 숫자 둘.
+   그림은 정사각에 가까워야 형상이 안 눌리므로 두 행을 통째로 준다. */
+#sc-frame   { grid-area: 3 / 1 / 5 / 4; }
+#sc-mspread { grid-area: 3 / 4 / 4 / 7; }
+#sc-mavg    { grid-area: 4 / 4 / 5 / 7; }
 #strip .sc {
   background: var(--panel);
   padding: 10px 12px 12px;
@@ -159,11 +160,61 @@ main {
 #strip .sc.warn b { color: var(--warn); }
 #strip .sc.bad  b { color: var(--bad); }
 
-/* 모터는 기체에 붙은 자리 그대로 2×2 다 — 화면 좌상단 칸이 실제 좌전 모터.
-   조금 작게 둔다: 절대값보다 **넷이 서로 비슷한가**가 판정이라 나란히
-   놓이는 것이 크기보다 중요하다. */
-#strip .sc.mot b { font-size: 28px; }
-#strip .sc.mot .k { color: var(--dim); }
+/* ── 모터: 기체 형상 위에 그린다 ─────────────────────────────
+   숫자 넷을 2×2 로 놓던 것을 그림으로 바꿨다 (2026-09-09). 숫자만으로는
+   "48 과 41 중 어느 쪽이 어느 팔인가" 를 매번 머리로 옮겨야 했다.
+   기수가 위인 X 형상에 얹으면 그 변환이 사라진다.
+
+   🔴 색 예산은 그대로다 — 평소 무채색, 이상할 때만 색.
+   다만 **부하 자체는 밝기와 크기로** 항상 보인다. 무채색 안에서의
+   밝기 차이는 "경고" 로 안 읽히므로 색 예산을 안 쓴다. */
+/* 🔴 그림 칸이 격자 높이를 밀어올리면 안 된다.
+   #strip 의 행은 auto 라 자식이 크면 스트립 전체가 커지고, 좁은 창에서
+   화면 밖으로 밀린다 (자체검사 「좁아도 스트립이 화면 안」 이 잡는다).
+   min-height:0 + 절대배치로 SVG 를 칸 안에 가둔다 — 칸 높이는 옆 두 칸
+   (편차·평균)이 정하고 그림은 남는 만큼만 쓴다. */
+/* 🔴 그림 칸이 격자 높이를 밀어올리면 안 된다.
+   #strip 의 행은 auto 라, SVG 를 width/height:100% 로 두면 viewBox 본래
+   크기(300px)를 자기 높이로 주장해 칸(175px)을 125px 넘치고 아래 로터
+   둘이 화면 밖으로 잘린다 (2026-09-09 실측).
+   min-height:0 인 flex 칸 + height:100% 인 SVG 라야 칸이 정한 높이에
+   맞춰 접힌다. viewBox 가 정사각이고 preserveAspectRatio 는 기본값(meet)
+   이라 칸이 가로로 길어져도 그림은 안 찌그러지고 가운데 선다. */
+#sc-frame { padding: 6px; min-height: 0; overflow: hidden; }
+/* flex-basis 0 이 핵심이다. flex:1 의 기본 basis 는 auto 라 SVG 가 제
+   본래 높이(viewBox 300px)를 최소치로 주장하고, 그만큼 스트립이 부풀어
+   좁은 창에서 화면 밖으로 밀린다 (자체검사 「좁아도 스트립이 화면 안」).
+   basis 0 이면 남는 높이만 나눠 갖는다 — 칸이 그림 크기를 정하지,
+   그림이 칸 크기를 정하지 않는다. */
+#mframe { flex: 1 1 0; width: 100%; height: auto; min-height: 0; display: block; }
+/* 동체·기수는 배경 수준으로 어둡게. 주인공은 로터다. */
+#mframe .fuse { stroke: var(--border-2); stroke-width: 2.5; stroke-linecap: round; }
+#mframe .nose { fill: var(--border-2); }
+/* 팔은 부하에 따라 굵어진다 — stroke-width 를 스크립트가 준다. */
+#mframe .arm {
+  stroke: var(--border-2); stroke-width: 3; stroke-linecap: round;
+  transition: stroke-width .18s linear, stroke .18s linear;
+}
+/* 로터: r 과 fill 을 스크립트가 준다. 테두리는 항상 있어서 값이 0이거나
+   데이터가 끊겨도 자리가 남는다 — 사라지면 "모터가 없다" 로 오독된다. */
+#mframe .rot {
+  fill: var(--panel-2); stroke: var(--border-2); stroke-width: 1.5;
+  transition: r .18s linear, fill .18s linear, stroke .18s linear;
+}
+/* 값은 로터 안에. dominant-baseline 으로 원 중심에 세로 정렬한다. */
+#mframe .mv {
+  font-family: var(--mono); font-size: 9px; font-weight: 700;
+  fill: var(--text); text-anchor: middle; dominant-baseline: central;
+  font-variant-numeric: tabular-nums;
+}
+/* 튄 모터만 색을 준다 — 넷 다 칠하면 어느 것이 문제인지 도로 못 읽는다. */
+#mframe .rot.warn { stroke: var(--warn); }
+#mframe .arm.warn { stroke: var(--warn); }
+#mframe .rot.bad  { stroke: var(--bad); }
+#mframe .arm.bad  { stroke: var(--bad); }
+/* 요약 숫자 둘은 다른 계기보다 조금 작게 — 그림이 주인공이다. */
+#sc-mspread b, #sc-mavg b { font-size: 28px; }
+#sc-mspread .k, #sc-mavg .k { color: var(--dim); }
 
 /* ── 헤더 배지 ───────────────────────────────────────────── */
 .pill {

@@ -909,23 +909,81 @@ function render(s) {
   setText($('st-eph'), d.eph != null ? d.eph.toFixed(2) : '—');
   sc('sc-eph', d.eph != null && d.eph > 3 ? 'bad' : d.eph != null && d.eph > 1 ? 'warn' : '');
 
-  // 모터 4개. 기체에 붙은 자리 그대로 2×2 로 놓인다 — 절대값보다
-  // **넷이 서로 비슷한가**가 판정이다.
-  const mt = d.motors || {};
-  const mv = ['LF', 'RF', 'LB', 'RB'].map((k) => mt[k]).filter((v) => v != null);
-  const mmax = mv.length ? Math.max(...mv) : null;
-  const mmin = mv.length ? Math.min(...mv) : null;
-  // 네 모터가 20%p 넘게 벌어지면 기체가 한쪽을 억지로 붙들고 있다는 뜻이다.
-  // 무게중심·프롭 손상·모터 열화의 첫 신호다. 그때 **튄 놈만** 색을 준다 —
-  // 넷 다 칠하면 어느 것이 문제인지 도로 못 읽는다.
-  const spread = (mmax != null && mmax - mmin > 20);
-  for (const k of ['LF', 'RF', 'LB', 'RB']) {
-    const v = mt[k];
-    setText($('st-m' + k), v == null ? '—' : v.toFixed(0));
-    sc('sc-m' + k, spread && (v === mmax || v === mmin) ? 'warn' : '');
-  }
+  // 모터 4개를 **기체 형상 위에** 그린다. 절대값보다 **넷이 서로 비슷한가**
+  // 가 판정이라, 부하를 원의 크기·밝기로 주고 튄 놈에만 색을 얹는다.
+  renderMotors(d.motors || {});
 
   renderMsgs(msgs);
+}
+
+// ── 모터: 기체 형상 위의 넷 ─────────────────────────────────────────
+// 🔴 이 기체 배치에 묶여 있다 (README 「출력 배치」): MAIN3/4/6/7 =
+//    우후/우전/좌후/좌전. 서버(mav_live.py)가 그 매핑으로 LF/RF/LB/RB 를
+//    만들어 보내므로 여기서는 이름 그대로 자리에 꽂는다.
+//
+// 왜 그림인가 — 숫자 넷을 2×2 로 놓으면 "48 과 41 중 어느 쪽이 어느 팔인가"
+// 를 매번 머리로 옮겨야 한다. 기수가 위인 X 형상에 얹으면 그 변환이 사라진다.
+//
+// 무엇을 보이나 — 두 가지가 겹쳐 있다:
+//   1. **절대 부하**: 원의 반지름과 채움 밝기. 무채색이라 색 예산을 안 쓴다.
+//      넷이 다 같이 커지는 것은 무겁거나 바람이 세다는 뜻이지 이상이 아니다.
+//   2. **치우침**: 편차가 벌어졌을 때 **최대·최소인 놈만** 색을 받는다.
+//      한쪽만 무리하는 것이 무게중심·프롭 손상·모터 열화의 첫 신호다.
+const MOTORS = ['LF', 'RF', 'LB', 'RB'];
+// 실측 근거 (2026-09-09 강풍 세션 6편): 무풍 3~4%p, 강풍 8~10%p.
+// 20%p 는 그 두 배가 넘는 값이라 "기체가 한쪽을 억지로 붙들고 있다" 로 읽는다.
+const SPREAD_WARN = 10, SPREAD_BAD = 20;
+
+function renderMotors(mt) {
+  // render() 의 sc 는 그 함수 안의 지역 상수다 — 여기서는 안 보인다.
+  // 같은 규칙(className 을 통째로 다시 씀)을 그대로 쓴다.
+  const sc = (id, cls) => { const e = $(id); if (e) e.className = 'sc' + (cls ? ' ' + cls : ''); };
+  const vals = MOTORS.map((k) => mt[k]).filter((v) => v != null);
+  const has = vals.length > 0;
+  const mmax = has ? Math.max(...vals) : null;
+  const mmin = has ? Math.min(...vals) : null;
+  const spread = has ? mmax - mmin : null;
+  const avg = has ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+
+  // 편차 등급이 곧 이 계기의 판정이다.
+  const lvl = spread == null ? '' : spread > SPREAD_BAD ? 'bad'
+            : spread > SPREAD_WARN ? 'warn' : '';
+
+  for (const k of MOTORS) {
+    const v = mt[k];
+    const rot = $('rot-' + k), arm = $('arm-' + k), txt = $('mv-' + k);
+    if (!rot) continue;
+    if (v == null) {
+      // 값이 없어도 자리는 남긴다 — 사라지면 "모터가 없다" 로 오독된다.
+      rot.setAttribute('r', 11);
+      rot.style.fill = ''; arm.style.strokeWidth = '';
+      rot.classList.remove('warn', 'bad'); arm.classList.remove('warn', 'bad');
+      setText(txt, '—');
+      continue;
+    }
+    // 0~100% 를 반지름 8~17 로. 값이 작아도 원이 사라지지 않게 하한을 둔다.
+    const f = Math.max(0, Math.min(100, v)) / 100;
+    rot.setAttribute('r', (8 + f * 9).toFixed(1));
+    // 밝기로도 부하를 준다. 무채색 회색조라 색 예산을 안 쓴다 —
+    // 15%(어두움) ~ 62%(밝음) 사이를 오간다.
+    rot.style.fill = `hsl(210 9% ${(15 + f * 47).toFixed(0)}%)`;
+    // 팔은 부하에 비례해 굵어진다. 그림을 곁눈질할 때 먼저 잡히는 신호다.
+    arm.style.strokeWidth = (3 + f * 4).toFixed(1);
+    // 색은 **튄 놈에게만**. 넷 다 칠하면 어느 것이 문제인지 도로 못 읽는다.
+    const hot = lvl && (v === mmax || v === mmin);
+    rot.classList.toggle('warn', hot && lvl === 'warn');
+    rot.classList.toggle('bad', hot && lvl === 'bad');
+    arm.classList.toggle('warn', hot && lvl === 'warn');
+    arm.classList.toggle('bad', hot && lvl === 'bad');
+    setText(txt, v.toFixed(0));
+  }
+
+  setText($('st-mspread'), spread == null ? '—' : spread.toFixed(1));
+  sc('sc-mspread', lvl);
+  setText($('st-mavg'), avg == null ? '—' : avg.toFixed(0));
+  // 평균은 "얼마나 힘든가" 다. 호버 65% 가 이 기체의 정상(MPC_THR_HOVER=0.65)
+  // 이라, 85% 를 넘으면 추력 여유가 얼마 안 남았다는 뜻이다.
+  sc('sc-mavg', avg == null ? '' : avg > 90 ? 'bad' : avg > 85 ? 'warn' : '');
 }
 
 // 🔴 증분 append. 길이 비교로 판정하면 서버의 messages[-40:] 슬라이딩 창 때문에
@@ -1001,6 +1059,16 @@ function demoState(n) {
       fix: 4, sats: 27, eph: 0.19, eph_ekf: 0.4,
       vibe: [2.5, 3.1, 4.4], ekf: { pos: 1, vel: 1, hgt: 1 }, ekf_ratio: { vel: 0.3 },
       rssi: 200, wp_seq: 3, wp_dist: 27.4, xtrack: -2.1,
+      // 모터 — 형상 계기를 데모로 검증하려면 값이 있어야 한다.
+      // 기본은 실측을 닮은 모양: 평균 60% 대에 편차 몇 %p.
+      // ?spread=N 으로 편차를 강제해 자체검사가 색·크기를 실측한다.
+      motors: (() => {
+        const sp = fx('spread', 4);              // 최대−최소 %p
+        const base = fx('mavg', 62);             // 평균 %
+        const w = Math.sin(t / 3) * 1.5;         // 살아 있게 흔든다
+        return { LF: base + sp / 2 + w, RF: base + sp / 6 - w,
+                 LB: base - sp / 6 + w, RB: base - sp / 2 - w };
+      })(),
     },
   };
 }
