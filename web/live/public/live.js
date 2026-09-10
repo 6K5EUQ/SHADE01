@@ -950,7 +950,15 @@ const ZOOM_50M = 19;
 //    비행장에서는 활주로·장애물이 지도보다 사진에 더 잘 보인다.
 let lmap = null, tileMode = 'sat', tiles = {};
 let trkLine = null, acMarker = null, homeMarker = null;
-let trkPts = [];          // [[lat,lon], ...] 누적
+// [[lat, lon, t], ...] — t 는 **받은 시각**(초, performance 기준).
+// 🔴 서버가 주는 점에는 시각이 없다([lat,lon,alt]). 시간 창으로 자르려면
+//    시각이 필요하므로 받은 순간을 여기서 붙인다. 서버가 한 번에 여러 개를
+//    보내면(첫 연결·재동기) 그 묶음은 같은 시각을 갖는다 — 창 경계에서
+//    몇 초 어긋날 수 있지만, 지도는 "대략 어디를 돌았나" 를 보는 계기다.
+// 상한 — 차트 버퍼(KEEP_N, 1시간치)와 뜻을 맞춘다. 지도 점은 움직여야
+// 쌓이므로(서버 TRACK_MIN_MOVE) 차트보다 훨씬 성기다. 넉넉히 잡는다.
+const TRACK_KEEP = 20000;
+let trkPts = [];
 let trkHave = 0;          // 서버 기준 지금까지 받은 점 개수
 let mapReady = false;
 // 🔴 따라가기는 **항상 켜져 있다** (2026-09-10). 토글 버튼을 없앴다 —
@@ -999,8 +1007,13 @@ function initMap() {
   //    확대·축소는 중심을 안 바꾸므로 따라가기와 부딪히지도 않는다.
   lmap.on('dragstart', () => { followPausedAt = Date.now(); });
   trkLine = L.polyline([], { color: '#58a6ff', weight: 2, opacity: .9 }).addTo(lmap);
-  // 자체검사·현장 디버깅이 줌과 실거리를 물어볼 수 있게 핸들을 남긴다.
+  // 자체검사·현장 디버깅이 줌·실거리·궤적 길이를 물어볼 수 있게 남긴다.
+  // "50m 급" 이나 "시간 창을 따라간다" 같은 주장은 숫자로 확인돼야 한다.
   window.__lmap = lmap;
+  window.__trkLine = trkLine;
+  window.drawTrack = drawTrack;
+  window.__trkPtsLen = () => trkPts.length;
+  window.__trkPtsRaw = () => trkPts;
   mapReady = true;
 }
 
@@ -1015,6 +1028,20 @@ function acIcon(hdg) {
   });
 }
 
+/** 시간 창 안의 점만 골라 궤적을 다시 그린다. winSec=0 이면 가진 것 전부. */
+function drawTrack() {
+  if (!trkLine) return;
+  let pts = trkPts;
+  if (winSec > 0 && trkPts.length) {
+    const cut = trkPts[trkPts.length - 1][2] - winSec;
+    // 창 안 첫 점을 찾는다. 시각이 오름차순이라 뒤에서부터 훑으면 빠르다.
+    let i = trkPts.length - 1;
+    while (i > 0 && trkPts[i - 1][2] >= cut) i--;
+    pts = trkPts.slice(i);
+  }
+  trkLine.setLatLngs(pts.map((p) => [p[0], p[1]]));
+}
+
 function renderMap(s) {
   if (!mapReady) initMap();
   if (!mapReady) return;
@@ -1022,16 +1049,23 @@ function renderMap(s) {
 
   // 항적 증분. track_from 이 0 이면 "처음부터 다시" 라는 뜻이다(서버 주석).
   if (Array.isArray(s.track) && s.track.length) {
+    const now = performance.now() / 1000;
     if (s.track_from === 0) trkPts = [];
     for (const p of s.track) {
       // 서버는 [lat, lon, ...] 형태로 준다. 유한한 값만 쓴다.
       const la = Array.isArray(p) ? p[0] : p && p.lat;
       const lo = Array.isArray(p) ? p[1] : p && p.lon;
       if (typeof la === 'number' && typeof lo === 'number'
-          && isFinite(la) && isFinite(lo)) trkPts.push([la, lo]);
+          && isFinite(la) && isFinite(lo)) trkPts.push([la, lo, now]);
     }
-    if (trkPts.length) trkLine.setLatLngs(trkPts);
+    // 무한히 자라지 않게. 차트 버퍼(KEEP_N = 1시간치)와 같은 한도를 쓴다 —
+    // "전체" 가 두 계기에서 다른 길이를 뜻하면 안 된다.
+    if (trkPts.length > TRACK_KEEP) trkPts.splice(0, trkPts.length - TRACK_KEEP);
   }
+  // 🔴 차트의 시간 창(1분/3분/10분/전체)과 **같은 구간**을 그린다.
+  //    지도만 전체를 그리면 "차트는 1분인데 지도는 20분" 이라 두 계기가
+  //    서로 다른 시간을 말한다 (2026-09-10).
+  drawTrack();
   if (typeof s.track_n === 'number') trkHave = s.track_n;
 
   const pos = (typeof d.lat === 'number' && typeof d.lon === 'number'
@@ -1603,7 +1637,7 @@ new ResizeObserver(() => {
 }).observe($('hudBox'));
 doLayout();
 
-$('win').onchange = (e) => { winSec = +e.target.value; renderCharts(); };
+$('win').onchange = (e) => { winSec = +e.target.value; renderCharts(); drawTrack(); };
 $('msgToggle').onclick = () => {
   const c = $('chartPane').classList.toggle('msgcollapsed');
   $('msgToggle').textContent = c ? '펴기' : '접기';

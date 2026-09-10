@@ -337,6 +337,30 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
      `marker ${D.querySelectorAll('#lmap .leaflet-marker-icon').length}개`);
   ok('궤적 선이 그려진다',
      D.querySelectorAll('#lmap path.leaflet-interactive, #lmap path').length > 0);
+  // 🔴 지도 궤적은 차트의 시간 창(1분/3분/10분/전체)을 따라간다 —
+  //    지도만 전체를 그리면 두 계기가 서로 다른 시간을 말한다 (2026-09-10).
+  if (W.__lmap && W.drawTrack && W.__trkPtsRaw) {
+    const line = W.__trkLine, sel = D.getElementById('win');
+    const n = () => (line ? line.getLatLngs().length : 0);
+    // 🔴 데모는 몇 초짜리라 점이 전부 1분 안에 들어온다 — 그대로 두면
+    //    "줄어든다" 를 확인할 수 없고 검사가 무조건 통과한다. 절반을 5분
+    //    전으로 밀어 **실제로 잘리는지** 본다.
+    const pts = W.__trkPtsRaw(), nowS = W.performance.now() / 1000;
+    if (pts.length >= 4) {
+      const half = Math.floor(pts.length / 2);
+      for (let i = 0; i < pts.length; i++) pts[i][2] = i < half ? nowS - 300 : nowS - 5;
+      sel.value = '0'; sel.dispatchEvent(new W.Event('change'));
+      const full = n();
+      sel.value = '60'; sel.dispatchEvent(new W.Event('change'));
+      const narrow = n();
+      ok('시간 창을 줄이면 궤적이 실제로 잘린다', narrow < full,
+         `전체 ${full} → 1분 ${narrow}`);
+      ok('잘린 뒤에도 최근 점은 남는다', narrow >= pts.length - half - 1,
+         `${narrow} >= ${pts.length - half - 1}`);
+      sel.value = '0'; sel.dispatchEvent(new W.Event('change'));
+      ok('전체로 되돌리면 복원된다', n() === full, `${n()} vs ${full}`);
+    }
+  }
   // GPS 가 없으면 왜 비었는지 말해야 한다 — 회색판만 남으면 고장으로 읽힌다.
   ok('GPS 있으면 안내가 숨는다', D.getElementById('mapEmpty').hidden === true);
 
