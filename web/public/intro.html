@@ -27,8 +27,7 @@ svg text { font-family: var(--mono); }
   background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
   background-size: 48px 48px; opacity: .35;
   -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%); mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%); }
-.heroTop { display: grid; grid-template-columns: 1fr 1.1fr; gap: 28px; align-items: end; }
-@media (max-width: 860px) { .heroTop { grid-template-columns: 1fr; } }
+.heroTop { display: grid; gap: 4px; }
 #hero h1 { font-size: clamp(34px, 5vw, 60px); margin: 0; letter-spacing: -.02em; line-height: 1; }
 #hero h1 span { display: inline-block; }
 #hero .tag { font-size: clamp(15px, 1.7vw, 19px); color: var(--ink); margin: 8px 0 0; font-weight: 500; line-height: 1.35; }
@@ -43,6 +42,21 @@ svg text { font-family: var(--mono); }
 #cue { text-align: center; color: var(--muted); font-size: 12px; letter-spacing: .2em; }
 #cue::after { content: ""; display: block; width: 1px; height: 22px; margin: 6px auto 0; background: linear-gradient(var(--muted), transparent); }
 
+/* 3D 무대 — SVG 실루엣을 Z 로 쌓아 두께를 만든다 (anime.js 사이트의 층 쌓기와 같은 수법) */
+#stage { position: absolute; inset: 0; overflow: hidden; perspective: 1300px; perspective-origin: 50% 42%;
+  background: radial-gradient(ellipse at 50% 60%, #121a24 0%, #0b0f16 62%); }
+#stage .floor { position: absolute; left: 50%; top: 56%; width: 1600px; height: 1600px; margin: -800px 0 0 -800px;
+  transform: rotateX(62deg); transform-style: preserve-3d;
+  background-image: linear-gradient(#1a212b 1px, transparent 1px), linear-gradient(90deg, #1a212b 1px, transparent 1px);
+  background-size: 60px 60px; opacity: .55;
+  -webkit-mask-image: radial-gradient(circle, #000 20%, transparent 62%); mask-image: radial-gradient(circle, #000 20%, transparent 62%); }
+#stage .shadow { position: absolute; left: 50%; top: 56%; width: 520px; height: 300px; margin: -150px 0 0 -260px;
+  transform: rotateX(62deg); border-radius: 50%; background: radial-gradient(ellipse, rgba(0,0,0,.75) 0%, rgba(0,0,0,0) 68%); }
+#stage .model { position: absolute; left: 50%; top: 56%; width: 700px; height: 640px; margin: -320px 0 0 -350px;
+  transform-style: preserve-3d; }
+#stage .part { position: absolute; inset: 0; transform-style: preserve-3d; }
+#stage .layer { position: absolute; inset: 0; width: 100%; height: 100%; display: block; backface-visibility: visible; }
+#stage .fin { position: absolute; left: 50%; top: 50%; width: 90px; height: 80px; transform-origin: 0 0; }
 /* 한 판: 좌 무대(기체 → 지도), 우 운용사 콘솔 */
 #flow { display: grid; grid-template-columns: 1fr 320px; padding: 0; overflow: hidden; }
 #flow .scene { position: relative; background: #0b0f16; min-width: 0; aspect-ratio: 9 / 5.3; }
@@ -133,18 +147,8 @@ footer a { color: var(--dim); }
 <!-- ═══════════ 1. 도입 ═══════════ -->
 <section id="hero">
   <div class="heroTop">
-    <div>
-      <h1><span class="reveal">SHADE</span><span class="reveal">01</span></h1>
-      <p class="tag reveal">수직이착륙 무인기에 신호정보 페이로드를 싣고,<br>날면서 찾아 지상으로 보낸다.</p>
-    </div>
-    <div>
-      <div class="chain">
-        <b class="reveal">기체</b><i class="reveal">→</i><b class="reveal sig">페이로드</b><i class="reveal">→</i>
-        <b class="reveal">수직 이륙</b><i class="reveal">→</i><b class="reveal">천이</b><i class="reveal">→</i>
-        <b class="reveal">경로 비행</b><i class="reveal">→</i><b class="reveal sig">수신</b><i class="reveal">→</i>
-        <b class="reveal lob">LOB</b><i class="reveal">→</i><b class="reveal fix">FIX</b><i class="reveal">→</i><b class="reveal">지상 분석</b>
-      </div>
-    </div>
+    <h1><span class="reveal">SHADE</span><span class="reveal">01</span></h1>
+    <p class="tag reveal">수직이착륙 무인기에 신호정보 페이로드를 싣고, 날면서 찾아 지상으로 보낸다.</p>
   </div>
 
   <div class="fig reveal" id="flow">
@@ -172,72 +176,12 @@ footer a { color: var(--dim); }
         <g id="kac" opacity="0"><g id="kacIn"><path d="M0,-9 L15,0 L0,9 L4,0 Z" fill="#e6edf3" stroke="#0d1117" stroke-width="1"/></g></g>
       </svg>
 
-      <!-- 기체 무대 (1단계) -->
-      <svg id="stage" viewBox="0 0 900 500" aria-label="기체 · 페이로드 · 수직 이륙 · 천이">
-        <defs>
-          <radialGradient id="pulse" r=".5"><stop offset="0" stop-color="#58a6ff" stop-opacity=".45"/><stop offset="1" stop-color="#58a6ff" stop-opacity="0"/></radialGradient>
-          <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-        </defs>
-        <rect width="900" height="500" fill="#0b0f16"/>
-        <!-- 상면도 -->
-        <g id="tv" transform="translate(450,235) scale(.62)">
-          <g id="acLines" fill="none" stroke="#e6edf3" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-            <path class="ln" d="M-300,-12 L-40,-30 L40,-30 L300,-12 L300,10 L40,26 L-40,26 L-300,10 Z"/>
-            <path class="ln fus" d="M-16,-190 C-16,-205 16,-205 16,-190 L16,140 C16,152 -16,152 -16,140 Z"/>
-            <path class="ln" d="M-150,-140 L-150,175"/><path class="ln" d="M150,-140 L150,175"/>
-            <path class="ln" d="M-160,168 L160,168 L160,184 L-160,184 Z"/>
-            <circle class="ln" cx="-150" cy="-140" r="9"/><circle class="ln" cx="150" cy="-140" r="9"/>
-            <circle class="ln" cx="-150" cy="175" r="9"/><circle class="ln" cx="150" cy="175" r="9"/>
-            <circle class="ln" cx="0" cy="146" r="7"/>
-          </g>
-          <g class="rotor" transform="translate(-150,-140)"><path d="M-70,0 L70,0" stroke="#8b949e" stroke-width="3" stroke-linecap="round"/><circle r="4" fill="#e6edf3"/></g>
-          <g class="rotor" transform="translate(150,-140)"><path d="M-70,0 L70,0" stroke="#8b949e" stroke-width="3" stroke-linecap="round"/><circle r="4" fill="#e6edf3"/></g>
-          <g class="rotor" transform="translate(-150,175)"><path d="M-70,0 L70,0" stroke="#8b949e" stroke-width="3" stroke-linecap="round"/><circle r="4" fill="#e6edf3"/></g>
-          <g class="rotor" transform="translate(150,175)"><path d="M-70,0 L70,0" stroke="#8b949e" stroke-width="3" stroke-linecap="round"/><circle r="4" fill="#e6edf3"/></g>
-          <g class="rotor push" transform="translate(0,146)"><path d="M-40,0 L40,0" stroke="#8b949e" stroke-width="3" stroke-linecap="round"/><circle r="3" fill="#e6edf3"/></g>
-          <!-- X-ray: 동체가 비치고 안의 장비가 보인다 -->
-          <g id="xray" opacity="0">
-            <path d="M-16,-190 C-16,-205 16,-205 16,-190 L16,140 C16,152 -16,152 -16,140 Z" fill="#58a6ff" fill-opacity=".10" stroke="#58a6ff" stroke-width="1.2" filter="url(#glow)"/>
-            <!-- 동체 안: 수신기 · 컴퓨터 · 링크 -->
-            <g class="mod" data-k="sdr"><rect x="-10" y="-150" width="20" height="44" rx="3" fill="#142c47" stroke="#58a6ff" stroke-width="1.5"/><path d="M-6,-128 L-2,-136 L1,-122 L4,-132 L6,-128" fill="none" stroke="#58a6ff" stroke-width="1.5"/></g>
-            <g class="mod" data-k="cpu"><rect x="-10" y="-96" width="20" height="36" rx="3" fill="#1c2128" stroke="#8b949e" stroke-width="1.5"/><path d="M-5,-88 L5,-88 M-5,-82 L5,-82 M-5,-76 L5,-76 M-5,-70 L5,-70" stroke="#8b949e" stroke-width="1.2"/></g>
-            <g class="mod" data-k="lnk"><rect x="-10" y="60" width="20" height="30" rx="3" fill="#1c2128" stroke="#8b949e" stroke-width="1.5"/><path d="M0,68 L0,82 M-6,74 L6,74" stroke="#8b949e" stroke-width="1.5"/></g>
-            <!-- 기체 하부 안테나 ×4: 동체 중심 · 동체 후방 · 양 날개 아래. 위에서 보면 가려지므로 파선 원 -->
-            <g class="mod ant" data-k="ant" fill="#0b0f16" stroke="#58a6ff" stroke-width="2" stroke-dasharray="4 3">
-              <circle cx="0" cy="-20" r="13"/><circle cx="0" cy="118" r="11"/><circle cx="-200" cy="0" r="13"/><circle cx="200" cy="0" r="13"/>
-            </g>
-            <g class="mod ant" data-k="ant2" fill="#58a6ff"><circle cx="0" cy="-20" r="4"/><circle cx="0" cy="118" r="3.5"/><circle cx="-200" cy="0" r="4"/><circle cx="200" cy="0" r="4"/></g>
-            <g id="xl" font-size="19" fill="#e6edf3" stroke-linecap="round">
-              <path d="M12,-128 L120,-128" stroke="#58a6ff" stroke-width="1"/><text x="126" y="-123" fill="#58a6ff" font-weight="700">SDR 수신기</text>
-              <path d="M12,-78 L120,-78" stroke="#8b949e" stroke-width="1"/><text x="126" y="-73" font-weight="700">온보드 컴퓨터</text>
-              <path d="M12,75 L120,75" stroke="#8b949e" stroke-width="1"/><text x="126" y="80" font-weight="700">데이터링크</text>
-              <path d="M-213,0 L-250,64 L-300,64" fill="none" stroke="#58a6ff" stroke-width="1" stroke-dasharray="3 3"/><text x="-300" y="88" fill="#58a6ff" font-weight="700">하부 안테나 ×4</text><text x="-300" y="108" font-size="15" fill="#8b949e">동체 중심 · 후방 · 양 날개 아래</text>
-            </g>
-          </g>
-        </g>
-        <!-- 측면도 -->
-        <g id="svw" opacity="0">
-          <line x1="80" y1="392" x2="820" y2="392" stroke="#30363d" stroke-width="2"/>
-          <g font-size="11" fill="#3d444d" font-family="ui-monospace, monospace"><text x="80" y="410">GROUND</text></g>
-          <ellipse id="shadow" cx="450" cy="392" rx="130" ry="7" fill="#000" opacity=".5"/>
-          <g id="sv" transform="translate(450,368)">
-            <g id="svLift" stroke="#8b949e" stroke-width="3" stroke-linecap="round">
-              <path d="M52,-16 L52,-38"/><path class="bl" d="M14,-38 L90,-38"/>
-              <path d="M-84,-16 L-84,-38"/><path class="bl" d="M-122,-38 L-46,-38"/>
-            </g>
-            <path d="M-118,0 C-118,-14 -96,-18 -58,-18 L92,-18 C124,-18 134,-8 134,0 C134,8 124,14 92,14 L-58,14 C-96,14 -118,10 -118,0 Z" fill="#0d1117" stroke="#e6edf3" stroke-width="2.4"/>
-            <path d="M-48,-18 L64,-18" stroke="#e6edf3" stroke-width="5" stroke-linecap="round"/>
-            <path d="M-118,-12 L-134,-58 L-106,-58 L-92,-18" fill="#0d1117" stroke="#e6edf3" stroke-width="2.4" stroke-linejoin="round"/>
-            <path d="M-40,14 L-40,26 M40,14 L40,26" stroke="#8b949e" stroke-width="2.4"/>
-            <g id="svBay" opacity=".95"><rect x="-20" y="-11" width="70" height="20" rx="3" fill="#142c47" stroke="#58a6ff" stroke-width="1.5"/><text x="15" y="4" text-anchor="middle" font-size="11" fill="#58a6ff" font-weight="700">SIGINT</text></g>
-            <!-- 하부 안테나: 동체 배 아래 두 개, 날개 아래 한 개(측면에서는 동체 옆에 겹쳐 보인다) -->
-            <g id="svAnt" stroke="#58a6ff" stroke-width="2" stroke-linecap="round"><path d="M14,14 L14,32 M-70,14 L-70,30 M40,-14 L40,12"/><circle cx="14" cy="34" r="3" fill="#58a6ff"/><circle cx="-70" cy="32" r="2.5" fill="#58a6ff"/></g>
-            <path id="svPush" d="M-122,-30 L-122,30" stroke="#8b949e" stroke-width="3" stroke-linecap="round"/>
-          </g>
-        </g>
-        <foreignObject x="0" y="0" width="0" height="0"></foreignObject>
-      </svg>
-
+      <!-- 기체 무대 (1단계) — 3D. 실루엣은 JS 가 층으로 쌓는다 -->
+      <div id="stage">
+        <div class="floor"></div>
+        <div class="shadow" id="shadow"></div>
+        <div class="model" id="model"></div>
+      </div>
     </div>
 
     <!-- 우: 지상 운용사 콘솔 -->
@@ -458,6 +402,59 @@ footer a { color: var(--dim); }
   once($('#hero'), () => {
     animate('#hero .reveal', { opacity: [0, 1], y: [18, 0], delay: stagger(60), duration: 900, ease: 'outExpo' });
 
+
+    // ── 3D 기체. Striver Mini VTOL 4+1 상면 실루엣 — 단일 동체 포드, 기수 트랙터 프로펠러,
+    //    고익 직선익, 날개 아래 좌우 로터 암(전·후 리프트 모터), 수직 꼬리 + 수평 꼬리.
+    //    부품마다 SVG 실루엣을 Z 로 여러 장 쌓아 두께를 만든다. 색은 아래가 어둡고 위가 밝다.
+    const NS = 'http://www.w3.org/2000/svg', VB = '-350 -330 700 640';
+    const FUS = 'M0,-300 C24,-300 32,-268 32,-226 L32,50 C32,120 22,200 13,262 L-13,262 C-22,200 -32,120 -32,50 L-32,-226 C-32,-268 -24,-300 0,-300 Z';
+    const WING = 'M-340,-24 L-42,-44 L42,-44 L340,-24 L340,24 L42,44 L-42,44 L-340,24 Z';
+    const ARMS = 'M-158,-150 L-142,-150 L-142,166 L-158,166 Z M142,-150 L158,-150 L158,166 L142,166 Z';
+    const HSTAB = 'M-112,228 L112,228 L112,262 L-112,262 Z';
+    const MOTORS = [[-150,-150],[150,-150],[-150,166],[150,166]];
+    const shade = (t) => { const c = (a, b) => Math.round(a + (b - a) * t); return `rgb(${c(14,38)},${c(19,48)},${c(26,64)})`; };
+    const model = $('#model');
+    const mkSvg = (z, inner, cls) => {
+      const el = document.createElementNS(NS, 'svg'); el.setAttribute('viewBox', VB); el.setAttribute('class', 'layer ' + (cls || ''));
+      el.dataset.z = z; el.innerHTML = inner; return el;
+    };
+    const part = (cls) => { const d = document.createElement('div'); d.className = 'part ' + cls; model.appendChild(d); return d; };
+    const stack = (host, d, z0, z1, n, extra) => {   // z0..z1 에 n 장
+      for (let i = 0; i < n; i++) {
+        const t = i / (n - 1), z = z0 + (z1 - z0) * t, top = i === n - 1;
+        host.appendChild(mkSvg(z, `<path d="${d}" fill="${top ? '#26303d' : shade(t)}" ${top ? 'stroke="#c9d1d9" stroke-width="1.6"' : ''}/>${top && extra ? extra : ''}`));
+      }
+    };
+    const pArms = part('arms'), pWing = part('wing'), pFus = part('fus'), pMot = part('mot'), pTop = part('top'), pX = part('xray');
+    stack(pArms, ARMS, 6, 14, 3);
+    stack(pFus, FUS, 0, 30, 11, '<path d="M-14,-236 C-14,-250 14,-250 14,-236 L14,-190 L-14,-190 Z" fill="#0d1117" stroke="#79c0ff" stroke-width="1"/><path d="M-30,-60 L30,-60 M-30,60 L30,60 M-31,-120 L31,-120" stroke="#3d444d" stroke-width="1"/>');
+    stack(pWing, WING, 30, 40, 4, '<path d="M-340,-24 L-42,-44 M42,-44 L340,-24" stroke="#e6edf3" stroke-width="1"/><path d="M-330,6 L-60,6 M60,6 L330,6" stroke="#3d444d" stroke-width="1"/><path d="M-340,-24 L-340,24 M340,-24 L340,24" stroke="#f0883e" stroke-width="3"/>');
+    stack(pFus, HSTAB, 12, 18, 3);
+    MOTORS.forEach(([x, y]) => stack(pMot, `M${x - 14},${y} a14,14 0 1,0 28,0 a14,14 0 1,0 -28,0`, 14, 46, 8));
+    // 맨 위 층: 프로펠러(리프트 4 + 기수 1), 페이로드 베이 표시
+    pTop.appendChild(mkSvg(48, MOTORS.map(([x, y]) => `<g class="rot" transform="translate(${x},${y})"><path d="M-64,0 L64,0" stroke="#8b949e" stroke-width="4" stroke-linecap="round"/><circle r="5" fill="#e6edf3"/></g>`).join('') +
+      `<g class="rot nose" transform="translate(0,-300)"><path d="M-58,0 L58,0" stroke="#8b949e" stroke-width="4" stroke-linecap="round"/><circle r="4" fill="#e6edf3"/></g>` +
+      `<rect id="bay" x="-20" y="-150" width="40" height="150" rx="6" fill="none" stroke="#58a6ff" stroke-width="1.5" stroke-dasharray="5 4" opacity=".9"/><text id="bayT" x="30" y="-64" font-size="20" font-weight="700" fill="#58a6ff">SIGINT</text>`, 'toplayer'));
+    // X-ray 층: 동체 안 장비(Z 16) + 하부 안테나(동체 아래·날개 아래)
+    pX.appendChild(mkSvg(16, `<rect x="-22" y="-150" width="44" height="52" rx="4" fill="#142c47" stroke="#58a6ff" stroke-width="1.5"/><path d="M-12,-124 L-6,-136 L0,-114 L6,-130 L12,-124" fill="none" stroke="#58a6ff" stroke-width="1.5"/><text x="30" y="-118" font-size="17" fill="#58a6ff" font-weight="700">SDR</text>` +
+      `<rect x="-22" y="-84" width="44" height="42" rx="4" fill="#1c2128" stroke="#8b949e" stroke-width="1.5"/><path d="M-12,-72 L12,-72 M-12,-63 L12,-63 M-12,-54 L12,-54" stroke="#8b949e" stroke-width="1.2"/><text x="30" y="-58" font-size="17" fill="#e6edf3" font-weight="700">컴퓨터</text>` +
+      `<rect x="-22" y="-28" width="44" height="34" rx="4" fill="#1c2128" stroke="#8b949e" stroke-width="1.5"/><path d="M0,-20 L0,-2 M-8,-11 L8,-11" stroke="#8b949e" stroke-width="1.5"/><text x="30" y="-6" font-size="17" fill="#e6edf3" font-weight="700">링크</text>`, 'xr'));
+    const antSvg = (pts) => pts.map(([x, y]) => `<circle cx="${x}" cy="${y}" r="16" fill="#0b0f16" stroke="#58a6ff" stroke-width="2.5" stroke-dasharray="5 4"/><circle cx="${x}" cy="${y}" r="5" fill="#58a6ff"/>`).join('');
+    pX.appendChild(mkSvg(-8, antSvg([[0, -40], [0, 120]]) + `<text x="-330" y="80" font-size="18" fill="#58a6ff" font-weight="700">하부 안테나 ×4</text>`, 'xr'));
+    pX.appendChild(mkSvg(24, antSvg([[-210, 2], [210, 2]]), 'xr'));
+    // 수직 꼬리 — 세워 둔 한 장. 동체 중심선 위, 꼬리 끝에.
+    const fin = document.createElement('div'); fin.className = 'fin';
+    // SVG 의 x=0 변이 동체 등선(밑변), +x 가 핀 높이. rotateY(-90) 이 +x 를 +Z(위)로 세운다.
+    fin.innerHTML = `<svg viewBox="0 0 90 80" style="width:100%;height:100%;display:block"><path d="M0,0 L0,80 L60,80 L70,40 L26,4 Z" fill="#20293a" fill-opacity=".8" stroke="#c9d1d9" stroke-width="1.4" stroke-linejoin="round"/></svg>`;
+    pFus.appendChild(fin);
+    const layers = $$('#model .layer');
+    // 초기 배치: 각 층을 제 Z 에. 무대 자체는 rotateX 로 눕히고 조금 돌려 둔다.
+    layers.forEach((el) => utils.set(el, { translateZ: +el.dataset.z }));
+    utils.set(fin, { translateX: 0, translateY: 180, translateZ: 30, rotateY: -90 });
+    utils.set('#model', { rotateX: 62, rotateZ: -28, scale: .72 });
+    utils.set('#stage .xr', { opacity: 0 });
+    animate('#model .rot:not(.nose) path', { rotate: 360, duration: 900, ease: 'linear', loop: true });
+
     // ── 지도. 백령도 서쪽 ~ 속초 동쪽이 한 화면에 들어오는 확대 투영.
     const X = (lon) => (lon - 123.8) * 150, Y = (lat) => (40.13 - lat) * 150;
     const smooth = (pts, close) => {
@@ -625,9 +622,10 @@ footer a { color: var(--dim); }
       $('#kmap').setAttribute('opacity', 0); $('#stage').style.opacity = 1; $('#kac').setAttribute('opacity', 0);
       utils.set('#ftrail', { strokeDashoffset: L });
       utils.set('#kac', { translateX: ENTRY[0][0], translateY: ENTRY[0][1], rotate: -90 });
-      $('#xray').setAttribute('opacity', 0); $('#tv').setAttribute('opacity', 1); $('#svw').setAttribute('opacity', 0);
-      utils.set('#sv', { translateX: 450, translateY: 368, rotate: 0 }); utils.set('#shadow', { rx: 130, opacity: .5 });
-      utils.set('#svLift', { opacity: 1 });
+      utils.set('#model', { rotateX: 62, rotateZ: -28, scale: .72, translateX: 0, translateY: 0, translateZ: 0, rotateY: 0, opacity: 1 });
+      utils.set('#stage .xr', { opacity: 0 }); utils.set('#stage .fus .layer:not(.xr)', { opacity: 1 });
+      utils.set('#shadow', { scale: 1, opacity: 1 });
+      layers.forEach((el) => utils.set(el, { translateZ: +el.dataset.z, opacity: 0 }));
       hot = 0; $('#wf0s').textContent = '스캔'; sigId.textContent = '—';
       $$('#kv b').forEach((b) => { b.textContent = '—'; b.className = ''; });
       olog.innerHTML = '<div class="cur">▌</div>'; ops.classList.add('idle'); dot.classList.remove('on'); opsSt.textContent = '링크 대기';
@@ -635,35 +633,30 @@ footer a { color: var(--dim); }
     };
     reset();
     animate('#emit .er', { r: [6, 26], opacity: [.9, 0], duration: 1800, ease: 'outQuad', loop: true, delay: stagger(900) });
-    animate('#stage .rotor:not(.push) path', { rotate: 360, duration: 700, ease: 'linear', loop: true });
-    animate('#stage .rotor.push path', { rotate: 360, duration: 2400, ease: 'linear', loop: true });
 
     // ── 마스터 타임라인. 1단계 기체 무대 11초 → 2단계 임무 27초 → 처음부터.
-    const T = { tv: 0, xray: 2600, side: 5600, off: 8400, map: 10800, cruise: 12400, dur: 24000, out: 36400, end: 39000 };
+    const T = { tv: 0, xray: 3200, side: 6200, off: 9000, map: 11500, cruise: 13000, dur: 24000, out: 37000, end: 39600 };
     const prog = { p: 0 }; let next = 0;
     const LOB_AT = [.09, .20, .30, .41, .60, .77];         // 진입 포함 정규화 진행률 — 첫 바퀴 4개, 둘째 바퀴 2개
-    const lines = svg.createDrawable('#stage .ln');
     const tl = createTimeline({ loop: true, onLoop: () => { reset(); next = 0; }, defaults: { ease: 'linear' } });
-    // 1 상면 — 윤곽이 그려진다
-    tl.add(lines, { draw: ['0 0', '0 1'], duration: 1600, ease: 'inOutSine', delay: stagger(40) }, T.tv);
-    tl.add('#stage .rotor', { opacity: [0, 1], duration: 400 }, T.tv + 1400);
-    // 2 X-ray — 동체가 비치고 장비가 드러난다
-    tl.add('#xray', { opacity: [0, 1], duration: 700, ease: 'outQuad', onBegin: () => cap(2, '페이로드 — 하부 안테나 ×4 · SDR · 컴퓨터 · 링크') }, T.xray);
-    tl.add('#xray .mod', { opacity: [0, 1], y: [10, 0], duration: 500, ease: 'outExpo', delay: stagger(160) }, T.xray + 200);
-    tl.add('#xl', { opacity: [0, 1], duration: 600 }, T.xray + 700);
-    // 3 측면으로 바뀌고 수직 이륙
-    tl.add('#tv', { opacity: [1, 0], duration: 500 }, T.side);
-    tl.add('#svw', { opacity: [0, 1], duration: 500, onBegin: () => { cap(3, '수직 이륙'); ops.classList.remove('idle'); dot.classList.add('on'); opsSt.textContent = '링크 · 이륙'; log('', 'LNK', '텔레메트리 연결 · 이륙'); } }, T.side + 300);
-    tl.add('#svLift .bl', { scaleX: [1, .25, 1], duration: 160, loop: 14, ease: 'inOutSine' }, T.side + 800);
-    tl.add('#sv', { translateY: [368, 210], duration: 2200, ease: 'inOutSine' }, T.side + 800);
-    tl.add('#shadow', { rx: [130, 60], opacity: [.5, .15], duration: 2200, ease: 'inOutSine' }, T.side + 800);
-    // 4 천이 — 리프트 로터가 멈추고 푸셔가 돌며 오른쪽으로 빠져나간다
-    tl.add('#svLift', { opacity: [1, .25], duration: 700, onBegin: () => cap(4, '고정익 천이') }, T.off);
-    tl.add('#svPush', { scaleY: [1, .2, 1], duration: 120, loop: 20, ease: 'inOutSine' }, T.off);
-    tl.add('#sv', { translateX: [450, 1100], translateY: [210, 150], rotate: [0, -7], duration: 2300, ease: 'inQuad' }, T.off + 200);
-    tl.add('#shadow', { opacity: [.15, 0], duration: 600 }, T.off + 200);
+    // 1 조립 — 층이 아래에서 올라와 자리를 잡는다 (스프링). 그 뒤 천천히 돈다.
+    tl.add(layers, { translateZ: [(el) => +el.dataset.z - 140, (el) => +el.dataset.z], opacity: [0, 1],
+                     duration: 1500, ease: 'outElastic(1, .6)', delay: stagger(16) }, T.tv);
+    tl.add('#model', { rotateZ: [-28, -60], duration: 5200, ease: 'inOutSine' }, T.tv + 800);
+    // 2 X-ray — 동체 위층이 비치고 안의 장비·하부 안테나가 드러난다
+    tl.add('#stage .fus .layer:not(.xr)', { opacity: [1, .16], duration: 700, ease: 'outQuad' }, T.xray);
+    tl.add('#stage .xr', { opacity: [0, 1], duration: 700, ease: 'outQuad' }, T.xray + 150);
+    // 3 수직 이륙 — 로터가 빨라지고 기체가 바닥면에서 수직(Z)으로 뜬다. 그림자는 작아진다.
+    tl.add('#stage .fus .layer:not(.xr)', { opacity: [.16, 1], duration: 500 }, T.side);
+    tl.add('#stage .xr', { opacity: [1, 0], duration: 400 }, T.side);
+    tl.add('#model', { translateZ: [0, 210], duration: 2400, ease: 'inOutSine', onBegin: () => { ops.classList.remove('idle'); dot.classList.add('on'); opsSt.textContent = '링크 · 이륙'; log('', 'LNK', '텔레메트리 연결 · 이륙'); } }, T.side + 300);
+    tl.add('#shadow', { scale: [1, .55], opacity: [1, .25], duration: 2400, ease: 'inOutSine' }, T.side + 300);
+    // 4 천이 — 기수가 들리고 앞으로 가속해 화면 밖으로. 리프트 로터는 멈추고 기수 프로펠러가 돈다.
+    tl.add('#model', { rotateX: [62, 74], rotateZ: [-60, -95], translateX: [0, 1100], translateY: [0, -260], scale: [.72, .46],
+                       duration: 2600, ease: 'inQuad', onBegin: () => { utils.remove('#model .rot:not(.nose) path'); animate('#model .rot.nose path', { rotate: 360, duration: 300, ease: 'linear', loop: true }); } }, T.off);
+    tl.add('#shadow', { opacity: [.25, 0], duration: 700 }, T.off);
     // 5 지도 — 무대가 걷히고 한반도 중부가 나타난다
-    tl.add('#stage', { opacity: [1, 0], duration: 900, onBegin: () => { cap(5, '경로 비행 — 백령도 서쪽 ↔ 속초 동쪽'); say('경로 비행'); } }, T.map);
+    tl.add('#stage', { opacity: [1, 0], duration: 900 }, T.map);
     tl.add('#kmap', { opacity: [0, 1], duration: 900 }, T.map);
     tl.add('#kac', { opacity: [0, 1], duration: 400 }, T.map + 700);
     tl.add('#kac', { translateX: mp.translateX, translateY: mp.translateY, rotate: mp.rotate, duration: T.dur }, T.cruise);
