@@ -1,6 +1,6 @@
 # SHADE01
 
-# https://shade01.bewe.co.kr/intro
+**체계 소개 → [shade01.bewe.co.kr/intro](https://shade01.bewe.co.kr/intro)**
 
 ![비행 중](docs/images/00-flight.jpg)
 

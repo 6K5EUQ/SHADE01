@@ -14,6 +14,27 @@
 상태      https://shade01.bewe.co.kr/api/health
 ```
 
+## 소개 페이지 `/intro` (2026-09-10)
+
+체계 소개 한 장. `web/public/intro.html` 파일 하나이고 `server.js` 가 `/intro`
+로 라우팅한다. 애니메이션은 **anime.js 4.5.0** 이며 CDN 을 쓰지 않고
+`web/public/vendor/animejs/` 에 벤더링한다 (Leaflet 과 같은 규칙).
+
+- 버전 기록용으로 `web/package.json`·`package-lock.json` 을 커밋한다.
+  `web/node_modules/` 는 `.gitignore` 에 있다 — 설치본은 커밋하지 않는다.
+- 도입부는 SVG 실루엣을 Z 로 쌓아 만든 3D 기체(Striver Mini 4+1)와 한반도
+  지도 위 임무 연출이 한 판에서 39초 주기로 돈다.
+- 🔴 **헤드리스 검증은 `--virtual-time-budget` 으로 하지 마라.** 그것은
+  `setTimeout` 만 앞당기고 anime 의 rAF 엔진은 첫 프레임에서 멈춘다 —
+  정지 화면을 찍고 통과로 오인한다. CDP 로 **실시간 대기**해서 찍는
+  [`tools/web/cdpshot.py`](../tools/web/cdpshot.py) 를 써라:
+
+  ```bash
+  .venv/bin/python tools/web/cdpshot.py http://127.0.0.1:4400/intro.html /tmp/intro.png 12
+  ```
+
+  `websocket-client` 가 필요하다 — 시스템 python 에는 없고 `.venv` 에 있다.
+
 ## 실시간 (2026-09-06)
 
 목록 화면 상단의 **실시간** 버튼. 현장 노트북이 밀어 올리는 동안에만 점이
