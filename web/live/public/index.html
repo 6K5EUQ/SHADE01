@@ -3,10 +3,27 @@
 <title>SHADE01 라이브</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="/live.css">
 
 <main>
-  <!-- 좌: HUD. DOM 순서상 먼저다 — 좁은 화면에서 그대로 위로 간다. -->
+  <!-- 좌: 지도. HUD 는 자세를 말하지만 **어디 있는지**는 말하지 않는다.
+       비행 중에 위치 감이 안 잡힌다는 것이 이 칸을 넣은 이유다 (2026-09-10).
+       로그 뷰어(log.html)와 **같은 Leaflet·같은 타일**을 쓴다 — 지난 비행과
+       지금 비행을 같은 그림으로 읽어야 눈이 안 흔들린다. -->
+  <section id="mapPane">
+    <div id="lmap"></div>
+    <div class="maptools">
+      <button id="tileBtn" title="지도 / 위성 전환">위성</button>
+      <!-- 따라가기. 끄면 지도를 손으로 옮겨 둔 채로 볼 수 있다 —
+           켜져 있으면 기체가 화면 밖으로 나갈 때 지도가 따라간다. -->
+      <button id="followBtn" class="on" title="기체를 따라간다">따라가기</button>
+    </div>
+    <!-- GPS 가 없으면 지도가 빈 회색판이 된다. 왜 비었는지 화면이 말해야 한다. -->
+    <div id="mapEmpty">GPS 대기 중</div>
+  </section>
+
+  <!-- 우: HUD. -->
   <section id="hudPane">
     <div id="hudBox">
       <!-- viewBox 는 layout() 이 실측 픽셀로 넣는다. 여기에 미리 쓰지 마라 —
@@ -175,4 +192,5 @@
 </div>
 
 <script src="/chart.js"></script>
+<script src="/vendor/leaflet/leaflet.js"></script>
 <script src="/live.js"></script>

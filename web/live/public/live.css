@@ -16,10 +16,54 @@ body { height: 100%; overflow: hidden; display: flex; flex-direction: column; }
    숫자 스트립이 화면 밖으로 밀려 조용히 사라진다. */
 main {
   display: grid;
-  grid-template-columns: minmax(560px, 1.32fr) minmax(380px, 1fr);
+  /* 🔴 좌 지도 : 우 HUD = 1 : 3 (2026-09-10). HUD 는 자세를 말하지만
+     **어디 있는지**를 말하지 않아 비행 중 위치 감이 안 잡혔다.
+     지도 하한 150px = 궤적과 기체 아이콘이 겹쳐 보이지 않는 최소.
+     HUD 하한 560px 은 그대로 — 좌우 테이프가 중앙 피치 사다리 라벨을
+     안 먹는 최소다(기존 실측). 차트는 오른쪽에 그대로 남는다. */
+  grid-template-columns:
+    minmax(150px, 0.44fr) minmax(560px, 1.32fr) minmax(380px, 1fr);
   flex: 1; min-height: 0;
 }
-#hudPane, #chartPane { min-width: 0; min-height: 0; }
+#mapPane, #hudPane, #chartPane { min-width: 0; min-height: 0; }
+
+/* ── 지도 ─────────────────────────────────────────────────────
+   로그 뷰어(log.html)와 같은 Leaflet·같은 타일을 쓴다. */
+#mapPane {
+  position: relative; overflow: hidden;
+  border-right: 1px solid var(--border); background: #0d1117;
+}
+#lmap { width: 100%; height: 100%; background: #0d1117; }
+/* Leaflet 이 기본으로 흰 배경을 깐다 — 어두운 판에서 눈이 아프다. */
+#lmap .leaflet-container { background: #0d1117; }
+/* 저작권 표기는 좁은 칸에서 두 줄을 먹는다. 작게 눌러 둔다. */
+#lmap .leaflet-control-attribution {
+  font-size: 9px; background: rgba(13,17,23,.7); color: var(--muted);
+}
+#lmap .leaflet-control-attribution a { color: var(--dim); }
+/* 지도 칸이 좁아(150~220px) 버튼을 가로로 놓으면 겹친다. 세로로 쌓고
+   오른쪽에 붙인다 — 왼쪽은 궤적이 지나는 자리다. */
+.maptools {
+  position: absolute; z-index: 400; right: 6px; top: 6px;
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-end;
+}
+.maptools button {
+  background: rgba(22,27,34,.92); color: var(--text);
+  border: 1px solid var(--border-2); border-radius: 4px;
+  font-size: 10px; padding: 3px 7px; cursor: pointer; white-space: nowrap;
+}
+/* 켜짐은 테두리·글자색으로만 말한다. 배경을 칠하면 이 작은 칸에서 그
+   버튼이 계기보다 먼저 눈에 들어온다 — 색 예산은 이상 신호에 쓴다. */
+.maptools button.on { border-color: var(--dim); color: var(--text); }
+/* GPS 가 없으면 지도가 빈 회색판이 된다 — 왜 비었는지 말해야 한다.
+   「안 보이는 것」도 정상 동작인 이상 그 사실이 화면에 있어야 한다. */
+#mapEmpty {
+  position: absolute; inset: 0; z-index: 350; display: flex;
+  align-items: center; justify-content: center;
+  background: rgba(13,17,23,.86); color: var(--muted);
+  font-size: 12px; pointer-events: none;
+}
+#mapEmpty[hidden] { display: none; }
 
 /* HUD 가 남는 높이를 다 먹고(1fr), 스트립은 auto 라 자기 높이를 먼저 확보한다 */
 /* 🔴 행 비율이 곧 "스트립이 어디까지 올라오나" 다.
@@ -372,12 +416,19 @@ a.btn { display: inline-block; text-decoration: none; }
   html, body { overflow: auto; }
   body { display: block; }
   main { grid-template-columns: 1fr; }
+  /* 🔴 좁으면 세로로 쌓인다. 지도에 높이를 주되 **HUD 에서 덜어와야** 한다 —
+     그냥 더하면 스트립이 화면 밖으로 밀린다 (자체검사 「좁아도 스트립이
+     화면 안」 이 잡았다: 34vh 를 더했더니 1286px > 1000px).
+     지도 22vh + HUD 를 그만큼 줄여 합이 그대로다. */
+  #mapPane { height: 22vh; border-right: 0; border-bottom: 1px solid var(--border); }
   #hudPane { border-right: 0; border-bottom: 1px solid var(--border); }
   /* 🔴 높이는 자식(#hudBox)이 아니라 **행**에 준다. 자식에 56vh 를 주면
      `1fr` 행이 그만큼 안 자라 hudBox 가 제 부모를 넘치고, 뒤따르는 차트
      패널이 그 위를 덮어 전류·상태 밴드와 숫자 스트립이 통째로 가려진다
      (실측: hudPane 447px 안에 hudBox 560px). 행을 키우면 자식은 따라온다. */
-  #hudPane { grid-template-rows: minmax(360px, 56vh) auto; }
+  /* 지도가 22vh 를 가져갔으므로 56 → 34vh. 합이 그대로라야 스트립이
+     화면 안에 남는다 (2026-09-10). */
+  #hudPane { grid-template-rows: minmax(300px, 34vh) auto; }
   #chartPane { height: 60vh; grid-template-rows: 1fr 96px; }
 }
 

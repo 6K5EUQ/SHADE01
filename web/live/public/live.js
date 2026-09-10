@@ -914,6 +914,132 @@ function render(s) {
   renderMotors(d.motors || {});
 
   renderMsgs(msgs);
+  renderMap(s);
+}
+
+// ── 지도 ────────────────────────────────────────────────────────────
+// HUD 는 자세를 말하지만 **어디 있는지**를 말하지 않는다. 비행 중 위치 감이
+// 안 잡힌다는 것이 이 칸이 생긴 이유다 (2026-09-10).
+//
+// 로그 뷰어(log.html)와 **같은 Leaflet·같은 타일**을 쓴다 — 지난 비행과 지금
+// 비행을 같은 그림으로 읽어야 눈이 안 흔들린다.
+//
+// 🔴 항적은 **증분으로** 받는다. 예전에 `?track=0` 으로 아예 안 받았던 이유가
+//    "40분 비행이면 폴마다 수백 KB" 였는데, 서버는 `since=` 로 그 뒤의 점만
+//    주는 길을 이미 갖고 있다 (`snapshot(since, want_track)`). 매 폴 몇 개씩만
+//    받으므로 대역폭 문제가 없다.
+const MAX_ZOOM = 20;
+// 🔴 위성이 기본이다 (2026-09-10). OSM 은 흰 바탕이라 어두운 계기판 옆에서
+//    그 칸만 밝게 튀어 눈이 그리로 쏠린다. 위성 사진은 어둡고, 무엇보다
+//    비행장에서는 활주로·장애물이 지도보다 사진에 더 잘 보인다.
+let lmap = null, tileMode = 'sat', tiles = {};
+let trkLine = null, acMarker = null, homeMarker = null;
+let trkPts = [];          // [[lat,lon], ...] 누적
+let trkHave = 0;          // 서버 기준 지금까지 받은 점 개수
+let follow = true, mapReady = false;
+
+function initMap() {
+  if (lmap || typeof L === 'undefined') return;
+  const box = $('lmap');
+  if (!box) return;
+  // 🔴 자체검사는 iframe 을 24개 띄운다. 그 각각이 외부 타일을 받으러 가면
+  //    검사가 끝나지 않는다 (실측: 180초를 줘도 "검사 중…"). `?notiles=1` 로
+  //    타일만 끈다 — 지도·마커·궤적·레이아웃은 그대로 검사된다.
+  const noTiles = new URLSearchParams(location.search).has('notiles');
+  lmap = L.map(box, { zoomControl: false, attributionControl: true });
+  L.control.zoom({ position: 'bottomright' }).addTo(lmap);
+  // 🔴 레이어를 붙이기 전에 뷰를 반드시 정한다 — 뷰 없는 지도에 Path 를 넣으면
+  //    Leaflet 이 _bounds 없는 상태로 _clipPoints 를 돌려 터진다 (log.html 과 같은 함정).
+  lmap.setView([36.5, 127.8], 6);
+  // maxNativeZoom: Esri 는 없는 타일을 404 가 아니라 안내 이미지로 200 을 준다.
+  // 그 너머는 마지막 타일을 확대해 쓴다 — 흐릿할 뿐 궤적 벡터는 선명하다.
+  tiles.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { maxZoom: MAX_ZOOM, maxNativeZoom: 19, attribution: '© OpenStreetMap' });
+  tiles.sat = L.tileLayer(
+    'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    { maxZoom: MAX_ZOOM, maxNativeZoom: 18, attribution: 'Esri World Imagery' });
+  if (!noTiles) tiles[tileMode].addTo(lmap);
+
+  const tb = $('tileBtn');
+  if (tb) tb.onclick = () => {
+    if (lmap.hasLayer(tiles[tileMode])) lmap.removeLayer(tiles[tileMode]);
+    tileMode = tileMode === 'osm' ? 'sat' : 'osm';
+    tiles[tileMode].addTo(lmap);
+    tb.textContent = tileMode === 'osm' ? '위성' : '지도';
+  };
+  if (tb) tb.textContent = tileMode === 'osm' ? '위성' : '지도';
+  const fb = $('followBtn');
+  if (fb) fb.onclick = () => {
+    follow = !follow;
+    fb.classList.toggle('on', follow);
+  };
+  // 손으로 지도를 끌면 따라가기를 끈다 — 보려던 곳에서 튕겨 나가면 못 쓴다.
+  lmap.on('dragstart', () => {
+    if (!follow) return;
+    follow = false;
+    const b = $('followBtn'); if (b) b.classList.remove('on');
+  });
+  trkLine = L.polyline([], { color: '#58a6ff', weight: 2, opacity: .9 }).addTo(lmap);
+  mapReady = true;
+}
+
+// 기체 아이콘 — 기수 방향으로 돈다. divIcon 이라 CSS transform 하나로 끝난다.
+function acIcon(hdg) {
+  return L.divIcon({
+    className: '', iconSize: [22, 22], iconAnchor: [11, 11],
+    html: `<svg width="22" height="22" viewBox="0 0 22 22"
+             style="transform:rotate(${(hdg || 0).toFixed(0)}deg)">
+             <polygon points="11,2 17,19 11,15 5,19" fill="#f0f6fc"
+                      stroke="#0d1117" stroke-width="1.2"/></svg>`,
+  });
+}
+
+function renderMap(s) {
+  if (!mapReady) initMap();
+  if (!mapReady) return;
+  const d = s.d || {};
+
+  // 항적 증분. track_from 이 0 이면 "처음부터 다시" 라는 뜻이다(서버 주석).
+  if (Array.isArray(s.track) && s.track.length) {
+    if (s.track_from === 0) trkPts = [];
+    for (const p of s.track) {
+      // 서버는 [lat, lon, ...] 형태로 준다. 유한한 값만 쓴다.
+      const la = Array.isArray(p) ? p[0] : p && p.lat;
+      const lo = Array.isArray(p) ? p[1] : p && p.lon;
+      if (typeof la === 'number' && typeof lo === 'number'
+          && isFinite(la) && isFinite(lo)) trkPts.push([la, lo]);
+    }
+    if (trkPts.length) trkLine.setLatLngs(trkPts);
+  }
+  if (typeof s.track_n === 'number') trkHave = s.track_n;
+
+  const pos = (typeof d.lat === 'number' && typeof d.lon === 'number'
+               && isFinite(d.lat) && isFinite(d.lon)
+               && (d.lat !== 0 || d.lon !== 0)) ? [d.lat, d.lon] : null;
+
+  const empty = $('mapEmpty');
+  if (empty) empty.hidden = !!pos;
+  if (!pos) return;
+
+  const hdg = (typeof d.hdg === 'number') ? d.hdg : (d.yaw || 0);
+  if (!acMarker) acMarker = L.marker(pos, { icon: acIcon(hdg) }).addTo(lmap);
+  else { acMarker.setLatLng(pos); acMarker.setIcon(acIcon(hdg)); }
+
+  // 홈(H). RTL 이 그리로 가므로 어디인지 보여야 한다.
+  if (Array.isArray(s.home) && s.home.length === 2) {
+    if (!homeMarker) {
+      homeMarker = L.marker(s.home, { icon: L.divIcon({
+        className: '', iconSize: [16, 16], iconAnchor: [8, 8],
+        html: '<div style="width:16px;height:16px;border-radius:50%;'
+            + 'background:rgba(63,185,80,.25);border:1.5px solid #3fb950;'
+            + 'color:#3fb950;font:700 10px/13px ui-monospace;text-align:center">H</div>',
+      }) }).addTo(lmap);
+    } else homeMarker.setLatLng(s.home);
+  }
+
+  // 첫 좌표를 받으면 한 번 확대해 붙는다. 그 뒤에는 따라가기만 한다.
+  if (!renderMap._zoomed) { lmap.setView(pos, 17); renderMap._zoomed = true; }
+  else if (follow) lmap.panTo(pos, { animate: false });
 }
 
 // ── 모터: 기체 형상 위의 넷 ─────────────────────────────────────────
@@ -1048,7 +1174,16 @@ function demoState(n) {
   const gs = fx('gs', 12 + 11 * Math.sin(t / 7));
   return {
     live: true, seq: n, age: 0, packets: n * 5, bytes: n * 300, src: 'demo',
-    track_n: 0, track_from: 0, track: [], home: [37.5, 127.0],
+    // 항적 — 지도를 데모로 검증하려면 점이 있어야 한다. 기체 좌표와 같은
+    // 원을 그리므로 궤적 위에 아이콘이 얹힌다.
+    // 서버와 같은 [lat, lon, alt] 형식. 매 폴 전량을 주되 track_from=0 이라
+    // 프론트가 "처음부터 다시" 로 받는다 — 데모는 짧아서 그래도 된다.
+    track_n: n, track_from: 0,
+    track: Array.from({ length: Math.min(n, 120) }, (_, i) => {
+      const u = (n - Math.min(n, 120) + i) / 5;
+      return [35.181 + Math.sin(u / 20) * 3e-4, 128.554 + Math.cos(u / 20) * 3e-4, 45];
+    }),
+    home: [35.181, 128.554],   // 실제 비행장 — 위성 타일이 의미 있게 보인다
     // 기록 상태. ?rec=on|wait|off 로 세 갈래를 강제해 자체검사가 실측한다.
     // 기본은 실제와 같은 모양 — arm 이면 두 경로로 적는 중.
     rec: fx2('rec') === 'off' ? { on: true, rec: false, waiting: false }
@@ -1063,7 +1198,7 @@ function demoState(n) {
       vtol: (n % 400) > 340 ? 'TRANSITION_TO_FW' : 'MC',
       // ?sys=8 로 비상정지 화면을 띄운다 — 자체검사가 그렇게 확인한다.
       system_status: fx('sys', 4),
-      lat: 37.5 + Math.sin(t / 20) * 3e-4, lon: 127.0 + Math.cos(t / 20) * 3e-4,
+      lat: 35.181 + Math.sin(t / 20) * 3e-4, lon: 128.554 + Math.cos(t / 20) * 3e-4,
            alt: fx('alt', 45 + 40 * Math.sin(t / 9)),
       vx: Math.cos(t / 7) * gs, vy: Math.sin(t / 7) * gs,
       groundspeed: gs, climb: 3 * Math.cos(t / 9), hdg, yaw: hdg,
@@ -1386,14 +1521,18 @@ async function poll() {
     return;
   }
   try {
-    // track=0 — 지도를 뺐으므로 항적은 안 받는다. 긴 비행에서 폴마다 수백 KB 가
-    // 오가는 것을 막는다 (서버는 개수만 알려 준다).
+    // 🔴 항적은 **증분으로** 받는다 (2026-09-10, 지도가 생기면서 바뀌었다).
+    //    예전에는 `track=0` 으로 아예 안 받았다 — 지도가 없었고, 전량을 받으면
+    //    40분 비행에서 폴마다 수백 KB 였기 때문이다. 서버는 `since=` 로 그 뒤의
+    //    점만 주는 길을 이미 갖고 있어(`snapshot(since, want_track)`), 매 폴
+    //    몇 개씩만 오간다. 전량을 다시 받는 것은 서버가 track_from=0 을
+    //    보낼 때뿐이다("처음부터 다시").
     // 🔴 tlog 재생 중에는 **재생 서버**의 상태를 본다. 웹에서 평소 폴하는
     //    `/api/live/state` 는 rim3 가 밀어 올린 **실시간** 값이라, 재생을
     //    틀어도 화면이 지금 기체를 계속 그린다 (2026-09-07 수정).
     //    로컬은 한 프로세스가 둘 다 쥐고 있어 `/api/state` 하나로 끝난다.
     const src = (ON_WEB && pbPlaying) ? '/api/play-state' : API_STATE;
-    const r = await fetch(src + '?track=0', { cache: 'no-store' });
+    const r = await fetch(src + '?since=' + trkHave, { cache: 'no-store' });
     if (r.ok) render(await r.json());
   } catch (e) {
     // 서버가 죽었을 때도 점으로 말한다 — 깜빡이는 빨강.

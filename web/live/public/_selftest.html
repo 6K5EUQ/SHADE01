@@ -45,7 +45,10 @@ function load(q, w, h) {
   return new Promise((res) => {
     const f = document.createElement('iframe');
     f.style.width = (w || 1100) + 'px'; f.style.height = (h || 845) + 'px'; f.style.border = '0';
-    f.src = '/?demo=1' + (q ? '&' + q : '');
+    // notiles=1 — iframe 24개가 각자 외부 타일을 받으러 가면 검사가 끝나지
+    // 않는다 (실측: 180초에도 "검사 중…"). 지도 자체는 그대로 뜨므로
+    // 마커·궤적·레이아웃 검사에는 영향이 없다.
+    f.src = '/?demo=1&notiles=1' + (q ? '&' + q : '');
     f.onload = () => setTimeout(() => res(f), 2600);
     document.body.appendChild(f);
   });
@@ -286,6 +289,35 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
   f = await load('mavg=93&spread=2'); D = f.contentDocument;
   ok('평균 90% 초과는 bad', D.getElementById('sc-mavg').classList.contains('bad'),
      D.getElementById('st-mavg').textContent + '%');
+
+  // ── 지도 ────────────────────────────────────────────────────────
+  // HUD 는 자세를 말하지만 어디 있는지를 말하지 않는다. 그 칸이 실제로
+  // 그려지는지, 좌우 비율이 1:3 인지, GPS 가 없을 때 이유를 말하는지 본다.
+  note('■ 지도 — 위치 감이 이 칸의 존재 이유다');
+  f = await load(''); D = f.contentDocument; W = f.contentWindow;
+  const mapPane = D.getElementById('mapPane'), hudPane = D.getElementById('hudPane');
+  ok('지도 칸이 있다', !!mapPane);
+  if (mapPane && hudPane) {
+    const mb = mapPane.getBoundingClientRect(), hb = hudPane.getBoundingClientRect();
+    ok('지도가 HUD 왼쪽', mb.left < hb.left, `map=${mb.left.toFixed(0)} hud=${hb.left.toFixed(0)}`);
+    // 1:3 — HUD 가 지도의 두 배는 넘어야 "3" 이라 부를 수 있다.
+    ok('HUD 가 지도보다 넓다 (1:3)', hb.width > mb.width * 2,
+       `map=${mb.width.toFixed(0)} hud=${hb.width.toFixed(0)}`);
+    ok('지도가 눌리지 않았다', mb.width > 100 && mb.height > 100,
+       `${mb.width.toFixed(0)}x${mb.height.toFixed(0)}`);
+  }
+  // Leaflet 이 실제로 타일을 붙였는가 — 스크립트가 안 실려도 칸은 남으므로
+  // 칸 존재만으로는 확인이 안 된다.
+  const panes = D.querySelectorAll('#lmap .leaflet-tile-pane');
+  ok('Leaflet 이 붙었다', panes.length > 0, `tile-pane ${panes.length}개`);
+  // 데모는 좌표를 주므로 기체 아이콘과 궤적이 있어야 한다.
+  ok('기체 아이콘이 그려진다',
+     D.querySelectorAll('#lmap .leaflet-marker-icon').length > 0,
+     `marker ${D.querySelectorAll('#lmap .leaflet-marker-icon').length}개`);
+  ok('궤적 선이 그려진다',
+     D.querySelectorAll('#lmap path.leaflet-interactive, #lmap path').length > 0);
+  // GPS 가 없으면 왜 비었는지 말해야 한다 — 회색판만 남으면 고장으로 읽힌다.
+  ok('GPS 있으면 안내가 숨는다', D.getElementById('mapEmpty').hidden === true);
 
   // ── 좁은 화면 ───────────────────────────────────────────────────
   note('■ 좁은 화면 — 계기가 사라지는 건 계기가 틀린 것 다음으로 나쁘다');
