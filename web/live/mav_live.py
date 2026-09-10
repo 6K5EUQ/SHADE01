@@ -921,6 +921,24 @@ def _link_kind(src):
     return 'ELRS' if ip.startswith('10.0.0.') else 'USB'
 
 
+def _push_track(st, lat, lon, alt):
+    """항적에 한 점 쌓는다. 유효한 좌표일 때만 — fix 전에는 0,0 이 들어온다.
+
+    🔴 GLOBAL_POSITION_INT 와 GPS_RAW_INT **양쪽에서** 부른다 (2026-09-10).
+       예전에는 전자 안에만 있었는데, 이 기체는 그 스트림이 안 와서
+       (실측: GPS_RAW 201회 / GLOBAL 0회) 궤적이 한 점도 안 쌓였다.
+    """
+    if not (lat or lon):
+        return
+    pt = [round(lat, 7), round(lon, 7), round(alt, 1) if alt is not None else 0.0]
+    if st._last_pt is None or _moved(st._last_pt, pt) > TRACK_MIN_MOVE:
+        st.track.append(pt)
+        st.track_total += 1              # 앞을 버려도 계속 는다 (증분 전송의 기준)
+        st._last_pt = pt
+        if len(st.track) > TRACK_MAX:
+            del st.track[:len(st.track) - TRACK_MAX]
+
+
 def handle(msg, st):
     """MAVLink 메시지 하나를 상태에 반영한다."""
     t = msg.get_type()
@@ -949,6 +967,8 @@ def handle(msg, st):
     elif t == 'GLOBAL_POSITION_INT':
         lat, lon = msg.lat / 1e7, msg.lon / 1e7
         d['lat'], d['lon'] = lat, lon
+        # EKF 를 거친 값이라 GPS_RAW_INT 폴백보다 우선한다 (아래 참조).
+        d['lat_src'] = 'global'
         d['alt_msl'] = msg.alt / 1000.0
         d['alt'] = msg.relative_alt / 1000.0          # 홈 기준 상대고도
         d['alt_src'] = 'gps'
@@ -957,15 +977,7 @@ def handle(msg, st):
         d['climb'] = -msg.vz / 100.0
         d['hdg'] = msg.hdg / 100.0 if msg.hdg != 65535 else None
 
-        # 유효한 좌표일 때만 항적에 쌓는다. fix 전에는 0,0 이 들어온다.
-        if lat or lon:
-            pt = [round(lat, 7), round(lon, 7), round(d['alt'], 1)]
-            if st._last_pt is None or _moved(st._last_pt, pt) > TRACK_MIN_MOVE:
-                st.track.append(pt)
-                st.track_total += 1          # 앞을 버려도 계속 는다 (증분 전송의 기준)
-                st._last_pt = pt
-                if len(st.track) > TRACK_MAX:
-                    del st.track[:len(st.track) - TRACK_MAX]
+        _push_track(st, lat, lon, d.get('alt'))
 
     elif t == 'ATTITUDE':
         d['roll'] = math.degrees(msg.roll)
@@ -1038,6 +1050,23 @@ def handle(msg, st):
         st.rec_gps['fix'] = msg.fix_type
         st.rec_gps['sats'] = msg.satellites_visible
         d['eph'] = msg.eph / 100.0 if msg.eph != 65535 else None
+
+        # 🔴 좌표 폴백 (2026-09-10). 지도가 빈 판이던 원인이다.
+        #    lat/lon 은 GLOBAL_POSITION_INT 에서만 채우고 있었는데, 이 기체는
+        #    **그 스트림이 안 온다** (실측: GPS_RAW_INT 201회 / GLOBAL 0회).
+        #    fix 3·위성 8·eph 3.14m 로 GPS 는 멀쩡히 잡혀 있는데도 화면에는
+        #    "GPS 대기 중" 만 떴다 — 계기는 fix 를, 지도는 lat 을 보고 있어서
+        #    같은 화면이 서로 다른 말을 했다.
+        #
+        #    GPS_RAW_INT 의 좌표는 EKF 를 거치지 않은 **생 수신기 값**이라
+        #    GLOBAL_POSITION_INT 보다 덜 매끄럽다. 그래서 **덮지 않고 채우기만**
+        #    한다 — GLOBAL 이 오는 기체에서는 그쪽이 계속 이긴다.
+        if msg.fix_type >= 2 and (msg.lat or msg.lon) \
+                and d.get('lat_src') != 'global':
+            d['lat'] = msg.lat / 1e7
+            d['lon'] = msg.lon / 1e7
+            d['lat_src'] = 'gps_raw'
+            _push_track(st, d['lat'], d['lon'], d.get('alt'))
 
     elif t == 'VIBRATION':
         d['vibe'] = [round(msg.vibration_x, 2), round(msg.vibration_y, 2),

@@ -88,6 +88,43 @@ def _pct_after(seq):
     return st.d.get('batt_pct')
 
 
+def _gps_raw(lat, lon, fix=3, sats=8):
+    return _M('GPS_RAW_INT', lat=int(lat * 1e7), lon=int(lon * 1e7),
+              fix_type=fix, satellites_visible=sats, eph=314)
+
+
+def _global_pos(lat, lon):
+    return _M('GLOBAL_POSITION_INT', lat=int(lat * 1e7), lon=int(lon * 1e7),
+              alt=50000, relative_alt=10000, vx=0, vy=0, vz=0, hdg=9000)
+
+
+def t_gps_coords():
+    """🔴 좌표는 GPS_RAW_INT 만 와도 채워져야 한다 (2026-09-10).
+
+    lat/lon 을 GLOBAL_POSITION_INT 에서만 채우고 있었는데, 이 기체는 그
+    스트림이 안 온다 — 실측 GPS_RAW 201회 / GLOBAL 0회. fix 3·위성 8·
+    eph 3.14m 로 GPS 는 멀쩡한데 지도만 "GPS 대기 중" 이었다. 계기는 fix 를,
+    지도는 lat 을 보고 있어 같은 화면이 서로 다른 말을 했다.
+    """
+    st = M.State()
+    M.handle(_gps_raw(35.1795, 128.5553), st)
+    check('GPS_RAW 만 와도 lat 이 채워진다', round(st.d.get('lat') or 0, 4), 35.1795)
+    check('GPS_RAW 만 와도 항적이 쌓인다', st.track_total >= 1, True)
+
+    # GLOBAL 이 오는 기체에서는 그쪽이 이긴다 — EKF 를 거친 값이라 더 매끄럽다.
+    st2 = M.State()
+    M.handle(_gps_raw(35.0, 128.0), st2)
+    M.handle(_global_pos(36.0, 129.0), st2)
+    check('GLOBAL 이 GPS_RAW 를 덮는다', round(st2.d.get('lat') or 0, 3), 36.0)
+    M.handle(_gps_raw(35.0, 128.0), st2)
+    check('GLOBAL 뒤의 GPS_RAW 는 못 덮는다', round(st2.d.get('lat') or 0, 3), 36.0)
+
+    # fix 가 없으면 좌표를 쓰지 않는다 — 0,0 이 대서양 한가운데로 찍힌다.
+    st3 = M.State()
+    M.handle(_gps_raw(0, 0, fix=0, sats=0), st3)
+    check('fix 없으면 좌표를 안 쓴다', st3.d.get('lat'), None)
+
+
 def t_battery_pct():
     check('SYS 먼저 와도 BATTERY 가 이긴다',
           _pct_after([_sys_status(80), _batt_status(62)]), 62)
@@ -241,7 +278,7 @@ def t_prune():
 
 
 if __name__ == '__main__':
-    for fn in (t_arbitration, t_battery_pct, t_parse, t_toggle, t_recording,
+    for fn in (t_arbitration, t_gps_coords, t_battery_pct, t_parse, t_toggle, t_recording,
                t_recording_keeps_takeoff, t_prune):
         fn()
     print('\n%d PASS · %d FAIL' % (PASS, FAIL))
