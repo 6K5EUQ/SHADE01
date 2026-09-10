@@ -21,17 +21,33 @@
 """
 
 import argparse
+import http.client
 import json
 import os
 import socket
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
-# 서버로 올리는 주기. 1초면 웹에서 충분히 "지금" 으로 읽힌다. 더 잦게 하면
-# LTE 로 올릴 때 데이터만 먹는다 (현장에서 테더링을 쓴다).
-DEFAULT_INTERVAL = 1.0
+# 서버로 올리는 주기.
+#
+# 🔴 1.0 → 0.1 (2026-09-11). 공개 화면이 1Hz 로 갱신돼 기체를 90° 꺾으면
+#    30/60/90 세 프레임만 잡혔다 — 조종자 보고. FC 는 USB 로 ATTITUDE 를
+#    100Hz 로 주고 트래커는 15.6Hz 로 내주는데, 이 중계가 1Hz 로 깎고 있었다.
+#    브라우저 폴(POLL_MS)만 올려도 소용없다 — 소스가 1Hz 면 20번 중 19번이
+#    같은 값이다.
+#
+# ⚠️ 데이터를 먹는다. 현장은 LTE 테더링이다 — 실측 프레임 1139 B (항적 증분
+#    포함, gzip 전) 이므로 10Hz 면 **약 11 KB/s = 시간당 40 MB** 다. 1Hz 때는
+#    시간당 4 MB 였다. 한 편이 10~20분이니 편당 7~14 MB 쯤 된다.
+#    데이터가 아까우면 유닛에서 `--interval 0.2` (5Hz) 로 낮춰라 — 조종기
+#    텔레메트리와 같은 급이고 체감 차이는 크지 않다.
+#
+# ⚠️ 0.1 보다 더 내리지 마라. rim3 LTE 실측 왕복이 keep-alive 로 **104ms**
+#    다. 주기가 그보다 짧으면 루프가 쉬지 못하고 요청만 쌓인다.
+DEFAULT_INTERVAL = 0.1
 
 # 로컬 트래커에서 읽을 때/서버로 올릴 때의 타임아웃.
 LOCAL_TIMEOUT = 3.0
@@ -85,17 +101,61 @@ def _apply_pin(base, want):
         pass
 
 
+# 🔴 연결을 재사용한다 (2026-09-11). urlopen 은 POST 마다 TCP+TLS 를 새로
+#    연다 — rim3 LTE 실측으로 왕복 **211ms** 였다. 0.1초 주기에서는 왕복이
+#    주기보다 길어 루프가 쉬지 못하고, 실효가 10Hz 가 아니라 ~4.7Hz 가 된다.
+#    keep-alive 로 재면 **104ms** 다 (같은 회선, 같은 시각).
+_conn = {'c': None, 'host': None}
+
+
+def _conn_get(to):
+    """이 프로세스가 들고 있는 연결. 없으면 연다."""
+    host = urllib.parse.urlsplit(to).netloc or to
+    if _conn['c'] is None or _conn['host'] != host:
+        _conn_close()
+        _conn['c'] = http.client.HTTPSConnection(host, timeout=PUSH_TIMEOUT)
+        _conn['host'] = host
+    return _conn['c']
+
+
+def _conn_close():
+    if _conn['c'] is not None:
+        try:
+            _conn['c'].close()
+        except Exception:
+            pass
+    _conn['c'] = None
+
+
 def _push(to, key, payload):
-    """서버로 올린다. 성공하면 서버 응답(dict), 실패하면 예외."""
+    """서버로 올린다. 성공하면 서버 응답(dict), 실패하면 예외.
+
+    🔴 연결이 끊겨 있으면 한 번만 다시 열고 재시도한다. 서버·중간 장비가
+       idle 연결을 끊는 것은 정상이고, 그때마다 예외를 올리면 호출부가
+       backoff 를 걸어 중계가 느려진다.
+    """
     body = json.dumps(payload, separators=(',', ':')).encode('utf-8')
-    req = urllib.request.Request(
-        to.rstrip('/') + '/api/live/push', data=body, method='POST',
-        headers={'Content-Type': 'application/json',
-                 'User-Agent': USER_AGENT,
-                 'X-Live-Key': key})
-    with urllib.request.urlopen(req, timeout=PUSH_TIMEOUT) as r:
-        raw = r.read().decode('utf-8') or '{}'
-        return json.loads(raw)
+    headers = {'Content-Type': 'application/json',
+               'User-Agent': USER_AGENT,
+               'X-Live-Key': key}
+    for attempt in (0, 1):
+        try:
+            c = _conn_get(to)
+            c.request('POST', '/api/live/push', body=body, headers=headers)
+            r = c.getresponse()
+            raw = r.read().decode('utf-8') or '{}'
+            if r.status >= 400:
+                # HTTPError 로 올려야 호출부의 "키가 맞나?" 갈래가 그대로 산다.
+                raise urllib.error.HTTPError(
+                    to + '/api/live/push', r.status, r.reason, r.headers, None)
+            return json.loads(raw)
+        except urllib.error.HTTPError:
+            raise
+        except (http.client.HTTPException, OSError):
+            _conn_close()
+            if attempt:
+                raise
+    raise RuntimeError('unreachable')
 
 
 def main():
