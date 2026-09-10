@@ -256,6 +256,25 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
   // 값 아래 <i> 는 걷어냈다 — 남아 있으면 단위가 두 곳에 보인다.
   ok('값 아래 단위는 없다', D.querySelectorAll('#strip i').length === 0,
      `${D.querySelectorAll('#strip i').length}개`);
+  // 🔴 곁눈질로 읽는 계기다. 칸이 110px 인데 값이 36px 이던 시절(여백 58px)로
+  //    돌아가지 않게 잡는다 (2026-09-10). 값이 칸 높이의 1/3 은 넘어야 한다.
+  const fill = (id) => {
+    const c = D.getElementById(id);
+    return c.querySelector('b').getBoundingClientRect().height
+         / c.getBoundingClientRect().height;
+  };
+  ok('값이 칸을 충분히 채운다 (고도)', fill('sc-alt') > 0.33,
+     (fill('sc-alt') * 100).toFixed(0) + '%');
+  ok('값이 칸을 충분히 채운다 (편차)', fill('sc-mspread') > 0.3,
+     (fill('sc-mspread') * 100).toFixed(0) + '%');
+  // 자릿수가 많은 값이 칸을 넘지 않는가 — 넘으면 잘리거나 줄바꿈된다.
+  const wfit = (id) => {
+    const c = D.getElementById(id);
+    return c.querySelector('b').getBoundingClientRect().width
+         <= c.getBoundingClientRect().width;
+  };
+  ok('값이 칸 폭을 안 넘는다', ['sc-alt', 'sc-spd', 'sc-cur', 'sc-eph', 'sc-mspread']
+     .every(wfit));
   // 편차가 평소 범위면 색이 없어야 한다 — 평소에 색이 보이면 색이 신호가 아니게 된다.
   ok('평소 편차엔 색이 없다',
      !D.getElementById('sc-mspread').classList.contains('warn') &&

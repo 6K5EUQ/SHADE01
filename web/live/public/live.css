@@ -180,7 +180,10 @@ main {
 #sc-mavg    { grid-area: 3 / 10 / 5 / 13; }
 #strip .sc {
   background: var(--panel);
-  padding: 10px 12px 12px;
+  /* 🔴 여백을 줄여 값에 준다 (2026-09-10). 실측 110px 칸에 값이 36px,
+     세로 여백이 58px 이나 비어 있었다 — 곁눈질로 읽는 계기라 숫자가
+     클수록 좋다. */
+  padding: 4px 6px 6px;
   /* 라벨·값을 세로로 쌓고 전부 가운데. 값과 단위만 한 줄에 나란히 선다. */
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
@@ -189,7 +192,7 @@ main {
 /* 값 + 단위 한 줄. 단위가 값 옆에 붙되 가운데 정렬을 안 깨뜨린다. */
 #strip .sc > b { display: inline-block; }
 #strip .sc[hidden] { display: none; }
-#strip .k { font-size: 11px; color: var(--muted);
+#strip .k { font-size: 13px; color: var(--muted);
             letter-spacing: .3px; white-space: nowrap; text-align: center; }
 /* 단위는 라벨 옆 괄호 안에 (2026-09-10). 값 아래 따로 두면 세로 공간을
    먹고, 값에서 눈을 떼야 단위를 읽는다. 이름과 같은 줄이면 한 번에 읽힌다. */
@@ -197,7 +200,9 @@ main {
 /* 곁눈질로 읽는 값이라 크게. tabular-nums 라 자릿수가 바뀌어도 안 흔들린다.
    칸이 세로로 커졌으니 글자도 같이 키운다 — 안 키우면 여백만 늘어난다. */
 #strip b {
-  font-family: var(--mono); font-size: 34px; font-weight: 700; line-height: 1.05;
+  /* 34 → 46px. 칸 265×110 에 82×36 이던 값을 키운다. 자릿수가 가장 많은
+     "위치 오차"(0.19)와 "속도"(22.9)가 기준이다 — 4자리가 안 눌려야 한다. */
+  font-family: var(--mono); font-size: 46px; font-weight: 700; line-height: 1.02;
   font-variant-numeric: tabular-nums; color: var(--text);
   min-width: 0; text-align: center;
 }
@@ -270,7 +275,8 @@ main {
    원 안에서 대비가 떨어져 숫자가 안 읽힌다. 색은 테두리·채움이 낸다. */
 #mframe .mv.warn, #mframe .mv.bad { fill: #fff; }
 /* 요약 숫자는 크게. 칸이 좁아진 만큼 글자로 채운다 — 곁눈질로 읽는 값이다. */
-#sc-mspread b, #sc-mavg b { font-size: 40px; }
+/* 모터 요약 칸은 150px 로 더 높다 (세로 여백 91px 이 비어 있었다). */
+#sc-mspread b, #sc-mavg b { font-size: 52px; }
 #sc-mspread .k, #sc-mavg .k { color: var(--dim); }
 
 /* ── 헤더 배지 ───────────────────────────────────────────── */
