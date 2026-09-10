@@ -29,7 +29,8 @@
 const ON_WEB = location.pathname.startsWith('/live');
 const API_STATE = ON_WEB ? '/api/live/state' : '/api/state';
 
-const POLL_MS = 200;
+const POLL_MS = 50;                   // 화면 폴 20Hz — 아래 CHART_EVERY 주석 참조
+const CHART_HZ = 5;                   // 차트 격자는 5Hz 로 유지한다
 
 // ── 계기 스케일 상수. 빌드와 layout() 이 같은 값을 읽는다 (두 벌이 되면 어긋난다) ──
 const PPD_PITCH = 6.0;                // 피치 px/도
@@ -68,8 +69,13 @@ let hoverT = null;                    // 커서가 붙잡고 있는 시각 (없�
 //
 // 폴 한 번이 격자 한 칸이다. 값이 없으면 null 을 넣는다 — 건너뛰면 시간축이
 // 밀려 20분 뒤 그래프가 실제보다 짧아진다.
-const HZ = 1000 / POLL_MS;            // 5Hz
+// 🔴 격자 주파수는 POLL_MS 에 매달지 마라. 2026-09-11 에 폴을 5Hz→20Hz 로
+//    올렸는데, 여기까지 따라 올라가면 1시간 버퍼가 18000→72000 칸이 되고
+//    차트 시간축이 4배로 늘어난다. 격자는 벽시계 5Hz 로 고정한다.
+const HZ = CHART_HZ;                  // 5Hz
 const KEEP_N = 3600 * HZ;             // 1시간치까지 들고 있는다
+// 폴 몇 번에 한 칸이냐 — 20Hz 폴 / 5Hz 격자 = 4
+const CHART_EVERY = Math.max(1, Math.round(1000 / POLL_MS / CHART_HZ));
 const trk = { hz: HZ, n: 0, dur: 0, modes: [], events: [] };
 let lastMode = null;
 let lastSeq = -1, lastSeqPoll = 0, pollN = 0;
@@ -768,17 +774,22 @@ function render(s) {
   // 🔴 재생 중에는 한 칸씩 쌓지 않는다. pbFillCharts() 가 0..t 구간을 통째로
   //    다시 만들어 두었으므로, 여기서 또 밀어 넣으면 프레임마다 격자가 하나씩
   //    늘어 차트 시간축이 실제 로그의 두 배로 벌어진다.
-  if (!s.playback) pushSample(s.live ? d : {});
+  // 🔴 폴이 20Hz 라도 격자는 5Hz 다 — 매 폴 밀어 넣으면 시간축이 4배로 벌어진다.
+  if (!s.playback && pollN % CHART_EVERY === 0) pushSample(s.live ? d : {});
   // 5Hz 로 단 3개를 전부 다시 그리면 초당 15회 SVG 재생성이다. 2.5Hz 로
   // 줄여 HUD 에 CPU 를 남긴다. 처음 몇 칸만 매번 그려 첫 화면이 안 빈다.
-  if (trk.n < 4 || pollN % 2 === 0) renderCharts();
+  if (trk.n < 4 || pollN % (CHART_EVERY * 2) === 0) renderCharts();
 
   // ③ 조기반환 — 여기부터는 새 데이터가 있을 때만.
   if (!changed) return;
 
   // ── 자세. 🔴 roll/pitch 에 CSS transition 이나 보간을 넣지 마라 —
   //    주 자세계에 100~200ms 지연이 생겨 계기가 과거를 보여준다.
-  //    데이터가 5Hz 니 화면도 5Hz 다. 끊겨 보이면 고칠 곳은 텔레메트리 레이트지 화면이 아니다.
+  //    ⚠️ 여기 있던 「데이터가 5Hz 니 화면도 5Hz 다. 끊겨 보이면 고칠 곳은
+  //    텔레메트리 레이트지 화면이다」는 **틀렸다** (2026-09-11 정정). USB 는
+  //    ATTITUDE 를 100Hz 로 준다 — 실측. 끊긴 건 링크가 아니라 POLL_MS=200 이
+  //    그걸 5Hz 로 버리고 있어서였다. ELRS 에서 extras.txt 로 레이트를 올려도
+  //    화면이 안 부드러워진 이유가 이것이다. 폴을 20Hz 로 올려 고쳤다.
   const roll = d.roll || 0, pitch = d.pitch || 0;
   // 기수를 들면(pitch +) 수평선은 **아래로** 내려간다. 부호를 빼먹으면 계기가 거꾸로 돈다.
   const rt = `rotate(${(-roll).toFixed(2)})`, pt = `translate(0,${(pitch * PPD_PITCH).toFixed(1)})`;
@@ -883,7 +894,7 @@ function render(s) {
     for (let i = msgs.length - 1; i >= 0; i--) if (keyOf(msgs[i]) === lastMsgKey) { start = i + 1; break; }
     const SEV = { EMERG: 1, ALERT: 1, CRIT: 1, ERROR: 1, WARN: 1 };
     for (let i = msgs.length - 1; i >= start; i--) {
-      if (SEV[msgs[i].sev]) { warnText = msgs[i].text.slice(0, 48); warnUntil = pollN + 75; break; }
+      if (SEV[msgs[i].sev]) { warnText = msgs[i].text.slice(0, 48); warnUntil = pollN + 15000 / POLL_MS; break; }
     }
     lastMsgKey = newKey;
   }
@@ -1396,7 +1407,8 @@ async function pbStart(name) {
       lastMode = null;
       pbPlay();
       if (ulpb.timer) clearInterval(ulpb.timer);
-      ulpb.timer = setInterval(pbTick, POLL_MS);
+      // 재생은 로그 격자(5Hz)에 물려 있다. 화면 폴 주기와 무관하게 200ms 다.
+      ulpb.timer = setInterval(pbTick, 1000 / CHART_HZ);
       return;
     }
     if (info.state === 'error') {
@@ -1578,7 +1590,11 @@ async function poll() {
   // 재생 중에는 실시간을 긁지 않는다. pbTick 이 화면을 그린다.
   if (ulpb.on) return;
   if (DEMO) {
-    render(demoState(demoN++));
+    // 🔴 demoState 의 시간축은 5Hz 폴 카운트로 짜여 있다 (n % 300 = 60초 등).
+    //    폴을 20Hz 로 올리면서 그대로 두면 데모가 4배 빨리 흘러, 자체검사가
+    //    2.6초에 보는 화면이 달라진다 (실측: 「Preflight Fail」 경고창이 미리
+    //    떠서 「정상 상태에 경고색 0건」이 FAIL 났다). 벽시계로 환산해 넘긴다.
+    render(demoState(Math.floor(demoN++ * POLL_MS / (1000 / CHART_HZ))));
     setTimeout(poll, POLL_MS);
     return;
   }
