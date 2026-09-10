@@ -27,10 +27,6 @@ main {
    이 분할과 무관하게 hudPane 폭을 그대로 쓴다.
    지도 하한 130px = 궤적과 기체 아이콘이 겹쳐 보이지 않는 최소.
    HUD 하한 420px = 좌우 테이프가 중앙 피치 사다리 라벨을 안 먹는 최소. */
-#hudTop {
-  display: grid; grid-template-columns: minmax(130px, 1fr) minmax(420px, 3fr);
-  min-width: 0; min-height: 0;
-}
 #mapPane { min-width: 0; min-height: 0; }
 
 /* ── 지도 ─────────────────────────────────────────────────────
@@ -39,9 +35,10 @@ main {
   position: relative; overflow: hidden;
   border-right: 1px solid var(--border); background: #0d1117;
 }
-/* 지도 칸이 이제 HUD 줄 안이라 hudPane 의 어두운 바탕과 붙는다.
-   좌측도 같은 폭 — 창 가장자리에 밀착돼 답답하다는 지적 (2026-09-10). */
-#hudTop > #mapPane { border-top: 4px solid #05070a; border-left: 4px solid #05070a; }
+/* 지도는 우측 칸 위쪽이다 (2026-09-10). HUD 와 같은 높이를 갖도록
+   #chartPane 이 행 높이를 좌측 #hudPane 과 같은 비율로 나눈다.
+   위쪽 4px 는 #hudBox 의 border-top 과 같은 값 — 두 칸의 그림이 같은 y 에서 시작한다. */
+#mapPane { border-top: 4px solid #05070a; border-bottom: 1px solid var(--border); }
 #lmap { width: 100%; height: 100%; background: #0d1117; }
 /* 🔴 타일의 채도·밝기를 낮춘다 (2026-09-10). 계기판 전체가 무채색 + 경고색만
    쓰는데 위성 사진만 채도가 높아 눈이 자꾸 그쪽으로 끌렸다 — 「색이 보이는
@@ -302,8 +299,14 @@ button.on { background: #1f6feb; border-color: #1f6feb; color: #fff; }
 a.btn { display: inline-block; text-decoration: none; }
 
 /* ── 차트 단 ─────────────────────────────────────────────── */
-#chartPane { position: relative; display: grid; grid-template-rows: 1fr 124px; }
-#chartPane.msgcollapsed { grid-template-rows: 1fr 26px; }
+/* 🔴 좌측 #hudPane 과 **같은 행 비율**(1.32fr : 1fr)을 쓴다. 그래야 지도
+   아랫선이 HUD 아랫선과 정확히 맞는다 (요구: HUD 와 같은 수직 범위).
+   하단 조작 바는 행을 차지하지 않는다 — 행에 넣으면 그 26px 만큼 우측만
+   짧아져 두 아랫선이 어긋난다 (실측 15px). 차트 위에 겹쳐 띄운다. */
+#chartPane { position: relative; display: grid; grid-template-rows: 1.32fr 1fr; }
+#chartPane > .msgs { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; }
+/* 겹친 바가 마지막 차트의 x축 눈금을 가리지 않게 그만큼 비워 둔다 */
+#charts { padding-bottom: 26px; }
 /* 켠 단이 세로를 나눠 갖는다 — 3단이면 한 화면에 딱 차고, 더 켜면 최소
    높이(150px) 아래로는 안 줄어 스크롤이 생긴다. 고정 높이로 두면 단을
    1~2개만 켰을 때 아래가 통째로 빈다. */
@@ -357,16 +360,16 @@ a.btn { display: inline-block; text-decoration: none; }
 .win { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 5px; }
 .win select { padding: 3px 6px; font-size: 11px; }
 
-/* ── FC 메시지 서랍 ──────────────────────────────────────── */
+/* ── 하단 조작 바 ────────────────────────────────────────
+   메시지 목록은 뺐다 (2026-09-10). 링크 상태·기록·재생·시간창은 조작이라 남는다. */
 .msgs {
   border-top: 1px solid var(--border); overflow: hidden; display: grid;
-  grid-template-rows: 26px 1fr; background: var(--panel);
+  grid-template-rows: 26px; background: var(--panel);
 }
 .msgs .hd {
   display: flex; align-items: center; gap: 8px; padding: 0 8px;
   font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border);
 }
-.msgs .hd .cnt { color: var(--bad); font-weight: 700; }
 /* 기록 상태 배지. 적는 중에는 붉게 깜빡인다 — 비디오 장비의 관습을 따른다.
    실내대기는 노랑(경고가 아니라 "아직") 이다. */
 .msgs .hd #recSt {
@@ -413,25 +416,6 @@ a.btn { display: inline-block; text-decoration: none; }
 .dot.warn { color: var(--warn); }
 .dot.bad  { color: var(--bad); animation: dotBlink 1s step-end infinite; }
 @keyframes dotBlink { 50% { opacity: .25; } }
-/* 스크롤은 살리고 **막대만** 감춘다 (2026-09-09). 서랍이 좁아 막대가
-   글자 폭을 먹고, 어두운 판 위에서 밝은 띠 하나가 계속 눈에 걸린다.
-   기능을 없애면 안 된다 — 새 메시지가 오면 아래로 따라가되(renderMsgs),
-   위로 올려 지난 것을 읽는 길은 남아 있어야 한다.
-   Firefox 는 scrollbar-width, WebKit 계열은 ::-webkit-scrollbar 를 쓴다. */
-#msgs { overflow-y: auto; padding: 4px 8px; min-height: 0; scrollbar-width: none; }
-#msgs::-webkit-scrollbar { width: 0; height: 0; }
-#msgs div {
-  font-family: var(--mono); font-size: 11px; line-height: 1.5;
-  padding: 1px 0; border-bottom: 1px solid var(--border);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-#msgs div:last-child { border-bottom: 0; }
-#msgs .sev { color: var(--muted); margin-right: 6px; }
-#msgs .s-EMERG, #msgs .s-ALERT, #msgs .s-CRIT, #msgs .s-ERROR { color: var(--bad); }
-#msgs .s-WARN { color: var(--warn); }
-#msgs .s-NOTICE { color: var(--accent); }
-#msgs .empty { color: var(--muted); border: 0; }
-
 /* 좁은 화면: HUD 위 · 차트 아래. DOM 순서가 이미 HUD 먼저라 order 속임수가 필요 없다. */
 @media (max-width: 900px) {
   html, body { overflow: auto; }
@@ -440,15 +424,14 @@ a.btn { display: inline-block; text-decoration: none; }
   /* 좁으면 지도와 HUD 를 위아래로 쌓는다. 가로로 두면 둘 다 못 쓸 만큼 좁다.
      🔴 hudTop 의 **행 높이 안에서** 나눈다 — 바깥에 높이를 더하면 스트립이
      화면 밖으로 밀린다 (자체검사 「좁아도 스트립이 화면 안」 이 잡는다). */
-  #hudTop { grid-template-columns: 1fr; grid-template-rows: 34% 66%; }
-  #mapPane { border-right: 0; border-bottom: 1px solid var(--border); }
   #hudPane { border-right: 0; border-bottom: 1px solid var(--border); }
   /* 🔴 높이는 자식(#hudBox)이 아니라 **행**에 준다. 자식에 56vh 를 주면
      `1fr` 행이 그만큼 안 자라 hudBox 가 제 부모를 넘치고, 뒤따르는 차트
      패널이 그 위를 덮어 전류·상태 밴드와 숫자 스트립이 통째로 가려진다
      (실측: hudPane 447px 안에 hudBox 560px). 행을 키우면 자식은 따라온다. */
   #hudPane { grid-template-rows: minmax(360px, 56vh) auto; }
-  #chartPane { height: 60vh; grid-template-rows: 1fr 96px; }
+  /* 좁으면 지도와 차트를 위아래로 쌓는다 — 지도는 고정 높이, 나머지가 차트. */
+  #chartPane { height: 92vh; grid-template-rows: minmax(220px, 34vh) 1fr 26px; }
 }
 
 /* ── 재생 바 ────────────────────────────────────────────────────────

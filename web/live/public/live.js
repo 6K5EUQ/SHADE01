@@ -419,14 +419,14 @@ const CHARTS = [
       { key: 'spd', color: 'var(--c-spd)', label: 'GPS 속도', axis: 'left', weight: 2, unit: 'm/s', minSpan: 4, nonNeg: true },
       { key: 'aspd', color: '#a371f7', label: '피토관 속도(고장)', axis: 'left', dim: true, unit: 'm/s', minSpan: 4, nonNeg: true }],
     thresholds: [{ v: 10, label: '10 m/s', color: '#d29922' }] },
-  { id: 'k-pwr', title: '전력', on: true, series: [
+  { id: 'k-pwr', title: '전력', on: false, series: [
       { key: 'cur', color: 'var(--c-cur)', label: '전류', axis: 'left', weight: 2, unit: 'A', minSpan: 10, nonNeg: true },
       // 6S 는 만충 25.2V·저전압 21.0V 라 폭이 4V 면 비행 전체가 담긴다.
       { key: 'volt', color: 'var(--c-volt)', label: '전압', axis: 'right', unit: 'V', minSpan: 2 }],
     // 60A — 조종자가 정한 경계 (2026-09-10). 45A(XT90 연속 정격)는 호버만 해도
     // 넘겨서 선이 늘 그래프 아래 깔려 있었다. 60 은 9/5 최대 90.2A 로 가는 길목이다.
     thresholds: [{ v: 60, label: '60A', color: '#d29922' }] },
-  { id: 'k-att', title: '자세', on: true, series: [
+  { id: 'k-att', title: '자세', on: false, series: [
       { key: 'roll', color: '#d55e00', label: '롤', axis: 'left', weight: 2, unit: '°', minSpan: 20 },
       { key: 'pitch', color: '#e69f00', label: '피치', axis: 'left', weight: 2, unit: '°', minSpan: 20 }] },
   { id: 'k-vib', title: '진동', on: false, series: [
@@ -942,7 +942,6 @@ function render(s) {
   // 가 판정이라, 부하를 원의 크기·밝기로 주고 튄 놈에만 색을 얹는다.
   renderMotors(d.motors || {});
 
-  renderMsgs(msgs);
   renderMap(s);
 }
 
@@ -973,7 +972,9 @@ const MAX_ZOOM = 20;
 //
 //    ⚠️ Esri 위성은 z18 까지만 실제 타일을 준다 — z19 는 마지막 타일을
 //    확대한 것이라 흐리다. 궤적·기체 아이콘은 벡터라 선명하다.
-const ZOOM_50M = 19;
+// 🔴 지도 칸이 우측 넓은 칸으로 옮겨지며(2026-09-10) 같은 z19 에서 가로 실거리가
+//    74m → 115m 로 늘었다. 한 단 올려 "화면 가로 100m 이내" 규칙을 지킨다.
+const ZOOM_50M = 20;
 // 🔴 위성 사진만 쓴다 (2026-09-10). OSM 은 흰 바탕이라 어두운 계기판 옆에서
 //    그 칸만 밝게 튀고, 비행장에서는 활주로·장애물이 지도보다 사진에 더 잘
 //    보인다. 전환 버튼도 없앴다 — 좁은 칸에서 버튼이 궤적을 가린다.
@@ -1221,41 +1222,6 @@ function renderMotors(mt) {
   // 평균은 "얼마나 힘든가" 다. 호버 65% 가 이 기체의 정상(MPC_THR_HOVER=0.65)
   // 이라, 85% 를 넘으면 추력 여유가 얼마 안 남았다는 뜻이다.
   sc('sc-mavg', avg == null ? '' : avg > 90 ? 'bad' : avg > 85 ? 'warn' : '');
-}
-
-// 🔴 증분 append. 길이 비교로 판정하면 서버의 messages[-40:] 슬라이딩 창 때문에
-//    40에서 영원히 멈춘다. 마지막으로 렌더한 키를 배열에서 찾아 그 뒤만 붙인다.
-let msgLastKey = '', msgCrit = 0;
-function renderMsgs(msgs) {
-  const box = $('msgs');
-  if (!msgs.length) {
-    if (!box.dataset.init) { box.innerHTML = '<div class="empty">FC 메시지 없음</div>'; box.dataset.init = '1'; }
-    return;
-  }
-  const keyOf = (m) => m.t + '|' + m.text;
-  const last = keyOf(msgs[msgs.length - 1]);
-  if (last === msgLastKey) return;
-
-  let start = 0, found = false;
-  for (let i = msgs.length - 1; i >= 0; i--) if (keyOf(msgs[i]) === msgLastKey) { start = i + 1; found = true; break; }
-  if (!found) { box.innerHTML = ''; msgCrit = 0; start = 0; }
-  box.dataset.init = '1';
-
-  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 20;
-  const SEV = { EMERG: 1, ALERT: 1, CRIT: 1, ERROR: 1 };
-  for (let i = start; i < msgs.length; i++) {
-    const m = msgs[i];
-    const time = new Date(m.t * 1000).toLocaleTimeString('ko-KR', { hour12: false });
-    const div = document.createElement('div');
-    div.innerHTML = `<span class="sev s-${m.sev}">${m.sev}</span><span class="sev">${time}</span>`;
-    div.appendChild(document.createTextNode(m.text));
-    box.appendChild(div);
-    if (SEV[m.sev]) msgCrit++;
-  }
-  while (box.childElementCount > 200) box.removeChild(box.firstChild);
-  msgLastKey = last;
-  setText($('msgCnt'), msgCrit ? `심각 ${msgCrit}` : '');
-  if (atBottom) box.scrollTop = box.scrollHeight;
 }
 
 // ── 데모 피드 ───────────────────────────────────────────────────────
@@ -1674,10 +1640,6 @@ new ResizeObserver(() => {
 doLayout();
 
 $('win').onchange = (e) => { winSec = +e.target.value; renderCharts(); drawTrack(); };
-$('msgToggle').onclick = () => {
-  const c = $('chartPane').classList.toggle('msgcollapsed');
-  $('msgToggle').textContent = c ? '펴기' : '접기';
-};
 
 // 데이터 원천 배지를 누르면 경로를 고정한다: 자동 → USB → ELRS → 자동.
 // USB 가 붙어 있으면 자동 선택은 늘 USB 라 ELRS 가 화면에 안 나오는데,

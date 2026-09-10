@@ -349,26 +349,25 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
   ok('지도 칸이 있다', !!mapPane);
   if (mapPane && hudBox) {
     const mb = mapPane.getBoundingClientRect(), hb = hudBox.getBoundingClientRect();
-    ok('지도가 HUD 왼쪽', mb.left < hb.left, `map=${mb.left.toFixed(0)} hud=${hb.left.toFixed(0)}`);
-    // 1:3 — HUD 가 지도의 두 배는 넘어야 "3" 이라 부를 수 있다.
-    ok('HUD 가 지도보다 넓다 (1:3)', hb.width > mb.width * 2,
-       `map=${mb.width.toFixed(0)} hud=${hb.width.toFixed(0)}`);
+    // 🔴 2026-09-10 배치 변경: 지도는 HUD 왼쪽이 아니라 **우측 칸 위**다.
+    //    HUD 는 좌측 폭을 다 쓰고, 지도는 차트 위에서 HUD 와 같은 높이를 갖는다.
+    ok('지도가 HUD 오른쪽', mb.left >= hb.right - 1, `map=${mb.left.toFixed(0)} hud.right=${hb.right.toFixed(0)}`);
+    ok('지도 아랫선이 HUD 아랫선과 같다', Math.abs(mb.bottom - hb.bottom) <= 2,
+       `map=${mb.bottom.toFixed(0)} hud=${hb.bottom.toFixed(0)}`);
     ok('지도가 눌리지 않았다', mb.width > 100 && mb.height > 100,
        `${mb.width.toFixed(0)}x${mb.height.toFixed(0)}`);
     // 🔴 지도는 **HUD 줄 안에서만** 폭을 나눈다. 아래 계기판은 그 분할과
     //    무관하게 hudPane 폭을 그대로 써야 한다 (2026-09-10 정정 — 처음에
     //    main 칸을 하나 더 만들었더니 계기판까지 밀려났다).
     const strip = D.getElementById('strip').getBoundingClientRect();
-    ok('계기판이 지도에 안 밀린다', strip.left <= mb.left + 1,
-       `strip.left=${strip.left.toFixed(0)} map.left=${mb.left.toFixed(0)}`);
-    ok('계기판이 지도+HUD 폭을 다 쓴다', strip.width >= (mb.width + hb.width) - 4,
-       `strip=${strip.width.toFixed(0)} map+hud=${(mb.width + hb.width).toFixed(0)}`);
+    ok('계기판이 HUD 폭을 그대로 쓴다', Math.abs(strip.width - hb.width) <= 4,
+       `strip=${strip.width.toFixed(0)} hud=${hb.width.toFixed(0)}`);
   }
   // 🔴 GPS 를 받으면 그 자리가 중심이고, 배율은 50m 급이다 (실내·실외 무관).
   const LM = W.__lmap;
   ok('지도 핸들이 있다', !!LM);
   if (LM) {
-    ok('줌이 50m 급 (z19)', LM.getZoom() === 19, 'z' + LM.getZoom());
+    ok('줌이 50m 급 (z20)', LM.getZoom() === 20, 'z' + LM.getZoom());
     const c = LM.getCenter(), dd = f.contentWindow;
     // 데모 좌표(35.181, 128.554) 근처에 중심이 잡혔는가 — GPS 를 따라간다는 뜻.
     ok('GPS 좌표가 지도 중심', Math.abs(c.lat - 35.181) < 0.01 && Math.abs(c.lng - 128.554) < 0.01,
@@ -547,11 +546,16 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
   ok('두 경로 배지가 다른 색이다', !!be && !!bf && cs(be).color !== cs(bf).color,
      `${be ? cs(be).color : '-'} vs ${bf ? cs(bf).color : '-'}`);
 
-  // ── 버튼 자리 ────────────────────────────────────────────────────
-  // 재생 버튼은 접기 버튼 **바로 왼쪽**이다 (사용자 지시 2026-09-06).
-  const po = D.getElementById('pbOpen'), mt = D.getElementById('msgToggle');
-  ok('재생 버튼이 접기 버튼 바로 왼쪽이다', po && mt && po.nextElementSibling === mt,
-     po && mt ? `pbOpen 다음=${po.nextElementSibling && po.nextElementSibling.id}` : '-');
+  // ── 로그창 제거 · 기본 차트 (사용자 지시 2026-09-10) ─────────────
+  // FC 메시지 목록은 뺐다. 하단 바의 조작(링크·기록·재생·시간창)은 남는다.
+  ok('FC 메시지 목록이 없다', !D.getElementById('msgs') && !D.getElementById('msgToggle'));
+  ok('하단 바 조작은 남아 있다',
+     !!D.getElementById('pbOpen') && !!D.getElementById('win') && !!D.getElementById('linkSrc'));
+  // 기본으로 뜨는 단은 고도·속도 둘뿐이다.
+  // id 는 .lchart 가 아니라 그 안의 <svg> 가 갖는다 (buildCharts).
+  const shown = [...D.querySelectorAll('#charts .lchart svg')].map((e) => e.id);
+  ok('기본 차트가 고도·속도 2단', shown.length === 2 && shown.includes('k-alt') && shown.includes('k-spd'),
+     shown.join(',') || '(없음)');
 
   // 피커 제목
   const hd = D.querySelector('#pbPick .hd b');
