@@ -27,6 +27,7 @@ ARM·모드변경·미션업로드가 실기에 들어간다 — 그래서 기�
 | [`README.md`](README.md) | 기체 식별·링크 구성·현재 상태·다음 비행 전 |
 | [`FC_CHANGELOG.md`](FC_CHANGELOG.md) | **FC 변경 이력 — 작업 전 필독** |
 | [`FLIGHT-SYNC.md`](FLIGHT-SYNC.md) | **비행 직후 한 줄** — `./qgc sync` 로 FC → 웹 |
+| [`PARSING.md`](PARSING.md) | 🔴 **로그 파싱 정본 — 읽기 작업 전 필독** |
 | [`PROCEDURE.md`](PROCEDURE.md) | 로그 수집 → 분석 → 기록 절차 (손으로 할 때) |
 | [`skills/shade01-test/`](skills/shade01-test/SKILL.md) | **비행 전 점검** — `./shade01 test` (읽기 전용, 3~6초) |
 | [`config/SETTINGS.md`](config/SETTINGS.md) | 파라미터 스냅샷 사람이 읽는 정리본 |
@@ -39,6 +40,10 @@ ARM·모드변경·미션업로드가 실기에 들어간다 — 그래서 기�
   영구 기록이다. 정본 보관소는 [shade01.bewe.co.kr](https://shade01.bewe.co.kr).
 - **로그는 `logs/` 에 평면으로 쌓는다.** 날짜 하위폴더를 만들지 마라 —
   `_repair()` 가 같은 디렉토리의 형제 로그만 기증자로 쓴다.
+- 🔴 **로그를 읽는 작업 전에 [`PARSING.md`](PARSING.md) 를 읽어라.** 분석·목록·웹
+  표시·"파싱이 깨졌다" 는 보고가 전부 해당한다. **지금까지 "깨졌다" 로 보고된 것의
+  대부분이 파일 문제가 아니었다** — 파일은 멀쩡한데 도구·직렬화·전송이 깨진 것이었다.
+  파일부터 의심하면 매번 헛다리를 짚고, 실제로 여섯 번 그랬다.
 - **`pyulog` 를 직접 부르지 마라.** 잘린 메시지에서 조용히 멈춘다. `./qgc` 를 거쳐라.
 - **`rim3` 도 이제 push 된다** (2026-09-06, SSH 키로 해결). 원인은 `gh` 로그인이
   아니라 `credential.helper` 가 `gh auth git-credential` 이라 HTTPS push 에

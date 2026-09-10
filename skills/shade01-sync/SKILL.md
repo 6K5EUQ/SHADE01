@@ -15,6 +15,8 @@ description: 비행이 끝난 뒤 한 줄로 FC 로그를 웹에 올린다. "qgc
 `~/.claude/skills/shade01-sync` 는 그쪽을 가리키는 심볼릭이다 — 사본을 만들지 마라.
 
 근거·실측치 전문은 **[`FLIGHT-SYNC.md`](../../FLIGHT-SYNC.md)** 에 있다.
+파싱·읽기 실패를 만나면 **[`PARSING.md`](../../PARSING.md)** 가 정본이다 —
+🔴 **고치기 전에 그 문서의 §1 진단 순서를 밟아라.** 파일부터 의심하면 헛다리를 짚는다.
 
 ```
 <SHADE01>/shade01                       진입점 (./qgc 도 같은 것)
