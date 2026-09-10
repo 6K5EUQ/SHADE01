@@ -138,8 +138,8 @@ update-desktop-database ~/.local/share/applications 2>/dev/null
 
 | # | 이름 | 방식 | 자동연결 | 쓰는 때 |
 |---|---|---|---|---|
-| 1 | **Pi 브리지** (raspb1 / LTE·WiFi) | UDP **14550** 리슨 | **ON** | 평소 비행 — 주 경로 |
-| 2 | **ELRS 백팩** (조종기 WiFi) | UDP **14555** → `10.0.0.1:14550` | OFF | Pi 가 죽었을 때 |
+| 1 | ~~**Pi 브리지** (raspb1 / LTE·WiFi)~~ | UDP **14550** 리슨 | **ON** (그대로 둔다 — `rim3` 직결 브리지가 같은 포트로 온다) | 🔴 **raspb1 사망** (2026-09-10). 이 링크는 이제 `rim3` PC 브리지를 받는다 |
+| 2 | **ELRS 백팩** (조종기 WiFi) | UDP **14555** → `10.0.0.1:14550` | OFF | **비행 중 현행 링크** |
 | 3 | **FC USB 직결** | Serial `/dev/ttyACM0` @921600 | OFF | 펌웨어·캘리브레이션 |
 
 ### 🔴 `autoConnectUDP` 를 꺼야 한다

@@ -50,4 +50,6 @@ ARM·모드변경·미션업로드가 실기에 들어간다 — 그래서 기�
   아니라 `credential.helper` 가 `gh auth git-credential` 이라 HTTPS push 에
   `yyrrm` 토큰이 쓰이던 것이었다. origin 을 SSH 로 바꿔 우회했다 —
   [절차](gcs/ACCESS.md#rim3-push-해결--ssh-키로-2026-09-06).
-  **`rim` 은 아직 fetch 만** 된다 (같은 방식으로 풀 수 있다).
+  **`rim` 은 수동 갱신 전용이다** (2026-09-10 결정) — 원격에서 push·scp·ssh 조작을 하지 않고,
+  그 PC 에 앉아 `git pull` 로만 맞춘다. 자동화 대상(`hosts.conf` SOURCES·브리지 후보)에서 뺐다.
+- 🔴 **raspb1 은 쇼트로 죽었다** (2026-09-10 확정). 컴패니언·공중 노드 없음. `raspb1@…` 절차는 전부 기록이다.

@@ -343,7 +343,8 @@ SERVER_REPO="~/SHADE01"
 
 **FC 를 다른 PC 로 옮기면 `FC_HOST` 한 줄만 바꾼다.** 2026-09-04 에
 raspb1 → rim3 로 옮겼고, 브리지 유닛 이름·스코프는 스크립트가 알아서 가른다
-(`rim3` = `--user shade-bridge`, `raspb1` = 시스템 `mavlink-bridge`).
+(`rim3` = `--user shade-bridge`, `raspb1` = 시스템 `mavlink-bridge` — raspb1 은 2026-09-10
+사망했으므로 그 분기는 기록이다).
 
 ### 새 PC 에서 한 번만
 

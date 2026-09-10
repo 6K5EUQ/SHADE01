@@ -61,7 +61,7 @@
 | `MAV_2_CONFIG` | 0 |
 | `SER_TEL1_BAUD` | 460800 |
 
-⛔ TELEM2 는 물리적으로 사망(2026-08-31). GCS 링크는 **FC USB → raspb1** 이 유일 경로다.
+⛔ TELEM2 는 물리적으로 사망(2026-08-31). GCS 링크는 **FC USB → PC(`rim3`) 브리지** 와 **ELRS 백팩** 둘이다 — raspb1 은 2026-09-10 사망.
 
 🔴 **`MAV_0_FORWARD=0` 이 "Sensor lost" 의 해결이다.** `1` 일 때 USB 인스턴스로
 들어온 트래픽이 TELEM1(조종기 링크)로 통째로 넘어갔다 — TELEM1 송신 2868 B/s 중

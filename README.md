@@ -125,11 +125,11 @@ GPS·배터리·통신 두절 대비 설정·센서 상태를 한 번에 읽고
 
 ## 링크 구성 — **3 경로**
 
-지상국 링크는 셋이다. 지금은 **raspb1 잠정 중단**, `rim3` USB 직결이 현행 주 경로다.
+지상국 링크는 **둘 남았다.** raspb1 은 **쇼트로 사망**(2026-09-10 확정)했고, `rim3` USB 직결이 지상 주 경로, ELRS 백팩이 비행 링크다. **공중 노드(기체 탑재 컴패니언)는 없다.**
 
 | # | 경로 | 상태 | 쓰는 때 |
 |---|---|---|---|
-| 1 | **raspb1 브리지** (기체 탑재 Pi) | ⚪ **휴면** — 2026-09-04 부터 오프라인 | 비행 중 원격 텔레메트리가 필요해지면. **지금은 3번(백팩)이 비행 링크다** |
+| 1 | ~~**raspb1 브리지** (기체 탑재 Pi)~~ | 🔴 **사망** — 쇼트 (2026-09-10 확정, 9/4 부터 offline 이었다) | 없음. 원격 텔레메트리가 필요해지면 **새 컴패니언을 장착해야 한다** |
 | 2 | **PC USB 직결 브리지** (현재 `rim3`) | ✅ **가동중** | 지상 정비·파라미터·펌웨어 |
 | 3 | **ELRS 백팩** (조종기 WiFi AP) | ✅ **비행 중 현행 링크** (WiFi 있는 PC 만) | 비행. 트래커가 USB 와 동시에 듣다가 USB 가 빠지면 이쪽으로 넘어간다 |
 
@@ -138,7 +138,13 @@ GPS·배터리·통신 두절 대비 설정·센서 상태를 한 번에 읽고
 노트북 WiFi 가 하나뿐이라 **백팩 AP 에 붙는 동안은 Tailscale 이 끊겨 1·2 번이 죽는다.**
 셋 다 실질적으로 배타적이다.
 
-### 1. raspb1 브리지 — 🟡 잠정 중단
+### 1. raspb1 브리지 — 🔴 사망 (2026-09-10)
+
+> 🔴 **raspb1 이 쇼트로 죽었다.** 9/4 부터 offline 이던 것이 하드웨어 사망으로 확정됐다.
+> 이 절은 **기록**이다 — 되살릴 수 없다. 이 Pi 는 BEWE DGS-3 지상 기지도 겸했으므로
+> **DGS-3 기지·드론 데이터링크·공중 노드가 전부 불가**다. 기체 탑재 컴패니언이 다시
+> 필요하면 새 보드로 [컴패니언 문서](components/companion/raspberry-pi-5/README.md)의
+> 구성을 재현한다. 아래 수치는 8/31 실측이다.
 
 ```
 [Pixhawk 6C Mini] ──USB-C ⟷ USB-A── [Raspberry Pi 5 "raspb1"]   ← 지금 USB 뽑힘
@@ -153,10 +159,10 @@ GPS·배터리·통신 두절 대비 설정·센서 상태를 한 번에 읽고
 | Pi ↔ GCS | UDP 14550 over Tailscale — GCS 수신 **21.8 KB/s** 실측 |
 | 브리지 | `mavlink-bridge.service` (`enabled`, `Restart=always`) |
 
-- ⚪ **휴면 (2026-09-04~)** — FC USB 를 `rim3` 로 옮겼다. raspb1 은 Tailscale 에서도
-  `offline` 이다. 예전에는 "비행 전 반드시 원복" 이라 적었으나 **9/5 야외 3편이 raspb1
-  없이 ELRS 백팩으로 날았다** — 비행 링크는 백팩이고 raspb1 은 필수가 아니다. 다시 살리는
-  때는 백팩 사거리를 넘는 원격 텔레메트리가 필요해질 때다.
+- 🔴 **사망 (2026-09-10 확정)** — 9/4 에 FC USB 를 `rim3` 로 옮긴 뒤 offline 이었고, 쇼트로
+  죽은 것이 확인됐다. **9/5 야외 3편이 raspb1 없이 ELRS 백팩으로 날았다** — 비행 링크는
+  백팩이고 컴패니언은 필수가 아니다. 백팩 사거리를 넘는 원격 텔레메트리는 **새 보드를 달기
+  전까지 없다.**
 - ⛔ **TELEM2 는 죽었다** (2026-08-31). 포트 전원까지 사망 —
   [근거](components/companion/raspberry-pi-5/README.md#-telem2-포트-사망--usb-링크로-전환-2026-08-31)
 - ✅ **WiFi + LTE 이중화** (2026-08-31) — LTE 모뎀 장착으로 WiFi 범위 의존이 해소됐다.
@@ -246,7 +252,7 @@ QGC 대신(또는 같이) **브라우저로 볼 수 있다** — 지도 한쪽, 
 | 기체 | [Striver Mini VTOL](airframes/striver-mini-vtol/README.md) (4+1), `MAV_TYPE=22` |
 | FC | [Pixhawk 6C Mini](components/fc/holybro-pixhawk-6c-mini/README.md) — `PX4_FMU_V6C`, HW `V6C002002` |
 | 펌웨어 | **PX4 v1.17.0 커스텀** (`d6f12ad1c4f7`, 2026-08-11 빌드, CRSF 포함, 플래시 98.3%) |
-| 컴패니언 | [Raspberry Pi 5 `raspb1`](components/companion/raspberry-pi-5/README.md) — ⚪ **휴면** (2026-09-04~, FC USB 는 `rim3`) |
+| 컴패니언 | 🔴 **없음** — [Raspberry Pi 5 `raspb1`](components/companion/raspberry-pi-5/README.md) 쇼트 사망 (2026-09-10 확정). FC USB 는 `rim3` |
 | 조종기 | [RadioMaster Boxer](components/transmitters/radiomaster-boxer/README.md) (EdgeTX 2.12.1) |
 | 수신기 | [RP4TD-M](components/receivers/radiomaster-rp4td-m/README.md) — TELEM1, 바인딩 완료 |
 | 전원 | [PM08 DroneCAN](components/power/holybro-pm08-can/README.md) — `UAVCAN_ENABLE=2`, `BAT1_SOURCE=1` |
@@ -322,7 +328,7 @@ SB(3단) + SC/SF 래치가 만든다. PWM 은 전부 2026-09-09 실측이다.
 
 | 항목 | 상태 |
 |---|---|
-| 링크 | ✅ 지상: `rim3` USB 직결 브리지 (ku·rim·gram 중계). **비행 중: ELRS 백팩** — 트래커가 USB·백팩을 동시에 듣고 USB 가 빠지면 2초 안에 백팩으로 넘어간다 ([상세](web/live/README.md#어디서-데이터를-받나)). 9/5 야외 3편이 이 구성으로 날았다. raspb1 은 **휴면**(2026-09-04 부터 오프라인) — 필수 아님 |
+| 링크 | ✅ 지상: `rim3` USB 직결 브리지 (ku·rim·gram 중계). **비행 중: ELRS 백팩** — 트래커가 USB·백팩을 동시에 듣고 USB 가 빠지면 2초 안에 백팩으로 넘어간다 ([상세](web/live/README.md#어디서-데이터를-받나)). 9/5 야외 3편이 이 구성으로 날았다. raspb1 은 🔴 **사망**(쇼트, 2026-09-10 확정) — 공중 노드 없음. 백팩 사거리 밖 텔레메트리 불가 |
 | 비행모드 | ✅ **STAB / ALT / POS / MSN / RTL 6슬롯 전부 의도대로** (2026-09-09 실측·수정). `COM_FLTMODE1` 이 `4`(Hold)라 미션이 안 걸리던 것을 **`3`(Mission)으로 되돌렸다** ([경위](components/transmitters/radiomaster-boxer/switch-mapping.md#-슬롯1-이-mission-이-아니라-hold-로-걸린다-2026-09-09)) |
 | ✅ 슬롯 여유 | 2026-09-09 실측 988/1173/1347/1520/2011 — **가장 좁은 곳도 63us**. 옛 "2단 7us" 경고는 없는 P3 로터리 기준이라 무효였다. **CH6 RC 캘리브레이션은 여전히 금지** |
 | ✅ 텔레메트리 | **"Sensor lost" 해결** (2026-09-09). 원인은 대역폭이 아니라 `MAV_0_FORWARD=1` — USB 브리지 트래픽 2736 B/s 가 조종기 링크로 넘어가고 있었다. `0` 으로 끄고 `MAV_0_RATE` 990→**1400**, `extras.txt` 로 TELEM1 스트림 재배분. 배터리 최대공백 **40.02s → 0.81s**, `BAD_DATA` **253 → 0** ([경위](FC_CHANGELOG.md#-2026-09-09--sensor-lost-원인-규명과-해결-mav_0_forward--extrastxt--mav_0_rate)) |
@@ -412,6 +418,7 @@ VTOL 이착륙으로 저장되지 않도록 주의하라 — 고정익을 푼 �
 | 2026-09-09 | ✅ **조종기 화면에 `Eph`(GPS 정확도) 추가.** CRSF 센서 프레임에 칸이 없는 값을 ArduPilot passthrough(`0x5002`) 원시 프레임에서 파싱한다 — 펌웨어·바인딩 변경 없음 ([원리](components/transmitters/radiomaster-boxer/telemetry-screen.md#eph--crsf-센서에-없는-값을-원시-프레임에서-읽는다-2026-09-09)) |
 | 2026-09-09 | ✅ **라이브 화면에서 수신 경로를 고정한다** (자동 → USB → ELRS). USB 가 붙어 있으면 ELRS 가 영영 안 보이던 것을 배지 클릭으로 전환. `shade01` 에서도 되고, 랩서버는 rim3 가 걸어 오는 push 의 **응답에 얹어** 전한다 — 인바운드 경로는 안 열었다 |
 | 2026-09-09 | ✅ **배터리 온도를 HUD 좌측 하단에 표시** (`BATTERY_STATUS.temperature`). ESC·모터 온도와 셀별 전압은 **하드웨어가 없다** (실측: `ESC_STATUS` 0회, `DSHOT_TEL_CFG=0`, `voltages[]` 가 팩 전압 하나) |
+| 2026-09-10 | 🔴 **raspb1 쇼트 사망 확정** — 9/4 부터 offline 이던 원인. 컴패니언·공중 노드 없음, BEWE DGS-3 기지도 불가. 같은 날 결정: **`rim` 은 원격 조작 안 한다 — 그 PC 에서 `git pull` 하는 수동 갱신만** |
 | 2026-09-09 | ✅ **로그 손상의 원인 정정 — SD 카드가 아니라 MAVFTP 전송이다.** 매 회차 새 연결로 재니 FC 가 낸 CRC 는 4회 전부 같고 내려받은 바이트만 갈렸다. 9/6 진단은 한 연결에서 CRC 를 반복 호출해 생긴 착시였다(PX4 `_workCalcFileCRC32` 버퍼 재사용). **카드 교체 불필요** ([상세](FLIGHT-SYNC.md#-2026-09-09-정정--카드가-아니라-전송-경로다)) |
 | 2026-09-06 | 🔴 **같은 로그를 받을 때마다 내용이 다름을 발견** — 512바이트 섹터 단위로 어긋난다. 로그의 "구독 섹션 유실"·"포맷 정의 유실"·깨진 float 이 전부 여기서 온다. `--verify` 다수결로 복원한다. ~~SD 교체 필요~~ → **원인은 9/9 에 전송 경로로 정정됐다** |
 | 2026-09-06 | ✅ **`./qgc sync` — 비행 직후 한 줄로 FC → 웹.** 크기 게이트로 49개→10개(2.7배), 실비행·호버만 업로드 ([절차](FLIGHT-SYNC.md)) |

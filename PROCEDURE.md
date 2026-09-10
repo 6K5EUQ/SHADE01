@@ -15,7 +15,7 @@
 > 이유는 sync 가 죽었을 때 무엇이 안에서 도는지 사람이 따라갈 수 있게 하려는 것이다.
 >
 > ⚠️ **아래 예시는 raspb1 기준으로 쓰였다.** 2026-09-04 부터 FC 는 `rim3` USB 에
-> 붙어 있고 raspb1 은 오프라인이다 (`sudo systemctl stop mavlink-bridge` →
+> 붙어 있고 raspb1 은 **쇼트로 죽었다** (2026-09-10 확정) (`sudo systemctl stop mavlink-bridge` →
 > `systemctl --user stop shade-bridge`, `raspb1@100.126.161.1` → `rim3@rim3`,
 > `~/.venv-mav` 는 rim3 에도 같은 이름으로 있다). FC 가 어느 PC 에 꽂혀 있는지는
 > `web/tools/hosts.conf` 의 `FC_HOST` 가 정본이다.

@@ -119,7 +119,7 @@ PDB 300A [XT30] ──22V──► UBEC ──5.3V──┬─► FC MAIN OUT �
 | VTOL ESC ×4 ([MFE ESC 650](../../esc/mfe-esc-650-50a/README.md)) | MAIN OUT 또는 AUX OUT — 🔶 아래 참조 |
 | 크루즈 ESC ([MFE ESC 6100](../../esc/mfe-esc-6s-100a/README.md)) | MAIN OUT 또는 AUX OUT — 🔶 아래 참조 |
 | 서보 ×5 ([MFE 3054](../../servos/mfe-s3054/README.md)) | MAIN OUT 또는 AUX OUT — 🔶 아래 참조 |
-| [Raspberry Pi 5 "raspb1" 컴패니언](../../companion/raspberry-pi-5/README.md) | 🔵 **USB-C 직결 → Pi `/dev/ttyACM0`** (2026-08-31 전환, 현행). `mav_bridge.py` 가 24.3 kB/s 수신 중. ⛔ 구 경로 Telem2(UART5) @921600 은 **케이블 FC측 커넥터 단락으로 폐기** — `MAV_1_CONFIG=0` 권장. ⚠️ Pi 전원은 별도 계통 |
+| [Raspberry Pi 5 "raspb1" 컴패니언](../../companion/raspberry-pi-5/README.md) | 🔴 **사망** (쇼트, 2026-09-10). USB-C 는 지금 `rim3` PC 로 간다. 아래는 8/31 구성: 🔵 USB-C 직결 → Pi `/dev/ttyACM0`. `mav_bridge.py` 가 24.3 kB/s 수신 중. ⛔ 구 경로 Telem2(UART5) @921600 은 **케이블 FC측 커넥터 단락으로 폐기** — `MAV_1_CONFIG=0` 권장. ⚠️ Pi 전원은 별도 계통 |
 | RC 수신기 ([RadioMaster RP4TD-M](../../receivers/radiomaster-rp4td-m/README.md)) | **Telem1 (UART7) @ CRSF** — ✅ 결선·바인딩 완료(2026-08-19), `RC_CRSF_PRT_CFG=101`. RC IN/SBUS 포트 불가. TX/RX 교차 배선. 배선표·파라미터는 [수신기 문서](../../receivers/radiomaster-rp4td-m/README.md#fc-연결-방법-pixhawk-6c-mini) 참조 |
 
 ### ✅ UART 포트 배정 — 충돌 해소 (2026-08-19)

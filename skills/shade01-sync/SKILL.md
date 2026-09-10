@@ -165,7 +165,8 @@ ssh rim3@rim3 'systemctl --user start shade-bridge.service'
 
 FC 를 다른 PC 로 옮겼으면 `web/tools/hosts.conf` 의 `FC_HOST` 한 줄만 바꾼다.
 브리지 유닛 이름·스코프는 스크립트가 알아서 가른다
-(`rim3` = `--user shade-bridge`, `raspb1` = 시스템 `mavlink-bridge`).
+(`rim3` = `--user shade-bridge`, `raspb1` = 시스템 `mavlink-bridge` — raspb1 은 사망(2026-09-10),
+분기만 남아 있다).
 
 🔴 **`hosts.conf` 는 gitignore 돼 있다. 주소를 커밋하지 마라** — 리포가 public 이다.
 

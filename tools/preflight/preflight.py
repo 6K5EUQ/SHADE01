@@ -224,7 +224,8 @@ def connect(explicit, verbose):
 
 # 브리지가 돌 만한 PC. Tailscale 이름으로 찾는다 — IP 를 박으면 주소가 바뀔 때
 # 조용히 안 붙는다 (gcs/ACCESS.md 가 이름을 쓰라고 하는 것과 같은 이유).
-BRIDGE_HOSTS = ('rim3', 'raspb1-dgs3', 'ku-dgs1', 'rim')
+# raspb1 은 2026-09-10 사망, rim 은 수동 갱신 전용(브리지 안 돌림) — 둘 다 뺐다.
+BRIDGE_HOSTS = ('rim3', 'ku-dgs1')
 
 
 def bridge_hosts():
