@@ -217,6 +217,26 @@ ssh ku@<서버> '
   systemctl is-active lab-shade01 lab-tunnel-shade01'
 ```
 
+### logs 는 심볼릭 링크다 — git 이 계속 "삭제됨" 이라 하지 않게
+
+서버에서는 `~/SHADE01/logs` 가 데이터 디렉토리(`~/shade01-data/logs`)를 가리키는
+심볼릭 링크다. 그래서 리포가 추적하는 `logs/.gitkeep` 이 그 자리에 없고, git 이
+매번 `D logs/.gitkeep` + `?? logs` 로 보고한다. **배포가 `git pull --ff-only` 를
+쓰므로 워킹트리가 더러우면 언젠가 걸린다.**
+
+한 번만 걸어 두면 조용해진다 (2026-09-10):
+
+```bash
+ssh ku@<서버> 'cd ~/SHADE01 &&
+  git update-index --skip-worktree logs/.gitkeep &&
+  printf "logs\n" >> .git/info/exclude &&
+  git status -sb'          # "## main...origin/main" 만 나와야 한다
+```
+
+🔴 **리포를 고쳐서 풀지 마라.** `.gitkeep` 을 지우면 `logs/` 가 없는 PC 에서
+로그 수집이 깨진다. 이건 **그 서버만의 구성**이라 서버 로컬 설정으로 막는 것이 맞다.
+`.git/info/exclude` 와 `skip-worktree` 는 둘 다 커밋되지 않는다.
+
 ## 배포 (이후)
 
 ```bash

@@ -218,11 +218,11 @@ SC 위 + SF  →  CH6 988us  →  슬롯 1  →  COM_FLTMODE1 을 읽는다 → 
 
 | 근거 | 내용 |
 |---|---|
-| 펌웨어 열거 | [`parameters.json`](../../../PX4-Autopilot/build/px4_fmu-v6c_default/parameters.json) · [`module_params.c:7400-7431`](../../../PX4-Autopilot/build/px4_fmu-v6c_default/generated_params/module_params.c#L7400) — `2:Position, 3:Mission, 4:Hold, 5:Return, 8:Stabilized` |
+| 펌웨어 열거 | `parameters.json` · `module_params.c:7400-7431` — `2:Position, 3:Mission, 4:Hold, 5:Return, 8:Stabilized` |
 | 9/2 로그 #184 | `COM_FLTMODE5=3` 일 때 FC 가 `AUTO_MISSION` 진입 ([분석](../../../flights/2026-09-02-log184-geofence-lockout.md)) |
 | **2026-09-09 실측** | **`COM_FLTMODE1=4` → CH6 988us → `AUTO:LOITER`** |
 
-⚠️ **`COM_FLTMODE` 값은 [`VehicleStatus.msg`](../../../PX4-Autopilot/msg/versioned/VehicleStatus.msg)
+⚠️ **`COM_FLTMODE` 값은 [`VehicleStatus.msg`](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/msg/versioned/VehicleStatus.msg)
 의 `NAVIGATION_STATE_*` 와 다른 enum 이다.** 거기서도 `4` 는 `AUTO_LOITER`(L40) 라
 결과가 우연히 같지만, 번호를 서로 대입하면 어긋난다 — nav_state `8` 은
 `ALTITUDE_CRUISE`(L44)이고 Stabilized 는 `15`(L51)인데, 파라미터 쪽 `8` 은 Stabilized 다.

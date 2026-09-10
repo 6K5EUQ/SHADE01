@@ -537,7 +537,7 @@ ms5525dso start -X -b 2 -a 0x76
 
 #### 🔴 RTL 이 순항고도의 12배로 솟고 있었다
 
-`RTL_CONE_ANG=45`("집 근처면 낮게 복귀")는 [rtl.cpp:538](PX4-Autopilot/src/modules/navigator/rtl.cpp#L538)
+`RTL_CONE_ANG=45`("집 근처면 낮게 복귀")는 [rtl.cpp:538](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/navigator/rtl.cpp#L538)
 에서 **`RTL_MIN_DIST`(10 m) 안쪽일 때만** 적용된다. 미션 웨이포인트는 19~65 m 에 있어
 cone 이 한 번도 켜지지 않고 `RTL_RETURN_ALT` 가 전량 적용됐다 — **미션 어느 지점에서
 RTL 이 걸려도 60 m.**
@@ -566,11 +566,11 @@ RTL 은 조작 없이도 걸린다: `NAV_DLL_ACT=2`(GCS 두절 10초), `NAV_RCL_
 설정값 0.50 은 실제보다 한참 낮았다.
 
 **적대적 검증** — 착륙 감지를 망가뜨리지 않는다. 저추력 판정선이 0.300 → 0.390 으로
-오르지만([MulticopterLandDetector.cpp:217](PX4-Autopilot/src/modules/land_detector/MulticopterLandDetector.cpp#L217)),
+오르지만([MulticopterLandDetector.cpp:217](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/land_detector/MulticopterLandDetector.cpp#L217)),
 9/2 로그의 착륙 직전 실제 추력은 **최저 0.120** 이다. 여유가 크다.
 
 이 값은 HTE 초기값일 뿐이고 비행 중에는 실시간 추정이 덮으므로
-([:106](PX4-Autopilot/src/modules/land_detector/MulticopterLandDetector.cpp#L106)),
+([:106](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/land_detector/MulticopterLandDetector.cpp#L106)),
 맞춰두면 **이륙 직후 수렴 전 구간이 안정된다.**
 
 ⚠️ **호버에 65%를 쓴다 = 여유가 35% 뿐이다.** log_184 에서 모터 하나가 1.00 포화에
@@ -582,11 +582,11 @@ RTL 은 조작 없이도 걸린다: `NAV_DLL_ACT=2`(GCS 두절 10초), `NAV_RCL_
 
 - `discharged_mah` 는 **부팅 후 누적**인데 비행별 잔량과 직접 비교했다
 - `BAT1_R_INTERNAL=-1.0` 은 "꺼짐"이 아니라 **"자동추정 사용"**이다
-  ([battery.cpp:228](PX4-Autopilot/src/lib/battery/battery.cpp#L228)). 실제 추정값
+  ([battery.cpp:228](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/lib/battery/battery.cpp#L228)). 실제 추정값
   0.0014 Ω/셀은 6S 리포 통상 범위 안이다
 
 SoC 는 전류적산과 전압을 **의도적으로 융합**한다
-([battery.cpp:287](PX4-Autopilot/src/lib/battery/battery.cpp#L287)). log_187 끝에서
+([battery.cpp:287](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/lib/battery/battery.cpp#L287)). log_187 끝에서
 적산 27.5% vs FC 보고 15.2% 였는데, 16000 mAh 팩에서 11595 mAh 를 썼으면 6S 리포
 권장 사용량(80% DoD = 12800 mAh)의 **91%** 다 — **FC 쪽이 현실적이다.**
 
@@ -612,12 +612,12 @@ SoC 는 전류적산과 전압을 **의도적으로 융합**한다
 #### 🔴 `.plan` 의 `VTOL_TAKEOFF`(84) 는 고정익 진입 경로였다
 
 이름과 달리 **"수직으로 떠서 → 고정익으로 전환하라"** 는 뜻이다.
-[mission.cpp:380](PX4-Autopilot/src/modules/navigator/mission.cpp#L380) 이 상승 후
+[mission.cpp:380](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/navigator/mission.cpp#L380) 이 상승 후
 `set_vtol_transition_item(..., VEHICLE_VTOL_STATE_FW)` 를 부른다 — **스위치를 거치지 않는다.**
 
 9/4 기록은 "미션 이착륙 = `NAV_FORCE_VT=1` + `.plan` 84/85 이므로 진입 경로 닫힘" 이라고
 적었으나 **틀렸다.** `force_vtol()` 은
-[navigator_main.cpp:1311](PX4-Autopilot/src/modules/navigator/navigator_main.cpp#L1311)
+[navigator_main.cpp:1311](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/navigator/navigator_main.cpp#L1311)
 에서 **기체가 이미 FW 일 때만** true 이므로, 84 를 막는 역할을 전혀 하지 않는다.
 `RC_MAP_TRANS_SW=0` 으로 스위치를 닫아도 **미션 시동만으로 전환이 걸렸다.**
 
@@ -693,7 +693,7 @@ MAIN 쪽은 건드리지 않았다. `PWM_MAIN_TIM0=100`(에일러론 서보), `T
 3. `PWM_*_DIS*` 는 1500 그대로
 
 `PWM_*_CENTER*` 는 이 기체에 없다 — 있으면 PX4 가 `CA_SV_CS*_TRIM` 을 강제로 0 으로
-리셋한다([ActuatorEffectivenessControlSurfaces.cpp:123](PX4-Autopilot/src/modules/control_allocator/VehicleActuatorEffectiveness/ActuatorEffectivenessControlSurfaces.cpp#L123)).
+리셋한다([ActuatorEffectivenessControlSurfaces.cpp:123](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/control_allocator/VehicleActuatorEffectiveness/ActuatorEffectivenessControlSurfaces.cpp#L123)).
 
 **남은 정비** — 셋 다 기계 조정 대상이고 소프트웨어로 덮지 않았다:
 

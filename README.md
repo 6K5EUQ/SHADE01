@@ -360,12 +360,12 @@ SB(3단) + SC/SF 래치가 만든다. PWM 은 전부 2026-09-09 실측이다.
 
 🔴 **이 경고는 2026-09-05 에 뒤집혔다 — 방향이 반대였다.**
 `VTOL_TAKEOFF`(84) 는 "수직 이륙" 이 아니라 **"수직으로 떠서 → 고정익으로 전환하라"** 다.
-[mission.cpp:380](PX4-Autopilot/src/modules/navigator/mission.cpp#L380) 이 상승 후
+[mission.cpp:380](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/navigator/mission.cpp#L380) 이 상승 후
 `set_vtol_transition_item(..., VEHICLE_VTOL_STATE_FW)` 를 부른다 — **스위치를 거치지 않으므로
 `RC_MAP_TRANS_SW=0` 으로도 막히지 않는다.**
 
 `NAV_FORCE_VT=1` 은 이 경로를 막지 못한다. `force_vtol()` 은
-[navigator_main.cpp:1311](PX4-Autopilot/src/modules/navigator/navigator_main.cpp#L1311)
+[navigator_main.cpp:1311](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/navigator/navigator_main.cpp#L1311)
 에서 **기체가 이미 고정익일 때만** true 이기 때문이다.
 
 **쿼드 전용인 동안은 `TAKEOFF`(22)·`LAND`(21) 여야 한다.** `.plan` 을 QGC 에서 다시 만들 때

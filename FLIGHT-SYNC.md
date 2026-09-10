@@ -596,7 +596,7 @@ CRC·md5 가 완전히 같았다.
 ### 왜 CRC 가 흔들려 보였나
 
 한 연결에서 `CalcFileCRC32` 를 반복 호출하면 값이 달라진다. PX4 의
-[`mavlink_ftp.cpp:875`](PX4-Autopilot/src/modules/mavlink/mavlink_ftp.cpp#L875)
+[`mavlink_ftp.cpp:875`](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/mavlink/mavlink_ftp.cpp#L875)
 `_workCalcFileCRC32()` 가 경로 버퍼 `_work_buffer2`(256B)를 **그대로 읽기 버퍼로
 재사용**한다. 세션 상태가 남은 채 연속 호출하면 오염된다.
 
@@ -663,7 +663,7 @@ CRC·md5 가 완전히 같았다.
 
 PX4 쪽 코드는 `_workRead()`·`send()` 둘 다 매 패킷 `lseek(payload->offset, SEEK_SET)`
 로 절대 오프셋을 잡으므로, 응용 계층에서 −512 가 생길 구조가 아니다
-([mavlink_ftp.cpp:1056](PX4-Autopilot/src/modules/mavlink/mavlink_ftp.cpp#L1056)).
+([mavlink_ftp.cpp:1056](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/mavlink/mavlink_ftp.cpp#L1056)).
 그렇다면 남는 것은 **NuttX 의 FAT/SD 계층** — 섹터 캐시나 DMA 재시도가 이전 섹터를
 다시 내주는 경로다. 여기부터는 펌웨어를 건드려야 한다.
 

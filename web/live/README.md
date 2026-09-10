@@ -102,7 +102,7 @@ off** 다 (그래서 `always` 가 `on` 의 플래그가 아니라 별도 하위�
 **판정은 FC 가 직접 말해 주는 값으로 한다** — 스위치 채널을 보고 짐작하지 않는다.
 PX4 는 `actuator_armed` 의 `kill`·`termination`·`lockdown` 중 하나라도 서면
 `HEARTBEAT.system_status` 를 **`MAV_STATE_FLIGHT_TERMINATION`(8)** 으로 덮는다
-([HEARTBEAT.hpp:122](../../PX4-Autopilot/src/modules/mavlink/streams/HEARTBEAT.hpp#L122)).
+([HEARTBEAT.hpp:122](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/mavlink/streams/HEARTBEAT.hpp#L122)).
 서버는 이미 `d['system_status']` 를 보내고 있어 서버 쪽은 고칠 것이 없었다.
 
 CH9 의 PWM(`rc_chan[8]`)을 보는 방법도 있다. **채널이 안 와서 안 쓰는 것이 아니다** —
@@ -132,7 +132,7 @@ termination 은 스위치를 거치지 않고, 화면은 기체 상태를 보여
 **원인**: `d['batt_pct']` 한 칸을 **두 MAVLink 메시지가 조건 없이 번갈아
 덮어썼다.** `SYS_STATUS` 는 FC 가 고른 주 배터리 요약이고, `BATTERY_STATUS` 는
 PM08 인스턴스를 그대로 보고한다 — PX4 가 DroneCAN 노드 ID 124 를 배터리 id 로
-쓰기 때문에([battery.cpp:131](../../PX4-Autopilot/src/drivers/uavcan/sensors/battery.cpp#L131),
+쓰기 때문에([battery.cpp:131](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/drivers/uavcan/sensors/battery.cpp#L131),
 하드코딩) 인스턴스 0 이 아니다. 두 값은 갱신 시점도 세는 대상도 다르다.
 그래서 웹 값이 마지막에 도착한 메시지를 따라 튀었다.
 
@@ -149,7 +149,7 @@ PM08 인스턴스를 그대로 보고한다 — PX4 가 DroneCAN 노드 ID 124 �
 지상에서는 `SYS_STATUS` 값이 그대로 보인다.
 
 **어느 쪽이 맞나 — `BATTERY_STATUS` 다.** PM08 실측이고 PX4 의 SoC 융합
-(전류적산 + 전압, [battery.cpp:287](../../PX4-Autopilot/src/lib/battery/battery.cpp#L287))
+(전류적산 + 전압, [battery.cpp:287](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/lib/battery/battery.cpp#L287))
 을 거친다. 그 융합이 적산보다 현실적이라는 것은
 [09-05 리뷰](../../flights/2026-09-05-mission-preflight-review.md)에서 이미
 확인했다 — log_187 에서 적산 27.5% vs FC 15.2% 였고, 실제 소모가 6S 권장

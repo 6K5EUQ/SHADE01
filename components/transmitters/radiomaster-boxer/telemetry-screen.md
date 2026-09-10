@@ -91,7 +91,7 @@ PWM 은 2026-09-09 실측(`RC_CHANNELS` ↔ `HEARTBEAT` 동시 관측)이다.
 
 ✅ **슬롯 1 은 `MISN` 이다.** `COM_FLTMODE1` 이 `4`(Hold)였던 동안은 배너도 `HOLD` 였으나,
 **2026-09-09 에 `3`(Mission)으로 되돌리면서** 배너도 함께 돌렸다. 값 표는 펌웨어 빌드
-산출물 [`module_params.c:7400-7431`](../../../PX4-Autopilot/build/px4_fmu-v6c_default/generated_params/module_params.c#L7400)
+산출물 `module_params.c:7400-7431`
 이 정본이다 — `3` Mission, `4` Hold.
 
 ⚠️ **배너는 기체가 실제로 할 일을 적는다.** `COM_FLTMODE1` 을 다시 만졌다면 이 줄과

@@ -33,7 +33,7 @@
 ### 왜 그런가 — `RTL_CONE_ANG` 은 이 미션에서 작동하지 않는다
 
 `RTL_CONE_ANG=45` 는 "집 근처면 낮게 돌아온다" 는 기능이지만,
-[rtl.cpp:538](../PX4-Autopilot/src/modules/navigator/rtl.cpp#L538) 에서 **`RTL_MIN_DIST`
+[rtl.cpp:538](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/navigator/rtl.cpp#L538) 에서 **`RTL_MIN_DIST`
 안쪽일 때만** 적용된다. 우리 `RTL_MIN_DIST=10 m` 인데 미션 웨이포인트는 19~65 m 에 있다.
 
 | 지점 | 집까지 | RTL 복귀고도 |
@@ -121,13 +121,13 @@
 | log_187 | 3874 mAh | 7721 → 11595 | 0.316 → 0.152 |
 
 **오류 2 — `BAT1_R_INTERNAL=-1.0` 은 "꺼짐"이 아니라 "자동추정 사용"이다.**
-[battery.cpp:228](../PX4-Autopilot/src/lib/battery/battery.cpp#L228) 이 음수일 때
+[battery.cpp:228](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/lib/battery/battery.cpp#L228) 이 음수일 때
 RLS 추정치를 쓴다. 실제로 로그의 추정값은 **0.0014 Ω/셀** 로, 6S 리포의 통상값
 (1.3~2.5 mΩ/셀) 안에 정확히 들어간다. 추정은 잘 돌고 있었다.
 
 ### 실제로는 무슨 일이 일어나는가
 
-[battery.cpp:287](../PX4-Autopilot/src/lib/battery/battery.cpp#L287) 의 SoC 는
+[battery.cpp:287](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/lib/battery/battery.cpp#L287) 의 SoC 는
 **전류 적산과 전압을 융합**한다. 전압 기반 추정이 낮을수록 가중치가 커져
 (`weight_v = 0.03 * (1 - SoC_volt)`) 적산값을 끌어내린다.
 
@@ -141,7 +141,7 @@ log_187 끝에서 적산은 27.5%, FC 보고는 15.2% 였다. **어느 쪽이 �
 그것을 모르고 낙관한다. 융합은 정확히 그 낙관을 보정하려고 있는 것이다.
 
 → **손대지 않는다.** `BAT1_V_EMPTY=3.6` 도 PX4 기본값이자
-[module.yaml](../PX4-Autopilot/src/lib/battery/module.yaml) 이 "3.5 V 급락 구간 위로
+[module.yaml](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/lib/battery/module.yaml) 이 "3.5 V 급락 구간 위로
 잡으라" 고 권장하는 값이다. 낮추면 깊은 방전으로 셀을 상하게 한다.
 
 ⚠️ 다만 log_187 이 셀당 **3.628 V** 까지 간 것은 사실이다. 한계 근처였다 —
@@ -188,7 +188,7 @@ EKF test ratio 는 1.0 이 경고선인데 우리는 **0.14 이하**다. 센서 
 
 ## ✅ 7. #184 조종 불능은 재발하지 않는다
 
-`COM_RC_OVERRIDE=1`(bit0)이 켜져 있다 — [commander_params.c:446](../PX4-Autopilot/src/modules/commander/commander_params.c#L446).
+`COM_RC_OVERRIDE=1`(bit0)이 켜져 있다 — [commander_params.c:446](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/commander/commander_params.c#L446).
 **auto 모드에서 스틱을 `COM_RC_STICK_OV=30%` 이상 움직이면 즉시 Position 모드로
 조종권이 돌아온다.**
 
@@ -238,16 +238,16 @@ EKF test ratio 는 1.0 이 경고선인데 우리는 **0.14 이하**다. 센서 
 **`MPC_THR_HOVER=0.65` 가 착륙 감지를 망가뜨리지 않는가?**
 
 착륙 감지의 저추력 판정선이 0.300 → 0.390 으로 올라간다
-([MulticopterLandDetector.cpp:217](../PX4-Autopilot/src/modules/land_detector/MulticopterLandDetector.cpp#L217)).
+([MulticopterLandDetector.cpp:217](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/land_detector/MulticopterLandDetector.cpp#L217)).
 9/2 로그의 실제 착륙 직전 추력은 **최저 0.120** 이었다 — 새 판정선보다 한참 아래다.
 문제없다.
 
 더구나 이 값은 **HTE 초기값**일 뿐이다. 비행 중에는 실시간 추정치가
-`_params.hoverThrottle` 을 덮으므로([:106](../PX4-Autopilot/src/modules/land_detector/MulticopterLandDetector.cpp#L106)),
+`_params.hoverThrottle` 을 덮으므로([:106](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/land_detector/MulticopterLandDetector.cpp#L106)),
 0.65 로 맞춰두면 **이륙 직후 추정이 수렴하기 전 구간이 오히려 안정된다.**
 
 **에어스피드 검사(`ASPD_DO_CHECKS=7`)가 미션에 영향을 주는가?** — 주지 않는다.
-[AirspeedValidator.cpp](../PX4-Autopilot/src/modules/airspeed_selector/AirspeedValidator.cpp)
+[AirspeedValidator.cpp](https://github.com/PX4/PX4-Autopilot/blob/d6f12ad1c4f7/src/modules/airspeed_selector/AirspeedValidator.cpp)
 의 모든 검사가 `_in_fixed_wing_flight` 로 게이트돼 있다. 쿼드 전용인 동안은 돌지 않는다.
 
 **`MIS_LND_ABRT_ALT=30` 이 RTL 20 m 보다 높다** — 무관하다. 파라미터 설명이

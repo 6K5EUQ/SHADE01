@@ -251,7 +251,7 @@ PX4 는 `RC_MAP_*_SW` 에서 **1500 초과를 ON** 으로 본다 → **내리면
 > 저장·되읽기 확인. 아래는 원인 기록이다.
 
 🔴 **`COM_FLTMODE1=4` 는 Mission 이 아니라 Hold 였다.** 값 표는 펌웨어 빌드 산출물
-[`module_params.c:7400-7431`](../PX4-Autopilot/build/px4_fmu-v6c_default/generated_params/module_params.c#L7400)
+`module_params.c:7400-7431`
 이 정본이다 — `3` Mission, **`4` Hold**, `5` Return, `8` Stabilized.
 (`COM_FLTMODE` 값은 `VehicleStatus.msg` 의 `NAVIGATION_STATE_*` 와 **다른 enum** 이다.
 거기 `4` 는 `AUTO_LOITER` 라 결과는 같지만, 번호를 서로 대입하면 `8` 에서 어긋난다 —
