@@ -21,23 +21,55 @@ p.lead { font-size: 17px; color: var(--dim); max-width: 640px; margin: 0; line-h
 @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } section { min-height: 0; } }
 svg text { font-family: var(--mono); }
 
-/* ── 헤더의 옅은 격자 ── */
-#hero { min-height: 100vh; position: relative; padding-top: 60px; }
+/* ── 도입 — 한 판에 전체 흐름 ── */
+#hero { min-height: 0; position: relative; padding: 64px 0 40px; gap: 18px; }
 #hero::before { content: ""; position: absolute; inset: 0; z-index: -1;
   background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
   background-size: 48px 48px; opacity: .35;
   -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%); mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%); }
-#hero h1 { font-size: clamp(40px, 7vw, 84px); margin: 0; letter-spacing: -.02em; line-height: 1; }
+.heroTop { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: end; }
+@media (max-width: 860px) { .heroTop { grid-template-columns: 1fr; } }
+#hero h1 { font-size: clamp(36px, 5.4vw, 64px); margin: 0; letter-spacing: -.02em; line-height: 1; }
 #hero h1 span { display: inline-block; }
-#hero .tag { font-size: clamp(18px, 2.4vw, 26px); color: var(--ink); margin: 12px 0 0; font-weight: 500; }
-#hero .chain { display: flex; flex-wrap: wrap; gap: 8px 6px; align-items: center; margin-top: 20px; color: var(--dim); font-family: var(--mono); font-size: 13px; }
+#hero .tag { font-size: clamp(16px, 1.8vw, 20px); color: var(--ink); margin: 8px 0 0; font-weight: 500; line-height: 1.35; }
+#hero .chain { display: flex; flex-wrap: wrap; gap: 8px 6px; align-items: center; color: var(--dim); font-family: var(--mono); font-size: 12.5px; }
 #hero .chain b { color: var(--ink); font-weight: 600; padding: 4px 10px; border: 1px solid var(--border-2); border-radius: 999px; background: var(--panel); }
+#hero .chain b.sig { color: var(--sig); border-color: #1d456f; }
 #hero .chain b.lob { color: var(--lob); border-color: #5c3a1a; }
 #hero .chain b.fix { color: var(--fix); border-color: #1d572f; }
 #hero .chain i { font-style: normal; opacity: .6; }
+#hero p.lead { font-size: 15px; }
 .reveal { opacity: 0; }
-#cue { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%); color: var(--muted); font-size: 12px; letter-spacing: .2em; }
-#cue::after { content: ""; display: block; width: 1px; height: 28px; margin: 8px auto 0; background: linear-gradient(var(--muted), transparent); }
+#cue { text-align: center; color: var(--muted); font-size: 12px; letter-spacing: .2em; }
+#cue::after { content: ""; display: block; width: 1px; height: 22px; margin: 6px auto 0; background: linear-gradient(var(--muted), transparent); }
+
+/* 한 판: 좌 인셋(기체·페이로드·단계·스펙트럼) + 우 지도 */
+#flow { display: grid; grid-template-columns: 236px 1fr; padding: 0; overflow: hidden; }
+#flow .side { border-right: 1px solid var(--border); padding: 14px; display: grid; grid-template-rows: auto auto 1fr auto; gap: 12px; background: #0f141b; min-width: 0; }
+#flow .cap2 { font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .08em; }
+#flow .side svg { width: 100%; height: auto; }
+#flow .st { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; align-content: start; }
+#flow .st li { font-size: 12.5px; color: var(--muted); padding: 5px 8px; border-radius: 6px; border: 1px solid transparent; display: flex; gap: 8px; align-items: center; transition: all .25s; }
+#flow .st li::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--border-2); flex: none; }
+#flow .st li.done { color: var(--dim); }
+#flow .st li.done::before { background: var(--dim); }
+#flow .st li.on { color: var(--ink); background: var(--panel-2); border-color: var(--border-2); }
+#flow .st li.on::before { background: var(--sig); box-shadow: 0 0 8px var(--sig); }
+#flow .st li.on.lob::before { background: var(--lob); box-shadow: 0 0 8px var(--lob); }
+#flow .st li.on.fix::before { background: var(--fix); box-shadow: 0 0 8px var(--fix); }
+#flow canvas { width: 100%; height: 56px; display: block; border-radius: 6px; background: #0d1117; border: 1px solid var(--border); }
+#flow .mapWrap { position: relative; background: #0b0f16; min-width: 0; }
+#flow .mapWrap svg { display: block; width: 100%; height: auto; }
+#flow .gcs { position: absolute; right: 14px; bottom: 14px; width: 262px; background: rgba(13,17,23,.94); border: 1px solid var(--border-2); border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: 11.5px; }
+#flow .gcs .t { color: var(--muted); letter-spacing: .08em; display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+#flow .gcs .t i { font-style: normal; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); display: inline-block; }
+#flow .gcs .t i.on { background: var(--ok); animation: livepulse 2s infinite; }
+#flow .gcs .rows { display: grid; gap: 3px; min-height: 76px; }
+#flow .gcs .rows div { color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#flow .gcs .rows div.sig { color: var(--sig); }
+#flow .gcs .rows div.lob { color: var(--lob); }
+#flow .gcs .rows div.fix { color: var(--fix); font-weight: 600; }
+@media (max-width: 860px) { #flow { grid-template-columns: 1fr; } #flow .side { border-right: 0; border-bottom: 1px solid var(--border); } #flow .gcs { position: static; width: auto; margin: 10px; } }
 
 /* ── 제원 카드 ── */
 .specs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
@@ -95,57 +127,97 @@ footer a { color: var(--dim); }
 
 <!-- ═══════════ 1. 도입 ═══════════ -->
 <section id="hero">
-  <div class="grid2">
+  <div class="heroTop">
     <div>
       <h1><span class="reveal">SHADE</span><span class="reveal">01</span></h1>
-      <p class="tag reveal">수직이착륙 무인기에<br>신호정보 페이로드를 싣는다.</p>
-      <div class="chain">
-        <b class="reveal">이륙</b><i class="reveal">→</i>
-        <b class="reveal">순항</b><i class="reveal">→</i>
-        <b class="reveal">스펙트럼 수신</b><i class="reveal">→</i>
-        <b class="reveal lob">LOB</b><i class="reveal">→</i>
-        <b class="reveal fix">FIX</b>
-      </div>
-      <p class="lead reveal" style="margin-top:22px">활주로 없이 수직으로 떠서 고정익으로 순항하고, 날아가는 동안 전파를
-        듣는다. 한 지점에서는 방향만 알 수 있지만, 비행하며 얻은 여러 방위선이
-        한 점에서 만나면 그것이 위치다.</p>
+      <p class="tag reveal">수직이착륙 무인기에 신호정보 페이로드를 싣고,<br>날면서 찾아 지상으로 보낸다.</p>
     </div>
-    <div class="fig" id="heroFig">
-      <span class="cap">STRIVER MINI VTOL · 4+1 · TOP VIEW</span>
-      <svg id="acTop" viewBox="-340 -230 680 440" aria-label="기체 상면도">
+    <div>
+      <div class="chain">
+        <b class="reveal">수직 이륙</b><i class="reveal">→</i>
+        <b class="reveal">순항</b><i class="reveal">→</i>
+        <b class="reveal sig">수신</b><i class="reveal">→</i>
+        <b class="reveal lob">LOB</b><i class="reveal">→</i>
+        <b class="reveal fix">FIX</b><i class="reveal">→</i>
+        <b class="reveal">지상 전송</b>
+      </div>
+      <p class="lead reveal" style="margin-top:12px">동체 안 수신기가 전파를 듣고, 비행하며 지점마다 방위선을 긋는다.
+        선이 교차하는 곳이 위치이고, 방위선도 위치도 <b>얻는 즉시 지상국으로 내려온다.</b> 아래 한 판이 그 전체다.</p>
+    </div>
+  </div>
+
+  <div class="fig reveal" id="flow">
+    <!-- 좌: 기체와 페이로드 — 무엇을 싣고 있는지 -->
+    <div class="side">
+      <div class="cap2">기체 · SIGINT 페이로드 탑재</div>
+      <svg id="acTop" viewBox="-340 -230 680 440" aria-label="기체 상면도 — 동체 안 신호정보 페이로드">
         <defs>
-          <radialGradient id="pulse" r=".5"><stop offset="0" stop-color="#58a6ff" stop-opacity=".35"/><stop offset="1" stop-color="#58a6ff" stop-opacity="0"/></radialGradient>
+          <radialGradient id="pulse" r=".5"><stop offset="0" stop-color="#58a6ff" stop-opacity=".45"/><stop offset="1" stop-color="#58a6ff" stop-opacity="0"/></radialGradient>
+          <filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
         </defs>
         <g id="rx" opacity="0">
-          <circle class="ring" cx="0" cy="-20" r="40" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
-          <circle class="ring" cx="0" cy="-20" r="40" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
-          <circle class="ring" cx="0" cy="-20" r="40" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
+          <circle class="ring" cx="0" cy="-60" r="40" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
+          <circle class="ring" cx="0" cy="-60" r="40" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
+          <circle class="ring" cx="0" cy="-60" r="40" fill="none" stroke="#58a6ff" stroke-width="1.5"/>
         </g>
         <g id="acLines" fill="none" stroke="#e6edf3" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <!-- 주익 -->
           <path class="ln" d="M-300,-12 L-40,-30 L40,-30 L300,-12 L300,10 L40,26 L-40,26 L-300,10 Z"/>
-          <!-- 동체 -->
           <path class="ln" d="M-16,-190 C-16,-205 16,-205 16,-190 L16,140 C16,152 -16,152 -16,140 Z"/>
-          <!-- 붐 -->
           <path class="ln" d="M-150,-140 L-150,175"/><path class="ln" d="M150,-140 L150,175"/>
-          <!-- 수평 안정판 -->
           <path class="ln" d="M-160,168 L160,168 L160,184 L-160,184 Z"/>
-          <!-- 리프트 모터 -->
           <circle class="ln" cx="-150" cy="-140" r="9"/><circle class="ln" cx="150" cy="-140" r="9"/>
           <circle class="ln" cx="-150" cy="175" r="9"/><circle class="ln" cx="150" cy="175" r="9"/>
-          <!-- 순항 모터 -->
           <circle class="ln" cx="0" cy="146" r="7"/>
         </g>
-        <!-- 로터: 회전축이 모터 중심이 되도록 각 g 를 translate 해 두고 안에서만 돌린다 -->
         <g class="rotor" transform="translate(-150,-140)"><path d="M-70,0 L70,0" stroke="#8b949e" stroke-width="3" stroke-linecap="round"/><circle r="4" fill="#e6edf3"/></g>
         <g class="rotor" transform="translate(150,-140)"><path d="M-70,0 L70,0" stroke="#8b949e" stroke-width="3" stroke-linecap="round"/><circle r="4" fill="#e6edf3"/></g>
         <g class="rotor" transform="translate(-150,175)"><path d="M-70,0 L70,0" stroke="#8b949e" stroke-width="3" stroke-linecap="round"/><circle r="4" fill="#e6edf3"/></g>
         <g class="rotor" transform="translate(150,175)"><path d="M-70,0 L70,0" stroke="#8b949e" stroke-width="3" stroke-linecap="round"/><circle r="4" fill="#e6edf3"/></g>
         <g class="rotor push" transform="translate(0,146)"><path d="M-40,0 L40,0" stroke="#8b949e" stroke-width="3" stroke-linecap="round"/><circle r="3" fill="#e6edf3"/></g>
-        <!-- 페이로드 자리 -->
-        <rect id="bay" x="-11" y="-120" width="22" height="90" rx="4" fill="url(#pulse)" stroke="#58a6ff" stroke-width="1.2" opacity="0"/>
-        <text id="bayT" x="26" y="-70" fill="#58a6ff" font-size="12" opacity="0">SIGINT 페이로드</text>
+        <!-- 🔴 강조: 동체 안 페이로드 베이. 안테나 4개 + 수신기 -->
+        <g id="bay" opacity="0" filter="url(#glow)">
+          <rect x="-12" y="-150" width="24" height="120" rx="5" fill="url(#pulse)" stroke="#58a6ff" stroke-width="2"/>
+          <g stroke="#58a6ff" stroke-width="2" stroke-linecap="round"><path d="M-6,-138 L-6,-118"/><path d="M6,-138 L6,-118"/><path d="M-6,-108 L-6,-88"/><path d="M6,-108 L6,-88"/></g>
+          <rect x="-8" y="-76" width="16" height="30" rx="2" fill="#142c47" stroke="#58a6ff" stroke-width="1.5"/>
+        </g>
+        <g id="bayT" opacity="0"><path d="M14,-110 L60,-140" stroke="#58a6ff" stroke-width="1"/><text x="64" y="-150" fill="#58a6ff" font-size="28" font-weight="700">SIGINT</text><text x="64" y="-126" fill="#8b949e" font-size="17">안테나 배열 · SDR</text></g>
       </svg>
+      <ul class="st" id="flowSt">
+        <li data-s="0">페이로드 점검 · 지상 대기</li>
+        <li data-s="1">수직 이륙</li>
+        <li data-s="2">천이 · 순항</li>
+        <li data-s="3" class="sig">스펙트럼 수신 · 신호 검출</li>
+        <li data-s="4" class="lob">방위선 LOB → 지상 전송</li>
+        <li data-s="5" class="fix">FIX 확정 → 지상 전송</li>
+        <li data-s="6">복귀 · 수직 착륙</li>
+      </ul>
+      <div><div class="cap2" style="margin-bottom:6px">SPECTRUM <span id="wf0s" style="color:var(--dim)">스캔 중</span></div><canvas id="wf0" width="240" height="56"></canvas></div>
+    </div>
+
+    <!-- 우: 한반도 위에서 벌어지는 일 -->
+    <div class="mapWrap">
+      <svg id="kmap" viewBox="0 0 900 500" aria-label="한반도 위 비행 · 방위선 · FIX · 지상 전송">
+        <defs>
+          <pattern id="kg" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30,0 L0,0 0,30" fill="none" stroke="#161b22" stroke-width="1"/></pattern>
+          <filter id="kglow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        </defs>
+        <rect width="900" height="500" fill="url(#kg)"/>
+        <path id="korea" fill="#131a24" stroke="#30363d" stroke-width="1.5" stroke-linejoin="round"/>
+        <ellipse id="jeju" fill="#131a24" stroke="#30363d" stroke-width="1.5"/>
+        <path id="dmz" fill="none" stroke="#3d444d" stroke-width="1" stroke-dasharray="4 4"/>
+        <g font-size="11" fill="#3d444d" font-family="ui-monospace, monospace"><text x="70" y="300">WEST SEA</text><text x="640" y="200">EAST SEA</text></g>
+        <path id="fpath" fill="none" stroke="#21262d" stroke-width="1.5" stroke-dasharray="3 5"/>
+        <path id="ftrail" fill="none" stroke="#58a6ff" stroke-width="2" stroke-linecap="round" opacity=".9"/>
+        <g id="klobs"></g>
+        <g id="kfix" opacity="0"><ellipse id="kell" rx="70" ry="44" fill="#3fb950" fill-opacity=".12" stroke="#f0883e" stroke-width="1.5"/><circle id="kfixP" r="4" fill="#3fb950" opacity="0"/><text id="kfixT" font-size="12" fill="#3fb950" font-weight="700" opacity="0">FIX</text></g>
+        <g id="emit" opacity="0"><circle class="er" r="6" fill="none" stroke="#f0883e" stroke-width="1.5"/><circle class="er" r="6" fill="none" stroke="#f0883e" stroke-width="1.5"/><circle r="3" fill="#f0883e"/><text dx="10" dy="-14" font-size="11" fill="#f0883e">송신원 (미상)</text></g>
+        <line id="dlink" stroke="#58a6ff" stroke-width="1" stroke-dasharray="2 4" opacity="0"/>
+        <g id="pk"></g>
+        <g id="gcsIcon"><path d="M0,0 L0,-22 M-7,-22 L7,-22 M-5,-16 L5,-16 M-3,-10 L3,-10" stroke="#e6edf3" stroke-width="2" stroke-linecap="round" fill="none"/><circle r="3.5" fill="#e6edf3"/><text x="10" y="6" font-size="11" fill="#8b949e">지상국</text></g>
+        <g id="kac"><g id="kacIn"><circle id="kacRing" r="11" fill="none" stroke="#58a6ff" stroke-width="1.5" opacity="0"/><path d="M0,-9 L15,0 L0,9 L4,0 Z" fill="#e6edf3" stroke="#0d1117" stroke-width="1"/></g></g>
+        <g id="phase"><rect x="14" y="14" width="200" height="30" rx="6" fill="#0d1117" fill-opacity=".9" stroke="#30363d"/><text id="phaseT" x="26" y="34" font-size="13" fill="#e6edf3" font-weight="600">페이로드 점검 · 지상 대기</text></g>
+      </svg>
+      <div class="gcs" id="gcsBox"><div class="t"><span>GCS · 실시간 수신</span><i id="gcsDot"></i></div><div class="rows" id="gcsRows"><div>링크 대기…</div></div></div>
     </div>
   </div>
   <div id="cue">SCROLL</div>
@@ -341,22 +413,167 @@ footer a { color: var(--dim); }
     io.observe(el);
   };
 
-  // ── 1. 도입 ──────────────────────────────────────────────────────
+  // ── 1. 도입 — 한 판에 전체 흐름 ─────────────────────────────────
   once($('#hero'), () => {
-    const tl = createTimeline({ defaults: { ease: 'outExpo', duration: 900 } });
-    tl.add('#hero .reveal', { opacity: [0, 1], y: [18, 0], delay: stagger(70) }, 0);
-    // 기체 윤곽이 스스로 그려진다
+    const tl0 = createTimeline({ defaults: { ease: 'outExpo', duration: 900 } });
+    tl0.add('#hero .reveal', { opacity: [0, 1], y: [18, 0], delay: stagger(60) }, 0);
+    // 인셋: 기체 윤곽이 그려지고, 페이로드 베이가 켜진다 — 무엇을 싣고 있는지부터.
     const lines = svg.createDrawable('#acTop .ln');
-    tl.add(lines, { draw: ['0 0', '0 1'], duration: 1800, ease: 'inOutSine', delay: stagger(60) }, 200);
-    tl.add('#acTop .rotor', { opacity: [0, 1], duration: 400 }, 1800);
-    tl.add('#bay', { opacity: [0, 1], duration: 600 }, 2200);
-    tl.add('#bayT', { opacity: [0, 1], x: [-6, 0], duration: 600 }, 2300);
-    tl.add('#rx', { opacity: [0, 1], duration: 400 }, 2400);
-    // 로터는 계속 돈다. 순항 프로펠러는 느리게 — 지상에서 멈춰 있는 것을 흉내낸다.
+    tl0.add(lines, { draw: ['0 0', '0 1'], duration: 1600, ease: 'inOutSine', delay: stagger(50) }, 300);
+    tl0.add('#acTop .rotor', { opacity: [0, 1], duration: 400 }, 1700);
+    tl0.add('#bay', { opacity: [0, 1], duration: 600 }, 1900);
+    tl0.add('#bayT', { opacity: [0, 1], x: [-6, 0], duration: 600 }, 2000);
+    tl0.add('#rx', { opacity: [0, 1], duration: 400 }, 2100);
     animate('#acTop .rotor:not(.push) path', { rotate: 360, duration: 700, ease: 'linear', loop: true });
     animate('#acTop .rotor.push path', { rotate: 360, duration: 2400, ease: 'linear', loop: true });
-    // 수신 파문 — 세 고리가 시차를 두고 퍼진다
-    animate('#rx .ring', { r: [40, 210], opacity: [.9, 0], duration: 2600, ease: 'outQuad', loop: true, delay: stagger(860) });
+    animate('#rx .ring', { r: [40, 200], opacity: [.9, 0], duration: 2600, ease: 'outQuad', loop: true, delay: stagger(860) });
+    animate('#bay rect', { strokeOpacity: [1, .45], duration: 900, ease: 'inOutSine', loop: true, alternate: true });
+
+    // ── 지도. 경위도 → 픽셀. 지상국은 실제 비행장(진해, 35.18N 128.55E).
+    const X = (lon) => (lon - 124) * 88 + 40, Y = (lat) => (43 - lat) * 48 + 8;
+    const KOREA = [[124.6,39.7],[125.3,39.5],[125.2,38.8],[125.6,38.4],[125.2,38.0],[126.2,37.8],[126.6,37.6],[126.4,37.0],
+      [126.6,36.4],[126.3,36.1],[126.5,35.6],[126.3,35.2],[126.5,34.6],[126.6,34.3],[127.4,34.4],[127.8,34.7],[128.4,34.8],
+      [128.6,35.05],[129.1,35.1],[129.4,35.5],[129.4,36.0],[129.5,36.5],[129.4,37.2],[128.9,37.8],[128.4,38.5],[128.2,39.0],
+      [127.6,39.6],[128.0,40.0],[129.0,40.4],[129.8,41.0],[130.5,42.3],[129.9,42.9],[128.8,42.0],[127.0,41.7],[126.0,40.9],
+      [125.3,40.4],[124.4,40.1]];
+    // 꺾은선이 아니라 중간점 2차곡선 — 손으로 찍은 점 40개가 해안선처럼 읽힌다.
+    const smooth = (pts, close) => {
+      const q = close ? pts.concat([pts[0], pts[1]]) : pts;
+      let d = `M${(q[0][0] + q[1][0]) / 2},${(q[0][1] + q[1][1]) / 2}`;
+      for (let i = 1; i < q.length - 1; i++) d += ` Q${q[i][0]},${q[i][1]} ${(q[i][0] + q[i + 1][0]) / 2},${(q[i][1] + q[i + 1][1]) / 2}`;
+      return d + (close ? ' Z' : '');
+    };
+    $('#korea').setAttribute('d', smooth(KOREA.map(([lo, la]) => [X(lo), Y(la)]), true));
+    $('#dmz').setAttribute('d', smooth([[126.2, 37.8], [126.9, 37.95], [127.6, 38.2], [128.4, 38.6]].map(([lo, la]) => [X(lo), Y(la)]), false));
+    const jj = $('#jeju'); jj.setAttribute('cx', X(126.5)); jj.setAttribute('cy', Y(33.4)); jj.setAttribute('rx', 24); jj.setAttribute('ry', 9);
+    const GCS = [X(128.55), Y(35.18)], EM = [X(127.3), Y(36.9)];
+    $('#gcsIcon').setAttribute('transform', `translate(${GCS[0]},${GCS[1]})`);
+    $('#emit').setAttribute('transform', `translate(${EM[0]},${EM[1]})`);
+    $('#kell').setAttribute('cx', EM[0]); $('#kell').setAttribute('cy', EM[1]);
+    $('#kfixP').setAttribute('cx', EM[0]); $('#kfixP').setAttribute('cy', EM[1]);
+    $('#kfixT').setAttribute('x', EM[0] + 10); $('#kfixT').setAttribute('y', EM[1] + 18);
+    // 비행 경로 — 진해에서 떠 내륙을 한 바퀴 돌아 돌아온다. 중간점 2차곡선으로 매끈하게.
+    const WP = [[128.55,35.18],[128.5,35.7],[128.0,36.2],[127.95,36.95],[127.6,37.5],[126.9,37.6],[126.6,37.0],[126.8,36.3],[127.5,35.8],[128.2,35.35],[128.55,35.18]]
+      .map(([lo, la]) => [X(lo), Y(la)]);
+    let d = `M${WP[0][0]},${WP[0][1]}`;
+    for (let i = 1; i < WP.length - 1; i++) {
+      const [x1, y1] = WP[i], [x2, y2] = WP[i + 1];
+      d += ` Q${x1},${y1} ${(x1 + x2) / 2},${(y1 + y2) / 2}`;
+    }
+    d += ` L${WP[WP.length - 1][0]},${WP[WP.length - 1][1]}`;
+    $('#fpath').setAttribute('d', d); $('#ftrail').setAttribute('d', d);
+    const P = $('#fpath'), L = P.getTotalLength();
+    const at = (u) => P.getPointAtLength(u * L);
+    const mp = svg.createMotionPath(P);
+    utils.set('#kac', { translateX: GCS[0], translateY: GCS[1], rotate: -90 });
+
+    // ── 인셋 스펙트럼 (작은 워터폴)
+    const cv = $('#wf0'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+    const row = ctx.createImageData(W, 1);
+    let hot = 0, tt = 0;
+    createTimer({ frameRate: 20, onUpdate: () => {
+      tt++;
+      ctx.drawImage(cv, 0, 0, W, H - 1, 0, 1, W, H - 1);
+      const dd = row.data;
+      for (let x = 0; x < W; x++) {
+        const f = x / W;
+        let v = .08 + Math.random() * .14 + .10 * Math.exp(-Math.pow((f - .25) / .04, 2)) * (0.6 + 0.4 * Math.sin(tt / 7));
+        v += hot * Math.exp(-Math.pow((f - .62) / .014, 2));
+        v = Math.min(1, v);
+        const r = v < .6 ? 13 + v * 60 : 40 + (v - .6) * 540, g = v < .6 ? 17 + v * 150 : 110 + (v - .6) * 360, b = 40 + v * 215;
+        dd[x * 4] = Math.min(255, r); dd[x * 4 + 1] = Math.min(255, g); dd[x * 4 + 2] = Math.min(255, b); dd[x * 4 + 3] = 255;
+      }
+      ctx.putImageData(row, 0, 0);
+    } });
+
+    // ── 상태 표시
+    const st = $$('#flowSt li'), phaseT = $('#phaseT'), rows = $('#gcsRows'), dot = $('#gcsDot');
+    const setSt = (i, label) => {
+      st.forEach((li, k) => { li.classList.toggle('on', k === i); li.classList.toggle('done', k < i); });
+      if (label) phaseT.textContent = label;
+    };
+    const gcsRow = (cls, text) => {
+      if (rows.firstChild && rows.firstChild.textContent === '링크 대기…') rows.innerHTML = '';
+      const el = document.createElement('div'); el.className = cls; el.textContent = text;
+      rows.prepend(el);
+      while (rows.children.length > 5) rows.lastChild.remove();
+      animate(el, { opacity: [0, 1], x: [6, 0], duration: 400, ease: 'outQuad' });
+    };
+    // 기체 → 지상국으로 패킷이 내려간다. 도착하면 수신창에 줄이 생긴다 — 실시간이라는 뜻.
+    const send = (from, color, cls, text) => {
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      c.setAttribute('r', 4); c.setAttribute('fill', color); c.setAttribute('filter', 'url(#kglow)');
+      c.setAttribute('cx', from.x); c.setAttribute('cy', from.y);
+      $('#pk').appendChild(c);
+      animate(c, { cx: GCS[0], cy: GCS[1], duration: 900, ease: 'inQuad', onComplete: () => { c.remove(); gcsRow(cls, text); dot.classList.add('on'); } });
+    };
+    const bearing = (p) => Math.round((Math.atan2(EM[0] - p.x, -(EM[1] - p.y)) * 180 / Math.PI + 360) % 360);
+    const drawLob = (u, k) => {
+      const p = at(u), a = Math.atan2(EM[1] - p.y, EM[0] - p.x), len = 300, half = 5 * Math.PI / 180;
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.innerHTML =
+        `<path d="M${p.x},${p.y} L${p.x + len * Math.cos(a - half)},${p.y + len * Math.sin(a - half)} L${p.x + len * Math.cos(a + half)},${p.y + len * Math.sin(a + half)} Z" fill="#f0883e" fill-opacity=".10"/>` +
+        `<line class="lobl" x1="${p.x}" y1="${p.y}" x2="${p.x + len * Math.cos(a)}" y2="${p.y + len * Math.sin(a)}" stroke="#f0883e" stroke-width="1.5"/>` +
+        `<circle cx="${p.x}" cy="${p.y}" r="3" fill="#f0883e"/>`;
+      $('#klobs').appendChild(g);
+      animate(svg.createDrawable(g.querySelector('.lobl')), { draw: ['0 0', '0 1'], duration: 600, ease: 'outQuad' });
+      animate(g.querySelector('path'), { opacity: [0, 1], duration: 600 });
+      const ELL = [[70, 44], [46, 30], [28, 18], [16, 10]];
+      $('#kfix').setAttribute('opacity', 1);
+      animate('#kell', { rx: ELL[k][0], ry: ELL[k][1], duration: 700, ease: 'outExpo' });
+      setSt(4, `LOB ${k + 1} · 방위 ${bearing(p)}° → 지상 전송`);
+      send(p, '#f0883e', 'lob', `LOB ${k + 1}  방위 ${String(bearing(p)).padStart(3, '0')}°  ±5°`);
+    };
+    const reset = () => {
+      $('#klobs').innerHTML = ''; $('#pk').innerHTML = '';
+      $('#kfix').setAttribute('opacity', 0); $('#kfixP').setAttribute('opacity', 0); $('#kfixT').setAttribute('opacity', 0);
+      utils.set('#kell', { rx: 70, ry: 44, stroke: '#f0883e' });
+      $('#emit').setAttribute('opacity', 0); $('#dlink').setAttribute('opacity', 0);
+      rows.innerHTML = '<div>링크 대기…</div>'; dot.classList.remove('on');
+      hot = 0; $('#wf0s').textContent = '스캔 중';
+      utils.set('#ftrail', { strokeDasharray: L, strokeDashoffset: L });
+      utils.set('#kac', { translateX: GCS[0], translateY: GCS[1], rotate: -90 });
+      setSt(0, '페이로드 점검 · 지상 대기');
+    };
+    reset();
+    animate('#emit .er', { r: [6, 26], opacity: [.9, 0], duration: 1800, ease: 'outQuad', loop: true, delay: stagger(900) });
+
+    // ── 마스터 타임라인 (ms 절대 위치). 한 바퀴 20초, 끝나면 처음부터.
+    const CR = 12000, T0 = 4000;   // 순항 12초, 이륙·천이 4초
+    const prog = { p: 0 }; let next = 0;
+    const LOB_AT = [.22, .40, .58, .76];
+    const tl = createTimeline({ loop: true, onLoop: () => { reset(); next = 0; }, defaults: { ease: 'linear' } });
+    // 0–1.6s 지상: 베이가 켜져 있다 (인셋). 1.6–3.2 수직 이륙: 링이 퍼지고 기체가 커졌다 작아진다.
+    tl.add({}, { duration: 1600, onBegin: () => setSt(0, '페이로드 점검 · 지상 대기') }, 0);
+    tl.add('#kacIn', { scale: [1, 1.7, 1], duration: 1600, ease: 'inOutSine', onBegin: () => { setSt(1, '수직 이륙 · 진해'); gcsRow('', '이륙 확인 · 링크 정상'); dot.classList.add('on'); } }, 1600);
+    tl.add('#kacRing', { r: [8, 30], opacity: [.9, 0], duration: 1400, ease: 'outQuad' }, 1700);
+    tl.add({}, { duration: 800, onBegin: () => setSt(2, '천이 · 순항 고도 진입') }, 3200);
+    // 순항: 경로를 따라간다. 궤적이 뒤에 남고, 지상국과의 링크선이 따라 움직인다.
+    tl.add('#kac', { translateX: mp.translateX, translateY: mp.translateY, rotate: mp.rotate, duration: CR }, T0);
+    tl.add('#ftrail', { strokeDashoffset: [L, 0], duration: CR }, T0);
+    tl.add(prog, { p: [0, 1], duration: CR, onUpdate: () => {
+      const q = at(prog.p);
+      const dl = $('#dlink');
+      dl.setAttribute('x1', q.x); dl.setAttribute('y1', q.y); dl.setAttribute('x2', GCS[0]); dl.setAttribute('y2', GCS[1]); dl.setAttribute('opacity', .55);
+      if (prog.p >= .10 && hot === 0) {          // 신호 검출
+        hot = .95; $('#wf0s').textContent = '신호 검출 · f 0.62';
+        $('#emit').setAttribute('opacity', 1);
+        setSt(3, '스펙트럼 수신 · 신호 검출');
+        send(q, '#58a6ff', 'sig', '신호 검출  f 0.62  SNR 18 dB');
+      }
+      while (next < LOB_AT.length && prog.p >= LOB_AT[next]) { drawLob(LOB_AT[next], next); next++; }
+      if (next === LOB_AT.length && !$('#kfixP').getAttribute('opacity').startsWith('1') && prog.p >= .80) {
+        $('#kfixP').setAttribute('opacity', 1); $('#kfixT').setAttribute('opacity', 1);
+        animate('#kell', { stroke: '#3fb950', fillOpacity: .2, duration: 500 });
+        setSt(5, 'FIX 확정 → 지상 전송');
+        send(q, '#3fb950', 'fix', 'FIX  36.90N 127.30E  ±120 m');
+      }
+    } }, T0);
+    // 복귀·착륙
+    tl.add('#kacIn', { scale: [1, 1.6, 1], duration: 1500, ease: 'inOutSine', onBegin: () => { setSt(6, '복귀 · 수직 착륙'); $('#dlink').setAttribute('opacity', 0); gcsRow('', '착륙 · 기록 회수'); } }, T0 + CR);
+    tl.add('#kacRing', { r: [30, 8], opacity: [0, .9], duration: 1200, ease: 'inQuad' }, T0 + CR);
+    tl.add({}, { duration: 2200 }, T0 + CR + 1500);
   });
 
   // ── 2. 기체 — 숫자가 올라간다 ────────────────────────────────────
