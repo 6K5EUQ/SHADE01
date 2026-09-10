@@ -54,6 +54,42 @@ def coerce(o):
     raise TypeError("직렬화 못 하는 타입: %s" % type(o).__name__)
 
 
+def jsonable(o):
+    """NaN/inf 를 null 로 **미리** 바꾼다. 컨테이너는 재귀로 훑는다.
+
+    🔴 `json.dumps(default=coerce)` 만으로는 못 막는다 (2026-09-10 실측).
+       `default=` 는 json 이 **모르는 타입**에만 불린다. NaN 은 그냥 float
+       (numpy float 도 float 서브클래스) 이라 json 이 안다고 여기고
+       `NaN` 이라는 글자를 그대로 뱉는다 — 그런데 `NaN` 은 JSON 표준에
+       없어서 `JSON.parse` 가 거부한다. 파이썬끼리는 왕복이 되므로
+       CLI 로 확인하면 멀쩡해 보이는 것이 이 버그를 오래 숨겼다.
+
+       실제 사고: log_11_2026-8-21-15-52-24.ulg 이 웹에서 "읽기 실패" 로
+       떴다. 파일은 멀쩡했고 파서도 성공했는데, 자기장 표준편차가 0 이라
+       상관계수가 0/0 = NaN 이 되어 `"mag_corr": NaN` 이 나갔다.
+       서버는 그것을 "추출기 출력이 JSON 이 아니다" 로만 보고했다.
+
+       allow_nan=False 로 예외를 받는 길도 있지만, 그러면 값 하나 때문에
+       리포트 전체가 죽는다. 한 필드만 null 로 떨어뜨리는 편이 낫다.
+    """
+    if isinstance(o, float):                    # numpy float 도 여기 걸린다
+        return None if math.isnan(o) or math.isinf(o) else o
+    if isinstance(o, np.floating):
+        f = float(o)
+        return None if math.isnan(f) or math.isinf(f) else f
+    if isinstance(o, np.integer):
+        return int(o)
+    if isinstance(o, np.bool_):
+        return bool(o)
+    if isinstance(o, np.ndarray):
+        return [jsonable(x) for x in o.tolist()]
+    if isinstance(o, dict):
+        return {k: jsonable(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [jsonable(x) for x in o]
+    return o
+
+
 def clean(arr, limit=None):
     """길이를 보존하며 이상치를 NaN 으로. 시계열 전용.
 
@@ -511,14 +547,18 @@ def main():
     row["points"] = decoded_points(ulog)
 
     if mode == "row":
-        print(json.dumps({"ok": True, "row": row}, default=coerce, ensure_ascii=False))
+        print(json.dumps(jsonable({"ok": True, "row": row}),
+                         default=coerce, allow_nan=False, ensure_ascii=False))
         return
 
     out = {"ok": True, "row": row, "sum": rep, "trk": build_track(ulog, t0, t1)}
     out["sum"]["uuid"] = ulog.msg_info_dict.get("sys_uuid", "?")
     if note:
         out["sum"]["note"] = note
-    print(json.dumps(out, default=coerce, ensure_ascii=False))
+    # allow_nan=False 는 안전망이다 — jsonable 이 놓친 NaN 이 있으면 조용히
+    # 나가는 대신 여기서 죽는다. 조용히 나가면 웹이 "읽기 실패" 로만 보인다.
+    print(json.dumps(jsonable(out), default=coerce, allow_nan=False,
+                     ensure_ascii=False))
 
 
 if __name__ == "__main__":
