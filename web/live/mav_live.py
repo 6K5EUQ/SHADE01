@@ -1420,6 +1420,11 @@ class Playback:
             fr = frames[i]
             # 지난 메시지만 보여준다 — 아직 안 온 경고를 미리 띄우면 재생이 아니다.
             msgs = [m for m in f['messages'] if m['t'] <= fr['t']][-40:]
+            # 🔴 항적도 재생 시각까지만 준다 (2026-09-10). 예전엔 빈 배열을 줬는데,
+            #    그러면 화면이 라이브 세션의 항적을 지우지 않아 로그 위에 실내
+            #    GPS 표류 꼬리가 파란 선으로 남았다. 되감기가 되므로 매번 처음부터
+            #    (track_from=0) 통째로 준다 — 280점 수준이라 싸다.
+            trk = [p for p in f['track'] if len(p) > 3 and p[3] <= fr['t']]
             return {
                 'live': True,          # 화면의 프리즈 오버레이를 켜지 않는다
                 'playback': True,
@@ -1439,9 +1444,9 @@ class Playback:
                 'd': fr['d'],
                 'home': f['home'],
                 'mission': [],
-                'track_n': 0,
+                'track_n': len(trk),
                 'track_from': 0,
-                'track': [],
+                'track': trk,
                 'messages': msgs,
             }
 

@@ -264,6 +264,9 @@ def load_flight(path):
                 pt = [round(lat, 7), round(lon, 7),
                       round((alt - href) if (alt is not None and href is not None) else 0.0, 1)]
                 if last_pt is None or _moved(last_pt, pt) > 0.4:
+                    # 네 번째 항목은 로그 시각(초). at(t) 가 여기까지만 잘라 보내고,
+                    # 화면은 이 값으로 시간 창을 자른다 — 라이브의 unix 초와 같은 자리다.
+                    pt.append(round(ts, 1))
                     track.append(pt)
                     last_pt = pt
             if alt is not None:

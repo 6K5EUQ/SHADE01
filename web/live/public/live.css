@@ -39,8 +39,9 @@ main {
   position: relative; overflow: hidden;
   border-right: 1px solid var(--border); background: #0d1117;
 }
-/* 지도 칸이 이제 HUD 줄 안이라 hudPane 의 어두운 바탕과 붙는다 */
-#hudTop > #mapPane { border-top: 4px solid #05070a; }
+/* 지도 칸이 이제 HUD 줄 안이라 hudPane 의 어두운 바탕과 붙는다.
+   좌측도 같은 폭 — 창 가장자리에 밀착돼 답답하다는 지적 (2026-09-10). */
+#hudTop > #mapPane { border-top: 4px solid #05070a; border-left: 4px solid #05070a; }
 #lmap { width: 100%; height: 100%; background: #0d1117; }
 /* 🔴 타일의 채도·밝기를 낮춘다 (2026-09-10). 계기판 전체가 무채색 + 경고색만
    쓰는데 위성 사진만 채도가 높아 눈이 자꾸 그쪽으로 끌렸다 — 「색이 보이는

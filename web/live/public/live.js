@@ -218,11 +218,17 @@ function buildHUD() {
   h.spdBox = el('rect', { fill: '#0d1117', opacity: .92, stroke: 'var(--c-spd)', 'stroke-width': 1.5 }, svg);
   h.spdApex = el('polygon', { fill: '#0d1117', opacity: .92, stroke: 'var(--c-spd)', 'stroke-width': 1.5 }, svg);
   h.spdVal = el('text', { 'text-anchor': 'end', 'font-size': 22, fill: '#e6edf3' }, svg);
-  // 테이프 머리말(대지속도 GS / 고도 AGL)은 뺐다 (2026-09-05). 눈금과 겹쳐
-  // 지저분하고, 어느 값인지는 아래 계기판이 '속도'·'고도' 로 이미 적는다.
-  // ⚠️ 좌측 테이프가 **대지속도**라는 사실 자체는 여전히 중요하다 —
-  //    피토관은 고장품이라 이 자리에 오면 안 된다. 그 근거는
-  //    web/live/README.md 「고장 센서 격리」에 남아 있다.
+  // 머리말·단위 (2026-09-10 복귀). 9/5 에 눈금과 겹친다고 뺐었는데, 무슨 값인지
+  // 테이프만 보고 못 읽는다는 지적이 있었다. 눈금 위에 판을 깔아 겹침을 막는다.
+  // ⚠️ 좌측은 **대지속도**다 — 피토관은 고장품이라 이 자리에 오면 안 된다
+  //    (web/live/README.md 「고장 센서 격리」).
+  h.spdHdrBg = el('rect', { fill: '#0d1117', opacity: .96, rx: 3 }, svg);
+  h.spdHdr = el('text', { 'text-anchor': 'end', 'font-size': 11, 'font-weight': 700,
+                          fill: 'var(--c-spd)', 'letter-spacing': '.5px' }, svg);
+  h.spdHdr.textContent = 'SPD';
+  h.spdUnitBg = el('rect', { fill: '#0d1117', opacity: .92, rx: 3 }, svg);
+  h.spdUnit = el('text', { 'text-anchor': 'end', 'font-size': 11, fill: '#e6edf3', opacity: .85 }, svg);
+  h.spdUnit.textContent = 'm/s';
 
   // ④ 우측 테이프 — 고도 AGL + 지면대
   h.altBg = el('rect', { fill: 'rgba(13,17,23,.55)' }, svg);
@@ -241,6 +247,13 @@ function buildHUD() {
   h.altBox = el('rect', { fill: '#0d1117', opacity: .92, stroke: 'var(--c-alt)', 'stroke-width': 1.5 }, svg);
   h.altApex = el('polygon', { fill: '#0d1117', opacity: .92, stroke: 'var(--c-alt)', 'stroke-width': 1.5 }, svg);
   h.altVal = el('text', { 'text-anchor': 'start', 'font-size': 22, fill: '#e6edf3' }, svg);
+  h.altHdrBg = el('rect', { fill: '#0d1117', opacity: .96, rx: 3 }, svg);
+  h.altHdr = el('text', { 'text-anchor': 'start', 'font-size': 11, 'font-weight': 700,
+                          fill: 'var(--c-alt)', 'letter-spacing': '.5px' }, svg);
+  h.altHdr.textContent = 'ALT';
+  h.altUnitBg = el('rect', { fill: '#0d1117', opacity: .92, rx: 3 }, svg);
+  h.altUnit = el('text', { 'text-anchor': 'start', 'font-size': 11, fill: '#e6edf3', opacity: .85 }, svg);
+  h.altUnit.textContent = 'm';
 
 
   // ⑤ 상승률 리본 — 숫자는 안 쓴다. 크기보다 부호와 추세라 막대가 더 빠르다.
@@ -344,12 +357,23 @@ function layout(w, hh) {
   box(h.spdBox, 0, cy - 15, TAPE_W, 30);
   setAttr(h.spdApex, 'points', `${TAPE_W},${cy - 9} ${TAPE_W + 12},${cy} ${TAPE_W},${cy + 9}`);
   setAttr(h.spdVal, 'x', TAPE_W - 6); setAttr(h.spdVal, 'y', cy + 8);
+  // 머리말은 테이프 맨 위, 단위는 판독 박스 바로 아래 — 둘 다 눈금 라벨 열(x=TAPE_W-18)에 맞춘다.
+  // 판은 눈금 라벨 한 줄(12px)을 통째로 덮을 높이 — 반만 가리면 더 지저분하다.
+  box(h.spdHdrBg, 2, AY0 + 2, TAPE_W - 4, 22);
+  setAttr(h.spdHdr, 'x', TAPE_W - 6); setAttr(h.spdHdr, 'y', AY0 + 17);
+  // 단위도 판을 깐다 — 눈금 라벨이 스크롤하며 그 자리를 지나간다.
+  box(h.spdUnitBg, TAPE_W - 34, cy + 17, 32, 15);
+  setAttr(h.spdUnit, 'x', TAPE_W - 6); setAttr(h.spdUnit, 'y', cy + 28);
 
   // 우 테이프
   box(h.altBg, W - TAPE_W, AY0, TAPE_W, AH);
   box(h.altBox, W - TAPE_W, cy - 15, TAPE_W, 30);
   setAttr(h.altApex, 'points', `${W - TAPE_W},${cy - 9} ${W - TAPE_W - 12},${cy} ${W - TAPE_W},${cy + 9}`);
   setAttr(h.altVal, 'x', W - TAPE_W + 6); setAttr(h.altVal, 'y', cy + 8);
+  box(h.altHdrBg, W - TAPE_W + 2, AY0 + 2, TAPE_W - 4, 22);
+  setAttr(h.altHdr, 'x', W - TAPE_W + 6); setAttr(h.altHdr, 'y', AY0 + 17);
+  box(h.altUnitBg, W - TAPE_W + 2, cy + 17, 20, 15);
+  setAttr(h.altUnit, 'x', W - TAPE_W + 6); setAttr(h.altUnit, 'y', cy + 28);
   setAttr(h.gndBand, 'width', TAPE_W); setAttr(h.gndBand, 'height', 80);
   setAttr(h.gndLine, 'x2', TAPE_W);
 
@@ -382,7 +406,9 @@ const CHARTS = [
   // 값이 실제로 안 움직이면 **평평하게 보이는 것이 사실**이다.
   { id: 'k-alt', title: '고도', on: true, series: [
       { key: 'alt', color: 'var(--c-alt)', label: '고도', axis: 'left', weight: 2, unit: 'm', minSpan: 4 },
-      { key: 'climb', color: 'var(--c-spd)', label: '상승률', axis: 'right', unit: 'm/s', minSpan: 2 }] },
+      { key: 'climb', color: 'var(--c-spd)', label: '상승률', axis: 'right', unit: 'm/s', minSpan: 2 }],
+    // 기준선은 축을 그 값까지 늘린다(chart.js) — 평소 5m 비행에서도 30m 가 어디인지 보인다.
+    thresholds: [{ v: 30, label: '30m', color: '#d29922' }] },
   // 두 속도의 출처가 다르다 — 이름에 그대로 적는다.
   //   GPS 속도    GLOBAL_POSITION_INT 의 vx·vy 합성 (EKF 융합). 믿는 값.
   //   피토관 속도  VFR_HUD.airspeed. 🔴 이 기체는 고장품이다 — 정지 시
@@ -391,19 +417,22 @@ const CHARTS = [
   //               '대지속도' 로 못박은 것과 같은 이유).
   { id: 'k-spd', title: '속도', on: true, series: [
       { key: 'spd', color: 'var(--c-spd)', label: 'GPS 속도', axis: 'left', weight: 2, unit: 'm/s', minSpan: 4, nonNeg: true },
-      { key: 'aspd', color: '#a371f7', label: '피토관 속도(고장)', axis: 'left', dim: true, unit: 'm/s', minSpan: 4, nonNeg: true }] },
+      { key: 'aspd', color: '#a371f7', label: '피토관 속도(고장)', axis: 'left', dim: true, unit: 'm/s', minSpan: 4, nonNeg: true }],
+    thresholds: [{ v: 10, label: '10 m/s', color: '#d29922' }] },
   { id: 'k-pwr', title: '전력', on: true, series: [
       { key: 'cur', color: 'var(--c-cur)', label: '전류', axis: 'left', weight: 2, unit: 'A', minSpan: 10, nonNeg: true },
       // 6S 는 만충 25.2V·저전압 21.0V 라 폭이 4V 면 비행 전체가 담긴다.
       { key: 'volt', color: 'var(--c-volt)', label: '전압', axis: 'right', unit: 'V', minSpan: 2 }],
-    // 45A 는 8/31 비행에서 453초 중 270초를 넘긴 선이다 (README 「전류」).
-    thresholds: [{ v: 45, label: '45A', color: '#d29922' }] },
+    // 60A — 조종자가 정한 경계 (2026-09-10). 45A(XT90 연속 정격)는 호버만 해도
+    // 넘겨서 선이 늘 그래프 아래 깔려 있었다. 60 은 9/5 최대 90.2A 로 가는 길목이다.
+    thresholds: [{ v: 60, label: '60A', color: '#d29922' }] },
   { id: 'k-att', title: '자세', on: true, series: [
       { key: 'roll', color: '#d55e00', label: '롤', axis: 'left', weight: 2, unit: '°', minSpan: 20 },
       { key: 'pitch', color: '#e69f00', label: '피치', axis: 'left', weight: 2, unit: '°', minSpan: 20 }] },
   { id: 'k-vib', title: '진동', on: false, series: [
-      { key: 'vib', color: '#f0883e', label: '진동(최대축)', axis: 'left', weight: 2, minSpan: 10, nonNeg: true }],
-    thresholds: [{ v: 30, label: '한계', color: '#d29922' }] },
+      { key: 'vib', color: '#f0883e', label: '진동(최대축)', axis: 'left', weight: 2, minSpan: 6, nonNeg: true }],
+    // 5 — 이 기체의 실측 정상치가 평균 2.5 / 최대 5.0 (README). 30 은 화면 밖이었다.
+    thresholds: [{ v: 5, label: '5', color: '#d29922' }] },
   { id: 'k-gps', title: 'GPS', on: false, series: [
       { key: 'sats', color: '#3fb950', label: '위성 수', axis: 'left', weight: 2, minSpan: 6, nonNeg: true },
       { key: 'eph', color: '#f85149', label: '위치 오차', axis: 'right', unit: 'm', minSpan: 2, nonNeg: true }] },
@@ -969,6 +998,9 @@ let mapReady = false;
 //    없으면 기체를 영영 놓친다.**
 const FOLLOW_RESUME_MS = 8000;
 let followPausedAt = 0;
+// 재생 중이면 시간 창의 기준 시각. 라이브면 null(= 지금). 재생 항적의 시각은
+// 로그 초이고 라이브는 unix 초라, "지금" 을 그대로 쓰면 재생 항적이 전부 잘린다.
+let trkNowRef = null;
 
 function initMap() {
   if (lmap || typeof L === 'undefined') return;
@@ -1028,7 +1060,7 @@ function drawTrack() {
   if (winSec > 0 && trkPts.length) {
     // 기준은 **지금**이다. 마지막 점 기준으로 하면 링크가 끊겨 점이 안 들어올 때
     // 창이 그 자리에 얼어붙어 옛 궤적이 계속 남는다.
-    const cut = (Date.now() / 1000) - winSec;
+    const cut = (trkNowRef != null ? trkNowRef : Date.now() / 1000) - winSec;
     // 창 안 첫 점을 찾는다. 시각이 오름차순이라 뒤에서부터 훑으면 빠르다.
     let i = trkPts.length - 1;
     while (i > 0 && trkPts[i - 1][2] >= cut) i--;
@@ -1043,9 +1075,12 @@ function renderMap(s) {
   const d = s.d || {};
 
   // 항적 증분. track_from 이 0 이면 "처음부터 다시" 라는 뜻이다(서버 주석).
-  if (Array.isArray(s.track) && s.track.length) {
+  // 🔴 재생은 빈 배열이라도 갈아끼운다 — 로그 초반(항적 0점)에 라이브 항적이
+  //    남아 있으면 로그 위에 실내 표류 꼬리가 파란 선으로 보인다 (2026-09-10).
+  trkNowRef = s.playback ? (typeof s.pos === 'number' ? s.pos : 0) : null;
+  if (Array.isArray(s.track) && (s.track.length || s.playback)) {
     const now = Date.now() / 1000;
-    if (s.track_from === 0) trkPts = [];
+    if (s.track_from === 0 || s.playback) trkPts = [];
     for (const p of s.track) {
       // 서버는 [lat, lon, alt, t] 로 준다. 유한한 값만 쓴다.
       const la = Array.isArray(p) ? p[0] : p && p.lat;
