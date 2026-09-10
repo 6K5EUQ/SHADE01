@@ -929,6 +929,21 @@ function render(s) {
 //    주는 길을 이미 갖고 있다 (`snapshot(since, want_track)`). 매 폴 몇 개씩만
 //    받으므로 대역폭 문제가 없다.
 const MAX_ZOOM = 20;
+// 🔴 기본 줌 — "50m 급" (2026-09-10 요청).
+//    지도 칸이 좁고(실측 155px) 세로로 길어(455px) 가로·세로 배율이 크게
+//    다르다. 실측 (위도 35.18, 155×455px):
+//
+//      z19   가로 37.8m · 세로 110.9m
+//      z18   가로 75.6m · 세로 221.8m
+//
+//    가로 기준 50m 에 가까운 것은 z19 다. z18 은 50m 를 훌쩍 넘어 기체가
+//    점처럼 작아진다. **가까이 보는 쪽을 택했다** — 이 계기의 목적이
+//    "지금 어디 있나" 이지 "전체 경로 조망" 이 아니기 때문이다.
+//    전체를 보고 싶으면 따라가기를 끄고 손으로 줌아웃하면 된다.
+//
+//    ⚠️ Esri 위성은 z18 까지만 실제 타일을 준다 — z19 는 마지막 타일을
+//    확대한 것이라 흐리다. 궤적·기체 아이콘은 벡터라 선명하다.
+const ZOOM_50M = 19;
 // 🔴 위성이 기본이다 (2026-09-10). OSM 은 흰 바탕이라 어두운 계기판 옆에서
 //    그 칸만 밝게 튀어 눈이 그리로 쏠린다. 위성 사진은 어둡고, 무엇보다
 //    비행장에서는 활주로·장애물이 지도보다 사진에 더 잘 보인다.
@@ -980,6 +995,8 @@ function initMap() {
     const b = $('followBtn'); if (b) b.classList.remove('on');
   });
   trkLine = L.polyline([], { color: '#58a6ff', weight: 2, opacity: .9 }).addTo(lmap);
+  // 자체검사·현장 디버깅이 줌과 실거리를 물어볼 수 있게 핸들을 남긴다.
+  window.__lmap = lmap;
   mapReady = true;
 }
 
@@ -1037,8 +1054,11 @@ function renderMap(s) {
     } else homeMarker.setLatLng(s.home);
   }
 
-  // 첫 좌표를 받으면 한 번 확대해 붙는다. 그 뒤에는 따라가기만 한다.
-  if (!renderMap._zoomed) { lmap.setView(pos, 17); renderMap._zoomed = true; }
+  // 🔴 좌표를 처음 받으면 그 자리로 **중심을 잡고 50m 급으로 확대**한다.
+  //    실내·실외를 가리지 않는다 — fix 가 잡히기만 하면 거기가 중심이다.
+  //    (실내에서도 GPS 가 3D fix 를 주면 오차가 크더라도 대략의 자리는 맞고,
+  //     빈 판을 보는 것보다 낫다.)
+  if (!renderMap._zoomed) { lmap.setView(pos, ZOOM_50M); renderMap._zoomed = true; }
   else if (follow) lmap.panTo(pos, { animate: false });
 }
 
