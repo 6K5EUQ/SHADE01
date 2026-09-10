@@ -1,8 +1,8 @@
 <!doctype html>
 <meta charset="utf-8">
-<title>SHADE01 — 무인기 신호정보 체계</title>
+<title>SHADE01 — 신호정보 무인 정찰기 플랫폼</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="수직이착륙 무인기에 신호정보 페이로드를 싣고, 비행하며 수신한 스펙트럼에서 방위선(LOB)을 뽑아 교차로 위치를 확정(FIX)하는 체계 소개">
+<meta name="description" content="수직이착륙 무인기 기반 신호정보(SIGINT) 정찰 플랫폼. 임무 항로 비행 중 무선 신호 수집·분석, 방위선(LOB) 교차 위치 확정(FIX), 지상국 실시간 전송.">
 <link rel="stylesheet" href="/app.css">
 <style>
 /* 소개 페이지 전용. 팔레트·글꼴은 app.css 를 그대로 쓴다 — 계기판·기록 페이지와
@@ -136,7 +136,7 @@ footer a { color: var(--dim); }
 
 <header>
   <h1><a href="/">SHADE01</a></h1>
-  <span class="sub">무인기 신호정보 체계 소개</span>
+  <span class="sub">신호정보 무인 정찰기 플랫폼</span>
   <span class="grow"></span>
   <a class="btn" href="/">비행 기록</a>
   <a class="btn" href="/live">실시간 계기판</a>
@@ -148,7 +148,7 @@ footer a { color: var(--dim); }
 <section id="hero">
   <div class="heroTop">
     <h1><span class="reveal">SHADE</span><span class="reveal">01</span></h1>
-    <p class="tag reveal">수직이착륙 무인기에 신호정보 페이로드를 싣고, 날면서 찾아 지상으로 보낸다.</p>
+    <p class="tag reveal">신호정보 무인 정찰기 플랫폼</p>
   </div>
 
   <div class="fig reveal" id="flow">
@@ -210,14 +210,12 @@ footer a { color: var(--dim); }
 
 <!-- ═══════════ 2. 기체 ═══════════ -->
 <section id="craft">
-  <h2><small>01 · 기체</small>익폭 2.1 m 의 수직이착륙 고정익</h2>
-  <p class="lead">리프트 로터 넷으로 수직으로 뜨고, 꼬리의 순항 프로펠러로 고정익 비행에 든다.
-    활주로가 필요 없고, 순항은 멀티콥터보다 오래·멀리 간다. 신호정보 임무에 필요한 두 가지 —
-    <b>아무 데서나 뜬다</b>, <b>오래 떠 있는다</b> — 를 한 기체가 갖는다.</p>
+  <h2><small>01 · 기체</small>수직이착륙 무인기</h2>
+  <p class="lead">활주로 필요 없이 수직으로 이·착륙하며 임무 항로를 비행하며 무선 신호를 수집·분석</p>
   <div class="specs" id="specs">
     <div class="spec"><div class="k">익폭</div><div class="v"><span data-to="2.1" data-dp="1">0</span><small>m</small></div><div class="n">고정익 순항</div></div>
-    <div class="spec"><div class="k">이륙중량</div><div class="v"><span data-to="7" data-dp="0">0</span><small>kg</small></div><div class="n">페이로드 포함</div></div>
-    <div class="spec"><div class="k">리프트 로터</div><div class="v"><span data-to="4" data-dp="0">0</span><small>+ 1</small></div><div class="n">수직 4 · 순항 1</div></div>
+    <div class="spec"><div class="k">이륙중량</div><div class="v"><span data-to="7" data-dp="0">0</span><small>kg</small></div><div class="n">페이로드 탑재 기준</div></div>
+    <div class="spec"><div class="k">리프트 로터</div><div class="v"><span data-to="4" data-dp="0">0</span><small>+ 1</small></div><div class="n">리프트 4 · 순항 1</div></div>
     <div class="spec"><div class="k">배터리</div><div class="v"><span data-to="16" data-dp="0">0</span><small>Ah · 6S</small></div><div class="n">단일 팩</div></div>
     <div class="spec"><div class="k">비행제어</div><div class="v" style="font-size:18px">PX4</div><div class="n">Pixhawk 6C Mini</div></div>
     <div class="spec"><div class="k">조종·텔레메트리</div><div class="v" style="font-size:18px">ELRS</div><div class="n">MAVLink · 지상 브리지</div></div>
@@ -228,15 +226,13 @@ footer a { color: var(--dim); }
 <section id="payload">
   <div class="grid2">
     <div>
-      <h2><small>02 · 페이로드</small>동체 안에 수신기를 싣는다</h2>
-      <p class="lead">기체는 운반체다. 임무는 동체 안 페이로드가 한다 — 광대역 수신기가 전파를 받고,
-        다채널 안테나로 도래 방향을 재고, 온보드 컴퓨터가 그 자리에서 정리해 기록하고 내려보낸다.
-        비행제어와는 전원·링크만 나눠 쓴다.</p>
+      <h2><small>02 · 페이로드</small>SDR 기반 신호정보 장비 동체 내부 탑재</h2>
+      <p class="lead">광대역 SDR 수신기 · 다채널 방향탐지 안테나 · 온보드 처리 컴퓨터 · 데이터링크. 비행제어와 전원·링크 공유.</p>
       <ul class="steps" id="paySteps">
-        <li><span class="i">A</span><div><b>다채널 안테나 배열</b><span>위상 차이로 도래 방향을 잰다 — 방위선(LOB)의 출발점</span></div></li>
-        <li><span class="i">B</span><div><b>광대역 SDR 수신기</b><span>스펙트럼을 통째로 받아 신호를 골라낸다</span></div></li>
-        <li><span class="i">C</span><div><b>온보드 컴퓨터</b><span>전처리·기록. 링크가 끊겨도 임무는 계속된다</span></div></li>
-        <li><span class="i">D</span><div><b>데이터링크</b><span>방위선과 요약만 지상으로 — 원본은 착륙 후</span></div></li>
+        <li><span class="i">A</span><div><b>다채널 안테나 배열</b><span>기체 하부 장착 · 위상차 기반 도래 방향 측정</span></div></li>
+        <li><span class="i">B</span><div><b>광대역 SDR 수신기</b><span>광대역 스펙트럼 수신 · 관심 신호 추출</span></div></li>
+        <li><span class="i">C</span><div><b>온보드 컴퓨터</b><span>전처리·기록 · 링크 단절 시 자율 임무 지속</span></div></li>
+        <li><span class="i">D</span><div><b>데이터링크</b><span>방위선·분석 결과 실시간 지상 전송 · 원본 착륙 후 회수</span></div></li>
       </ul>
     </div>
     <div class="fig">
@@ -247,7 +243,7 @@ footer a { color: var(--dim); }
         <!-- 페이로드 베이 -->
         <rect x="150" y="98" width="230" height="104" rx="8" fill="none" stroke="#58a6ff" stroke-width="1.2" stroke-dasharray="4 4" opacity=".7"/>
         <!-- 모듈 (아래서 위로 슬라이드) -->
-        <g class="mod" data-k="A"><rect x="160" y="108" width="100" height="36" rx="6" fill="#142c47" stroke="#58a6ff"/><text x="210" y="131" text-anchor="middle" font-size="12" fill="#e6edf3">안테나 ×N</text></g>
+        <g class="mod" data-k="A"><rect x="160" y="108" width="100" height="36" rx="6" fill="#142c47" stroke="#58a6ff"/><text x="210" y="131" text-anchor="middle" font-size="12" fill="#e6edf3">안테나 (하부)</text></g>
         <g class="mod" data-k="B"><rect x="270" y="108" width="100" height="36" rx="6" fill="#142c47" stroke="#58a6ff"/><text x="320" y="131" text-anchor="middle" font-size="12" fill="#e6edf3">SDR 수신기</text></g>
         <g class="mod" data-k="C"><rect x="160" y="154" width="100" height="36" rx="6" fill="#1c2128" stroke="#8b949e"/><text x="210" y="177" text-anchor="middle" font-size="12" fill="#e6edf3">온보드 컴퓨터</text></g>
         <g class="mod" data-k="D"><rect x="270" y="154" width="100" height="36" rx="6" fill="#1c2128" stroke="#8b949e"/><text x="320" y="177" text-anchor="middle" font-size="12" fill="#e6edf3">데이터링크</text></g>
@@ -274,10 +270,8 @@ footer a { color: var(--dim); }
 
 <!-- ═══════════ 4. 운용 ═══════════ -->
 <section id="ops">
-  <h2><small>03 · 운용</small>떠서, 전환하고, 듣고, 돌아온다</h2>
-  <p class="lead">수직으로 20 m 까지 오른 뒤 고정익으로 전환해 임무 고도로 나간다. 수신은 순항 내내 돌고,
-    임무가 끝나면 홈 상공에서 다시 수직으로 내려앉는다. 조종기·지상국이 끊겨도 기체는 스스로 돌아오도록
-    failsafe 를 둔다.</p>
+  <h2><small>03 · 운용</small>수직 이륙 · 천이 · 항로 비행 · 복귀</h2>
+  <p class="lead">수직 이륙 후 고정익 천이, 임무 고도 항로 비행 중 상시 수신. 임무 종료 후 홈 상공 수직 착륙. 링크·배터리 failsafe 자동 복귀.</p>
   <div class="grid2">
     <div class="fig">
       <span class="cap">FLIGHT PROFILE</span>
@@ -307,20 +301,18 @@ footer a { color: var(--dim); }
     </div>
     <ul class="steps" id="opsSteps">
       <li><span class="i">1</span><div><b>수직 이륙</b><span>리프트 로터 4 · 활주로 불필요</span></div></li>
-      <li><span class="i">2</span><div><b>천이</b><span>순항 프로펠러로 속도를 얻어 날개로 뜬다</span></div></li>
-      <li><span class="i">3</span><div><b>순항 · 수신</b><span>임무 고도에서 페이로드가 돈다. 위치마다 방위선을 남긴다</span></div></li>
-      <li><span class="i">4</span><div><b>복귀</b><span>RTL — 링크·배터리 failsafe 가 스스로 홈으로 끈다</span></div></li>
-      <li><span class="i">5</span><div><b>수직 착륙</b><span>홈 상공에서 다시 멀티콥터로</span></div></li>
+      <li><span class="i">2</span><div><b>천이</b><span>순항 프로펠러 가속 · 고정익 전환</span></div></li>
+      <li><span class="i">3</span><div><b>순항 · 수신</b><span>임무 고도 항로 비행 · 지점별 방위선 산출</span></div></li>
+      <li><span class="i">4</span><div><b>복귀</b><span>RTL · 링크·배터리 failsafe 자동 복귀</span></div></li>
+      <li><span class="i">5</span><div><b>수직 착륙</b><span>홈 상공 멀티콥터 전환 · 수직 착륙</span></div></li>
     </ul>
   </div>
 </section>
 
 <!-- ═══════════ 5. 신호정보 ═══════════ -->
 <section id="sigint">
-  <h2><small>04 · 신호정보</small>방위선이 모이면 위치가 된다</h2>
-  <p class="lead">한 지점에서 수신기가 아는 것은 <b style="color:var(--lob)">방향</b>뿐이다 — 그 선 위 어딘가에 송신원이 있다.
-    기체가 움직이며 다른 지점에서 다시 재면 선이 하나 더 생기고, 선들이 만나는 곳이 좁혀진다.
-    비행 자체가 측정 기선이 되는 셈이다. 그래서 <b>날아다니는 수신기</b>가 필요하다.</p>
+  <h2><small>04 · 신호정보</small>방위선 교차에 의한 위치 확정</h2>
+  <p class="lead">단일 지점 수신 → 방위선(LOB). 이동 중 다지점 방위선 교차 → 위치 확정(FIX). 비행 항로 자체가 측정 기선.</p>
   <div class="grid2">
     <div class="fig">
       <span class="cap">SPECTRUM · WATERFALL</span>
@@ -348,33 +340,31 @@ footer a { color: var(--dim); }
     </div>
   </div>
   <ul class="steps" id="sigSteps" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
-    <li><span class="i">1</span><div><b>수신</b><span>순항 중 스펙트럼을 훑고 관심 신호를 잡는다</span></div></li>
-    <li class="lob"><span class="i">2</span><div><b>방위 추정 · LOB</b><span>안테나 배열의 위상차로 도래 방향을 잰다. 지점마다 한 줄</span></div></li>
-    <li class="lob"><span class="i">3</span><div><b>교차</b><span>비행하며 얻은 방위선들을 지도 위에서 겹친다</span></div></li>
-    <li class="fix"><span class="i">4</span><div><b>위치 확정 · FIX</b><span>교차 영역이 좁아지면 오차 타원과 함께 위치를 낸다</span></div></li>
+    <li><span class="i">1</span><div><b>수신</b><span>항로 비행 중 스펙트럼 감시 · 관심 신호 검출</span></div></li>
+    <li class="lob"><span class="i">2</span><div><b>방위 추정 · LOB</b><span>안테나 배열 위상차 기반 도래 방향 측정 · 지점별 산출</span></div></li>
+    <li class="lob"><span class="i">3</span><div><b>교차</b><span>다지점 방위선 지도 중첩</span></div></li>
+    <li class="fix"><span class="i">4</span><div><b>위치 확정 · FIX</b><span>교차 영역 수렴 · 오차 타원 포함 위치 산출</span></div></li>
   </ul>
 </section>
 
 <!-- ═══════════ 6. 지상 체계 ═══════════ -->
 <section id="ground">
-  <h2><small>05 · 지상 체계</small>날리면서 보고, 내려온 뒤 남긴다</h2>
-  <p class="lead">비행 중에는 지상국이 기체 상태와 방위선을 실시간으로 받고, 착륙하면 비행 로그와 수신 기록이
-    웹에 올라가 지도 위에서 되감아 볼 수 있다. 무엇을 왜 바꿨는지까지 전부 기록이 남는다.</p>
+  <h2><small>05 · 지상 체계</small>지상국 실시간 감시 · 비행 후 기록</h2>
+  <p class="lead">비행 중 기체 상태·방위선·분석 결과 실시간 수신. 착륙 후 비행 로그·수신 기록 웹 등록, 지도 기반 재생. 설정 변경 이력 전수 기록.</p>
   <div class="flow" id="flow">
     <div class="node"><b>무인기</b><span>PX4 비행제어<br>SIGINT 페이로드<br>온보드 기록</span></div>
     <div class="link"><i></i></div>
-    <div class="node"><b>지상국</b><span>실시간 계기판 · 지도<br>방위선 수신<br>failsafe 감시</span></div>
+    <div class="node"><b>지상국</b><span>실시간 계기판 · 지도<br>방위선 · 분석 결과 수신<br>failsafe 감시</span></div>
     <div class="link"><i></i></div>
-    <div class="node"><b>웹 기록</b><span>비행별 로그 · 재생<br>지도 위 항적<br>변경 이력</span></div>
+    <div class="node"><b>웹 기록</b><span>비행별 로그 · 재생<br>지도 항적<br>변경 이력</span></div>
   </div>
   <div class="cta">
-    <a class="btn primary" href="/live">실시간 계기판 보기</a>
-    <a class="btn" href="/">비행 기록 보기</a>
+    <a class="btn primary" href="/live">실시간 계기판</a>
+    <a class="btn" href="/">비행 기록</a>
   </div>
   <footer>
-    SHADE01 — Striver Mini VTOL 4+1 · PX4 v1.17 · Pixhawk 6C Mini.
-    이 페이지는 체계 개요다. 수치·구성의 정본은 <a href="https://github.com/6K5EUQ/SHADE01">저장소 문서</a>에 있고,
-    비행 기록은 <a href="/">목록</a>에서 실측 그대로 본다.
+    SHADE01 — Striver Mini VTOL 4+1 · PX4 v1.17 · Pixhawk 6C Mini. 체계 개요.
+    수치·구성 정본: <a href="https://github.com/6K5EUQ/SHADE01">저장소 문서</a> · 비행 기록: <a href="/">목록</a>.
   </footer>
 </section>
 
