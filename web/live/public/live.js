@@ -939,7 +939,8 @@ const MAX_ZOOM = 20;
 //    가로 기준 50m 에 가까운 것은 z19 다. z18 은 50m 를 훌쩍 넘어 기체가
 //    점처럼 작아진다. **가까이 보는 쪽을 택했다** — 이 계기의 목적이
 //    "지금 어디 있나" 이지 "전체 경로 조망" 이 아니기 때문이다.
-//    전체를 보고 싶으면 따라가기를 끄고 손으로 줌아웃하면 된다.
+//    전체를 보고 싶으면 손으로 줌아웃하면 된다 — 확대·축소는 따라가기를
+//    멈추지 않으므로 축척만 바뀐 채 기체를 계속 따라간다.
 //
 //    ⚠️ Esri 위성은 z18 까지만 실제 타일을 준다 — z19 는 마지막 타일을
 //    확대한 것이라 흐리다. 궤적·기체 아이콘은 벡터라 선명하다.
@@ -951,7 +952,15 @@ let lmap = null, tileMode = 'sat', tiles = {};
 let trkLine = null, acMarker = null, homeMarker = null;
 let trkPts = [];          // [[lat,lon], ...] 누적
 let trkHave = 0;          // 서버 기준 지금까지 받은 점 개수
-let follow = true, mapReady = false;
+let mapReady = false;
+// 🔴 따라가기는 **항상 켜져 있다** (2026-09-10). 토글 버튼을 없앴다 —
+//    비행 중에 기체가 화면 밖으로 나가 있는 상태가 정상일 이유가 없고,
+//    좁은 칸에서 버튼 하나가 계기 자리를 먹는다.
+//    다만 손으로 지도를 끌어 주변을 볼 수는 있어야 하므로, 드래그하면
+//    잠시 멈췄다가 스스로 돌아온다. 되돌릴 버튼이 없으니 **자동 복귀가
+//    없으면 기체를 영영 놓친다.**
+const FOLLOW_RESUME_MS = 8000;
+let followPausedAt = 0;
 
 function initMap() {
   if (lmap || typeof L === 'undefined') return;
@@ -983,17 +992,12 @@ function initMap() {
     tb.textContent = tileMode === 'osm' ? '위성' : '지도';
   };
   if (tb) tb.textContent = tileMode === 'osm' ? '위성' : '지도';
-  const fb = $('followBtn');
-  if (fb) fb.onclick = () => {
-    follow = !follow;
-    fb.classList.toggle('on', follow);
-  };
-  // 손으로 지도를 끌면 따라가기를 끈다 — 보려던 곳에서 튕겨 나가면 못 쓴다.
-  lmap.on('dragstart', () => {
-    if (!follow) return;
-    follow = false;
-    const b = $('followBtn'); if (b) b.classList.remove('on');
-  });
+  // 손으로 끌면 8초간 멈춘다 — 보려던 곳에서 곧바로 튕겨 나가면 못 쓴다.
+  // 그 뒤에는 스스로 기체로 돌아온다 (버튼이 없으므로 자동 복귀가 유일한 길이다).
+  // ⚠️ dragstart 만 본다. zoomstart 를 같이 걸면 첫 좌표에서 부르는
+  //    setView 자체가 zoom 이벤트를 내 곧바로 8초 정지에 걸린다.
+  //    확대·축소는 중심을 안 바꾸므로 따라가기와 부딪히지도 않는다.
+  lmap.on('dragstart', () => { followPausedAt = Date.now(); });
   trkLine = L.polyline([], { color: '#58a6ff', weight: 2, opacity: .9 }).addTo(lmap);
   // 자체검사·현장 디버깅이 줌과 실거리를 물어볼 수 있게 핸들을 남긴다.
   window.__lmap = lmap;
@@ -1059,7 +1063,9 @@ function renderMap(s) {
   //    (실내에서도 GPS 가 3D fix 를 주면 오차가 크더라도 대략의 자리는 맞고,
   //     빈 판을 보는 것보다 낫다.)
   if (!renderMap._zoomed) { lmap.setView(pos, ZOOM_50M); renderMap._zoomed = true; }
-  else if (follow) lmap.panTo(pos, { animate: false });
+  else if (Date.now() - followPausedAt > FOLLOW_RESUME_MS) {
+    lmap.panTo(pos, { animate: false });
+  }
 }
 
 // ── 모터: 기체 형상 위의 넷 ─────────────────────────────────────────
