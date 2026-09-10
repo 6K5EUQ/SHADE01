@@ -1,6 +1,6 @@
 # SHADE01
 
-**VTOL 드론 한 대를 실제로 운용하면서 만든 기록과 도구.**
+# https://shade01.bewe.co.kr/intro
 
 ![비행 중](docs/images/00-flight.jpg)
 
