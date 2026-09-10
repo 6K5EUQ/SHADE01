@@ -29,3 +29,6 @@ web/data/
 web/.env
 web/*.log
 web/tools/hosts.conf
+
+# 종료시각 캐시 — 파생 데이터다 (lognames.py)
+.endtime-cache.json

@@ -44,6 +44,7 @@ log_<엔트리ID>_<종료시각 KST>.ulg
 """
 
 import datetime
+import json
 import os
 import re
 
@@ -92,6 +93,68 @@ def parse(name):
     return None, None, '?'
 
 
+# 🔴 종료시각 캐시 (2026-09-10). 이 함수는 로그를 **통째로 파싱**한다 —
+#    파일당 0.03~0.24초다. 재생 목록(logsource.catalog)이 로컬 사본 전부에
+#    대해 부르므로 64개면 **9초**가 걸렸고, 그것이 "여는 중… 수십 초" 의
+#    정체였다 (실측: catalog 9.07초 중 _remote_list 는 0.00초).
+#
+#    파일은 한 번 쓰이면 안 바뀐다. (경로, mtime, 크기)로 캐시하면 두 번째
+#    부터 공짜다. 파일이 바뀌면 키가 달라져 자동으로 다시 잰다.
+_END_CACHE = {}
+# 디스크에도 남긴다 — 메모리 캐시만 두면 서비스가 재시작될 때마다 첫 사용자가
+# 9초를 기다린다. 로그 디렉토리 옆에 JSON 한 장으로 둔다.
+_END_CACHE_FILE = None
+_END_DIRTY = False
+
+
+def _cache_path():
+    global _END_CACHE_FILE
+    if _END_CACHE_FILE is None:
+        d = os.environ.get('QGC_LOG_DIR') or os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__)))), 'logs')
+        _END_CACHE_FILE = os.path.join(os.path.expanduser(d), '.endtime-cache.json')
+    return _END_CACHE_FILE
+
+
+def _cache_load():
+    """디스크 캐시를 한 번 읽어 메모리로 올린다. 깨져 있으면 조용히 버린다."""
+    global _END_CACHE
+    if _END_CACHE:
+        return
+    try:
+        with open(_cache_path(), encoding='utf-8') as fh:
+            raw = json.load(fh)
+        for k, v in raw.items():
+            p, mt, sz = k.rsplit('|', 2)
+            _END_CACHE[(p, int(mt), int(sz))] = (
+                datetime.datetime.fromisoformat(v) if v else None)
+    except Exception:
+        _END_CACHE = {}
+
+
+def _cache_save():
+    """바뀐 것이 있을 때만 쓴다. 실패해도 조용히 넘어간다 — 캐시일 뿐이다."""
+    global _END_DIRTY
+    if not _END_DIRTY:
+        return
+    try:
+        raw = {'%s|%d|%d' % k: (v.isoformat() if v else None)
+               for k, v in _END_CACHE.items()}
+        tmp = _cache_path() + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as fh:
+            json.dump(raw, fh)
+        os.replace(tmp, _cache_path())        # 원자적 — 반쯤 쓴 파일이 안 남는다
+        _END_DIRTY = False
+    except Exception:
+        pass
+
+
+def _mark_dirty():
+    global _END_DIRTY
+    _END_DIRTY = True
+
+
 def end_time(path):
     """로그를 열어 **끝난 시각**(KST, naive)을 잰다. 못 재면 None.
 
@@ -103,11 +166,23 @@ def end_time(path):
     """
     import qgclog as Q
     try:
+        st = os.stat(path)
+        key = (os.path.abspath(path), int(st.st_mtime), st.st_size)
+    except OSError:
+        return None
+    _cache_load()
+    if key in _END_CACHE:
+        return _END_CACHE[key]
+    try:
         ulog, _ = Q._load(path)
     except Exception:
+        _END_CACHE[key] = None      # 못 읽는 것도 기억한다 — 매번 다시 열지 않게
+        _mark_dirty()
         return None
     bt = ulog.msg_info_dict.get('boot_time_utc_us')
     if not bt:
+        _END_CACHE[key] = None
+        _mark_dirty()
         return None
     last = None
     for d in ulog.data_list:
@@ -115,9 +190,14 @@ def end_time(path):
         if ts is not None and len(ts):
             last = ts[-1] if last is None else max(last, ts[-1])
     if last is None:
+        _END_CACHE[key] = None
+        _mark_dirty()
         return None
     utc = datetime.datetime.fromtimestamp((bt + last) / 1e6, datetime.timezone.utc)
-    return utc.astimezone(KST).replace(tzinfo=None)
+    out = utc.astimezone(KST).replace(tzinfo=None)
+    _END_CACHE[key] = out
+    _mark_dirty()
+    return out
 
 
 def assign(names, end_of=None):

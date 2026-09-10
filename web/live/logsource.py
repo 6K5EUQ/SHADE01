@@ -159,6 +159,12 @@ def catalog(force=False):
 
     names = [n for n, _ in rows]
     tbl = L.assign(names, end_of=end_of)
+    # 종료시각은 로그를 통째로 파싱해야 나온다 — 64개면 9초다 (2026-09-10 실측).
+    # 캐시를 디스크에 남겨 다음 호출·다음 재시작이 공짜가 되게 한다.
+    try:
+        L._cache_save()
+    except Exception:
+        pass
     sizes = dict(rows)
 
     items = []

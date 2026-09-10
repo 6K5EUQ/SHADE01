@@ -42,13 +42,21 @@ main {
 /* 지도 칸이 이제 HUD 줄 안이라 hudPane 의 어두운 바탕과 붙는다 */
 #hudTop > #mapPane { border-top: 4px solid #05070a; }
 #lmap { width: 100%; height: 100%; background: #0d1117; }
+/* 🔴 타일의 채도·밝기를 낮춘다 (2026-09-10). 계기판 전체가 무채색 + 경고색만
+   쓰는데 위성 사진만 채도가 높아 눈이 자꾸 그쪽으로 끌렸다 — 「색이 보이는
+   것 자체가 신호」 라는 이 화면의 규칙을 지도가 혼자 깨고 있었다.
+   배경이 조용해지면 **궤적(파랑)과 기체(흰색)가 오히려 더 잘 보인다.**
+   활주로·건물 윤곽은 그대로 읽힌다. */
+#lmap .leaflet-tile { filter: saturate(.45) brightness(.72); }
 /* Leaflet 이 기본으로 흰 배경을 깐다 — 어두운 판에서 눈이 아프다. */
 #lmap .leaflet-container { background: #0d1117; }
 /* 저작권 표기는 좁은 칸에서 두 줄을 먹는다. 작게 눌러 둔다. */
+/* 저작권 배지는 좁은 칸에서 두 줄을 먹고 흰 띠로 튄다. 판 색으로 눌러 둔다. */
 #lmap .leaflet-control-attribution {
-  font-size: 9px; background: rgba(13,17,23,.7); color: var(--muted);
+  font-size: 8px; padding: 0 3px; line-height: 1.5;
+  background: rgba(13,17,23,.78); color: var(--border-2);
 }
-#lmap .leaflet-control-attribution a { color: var(--dim); }
+#lmap .leaflet-control-attribution a { color: var(--border-2); }
 /* 지도 위 버튼을 전부 없앴다 (2026-09-10). 칸이 좁아 버튼이 궤적을 가린다.
    따라가기는 항상 켜져 있고(손으로 끌면 8초 뒤 복귀), 타일은 위성 고정,
    줌은 휠·핀치로 한다. */
