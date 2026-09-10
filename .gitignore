@@ -32,3 +32,6 @@ web/tools/hosts.conf
 
 # 종료시각 캐시 — 파생 데이터다 (lognames.py)
 .endtime-cache.json
+
+# npm — anime.js 는 web/public/vendor/animejs/ 에 벤더링한다 (Leaflet 과 같은 이유). 설치본은 커밋하지 않는다
+web/node_modules/

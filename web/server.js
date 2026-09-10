@@ -689,6 +689,8 @@ async function route(req, res) {
     return proxyLive(req, res);
   }
   if (/^\/compare\b/.test(p)) return serveStatic(req, res, '/compare.html');
+  // /intro 는 체계 소개 페이지. 실제 파일은 intro.html 이다.
+  if (p === '/intro' || p === '/intro/') return serveStatic(req, res, '/intro.html');
   return serveStatic(req, res, p);
 }
 

@@ -10,6 +10,7 @@
 분석      https://shade01.bewe.co.kr/log/<id>          ?t=113.5 로 그 순간부터
 비교      https://shade01.bewe.co.kr/compare?a=<id>&b=<id>
 실시간    https://shade01.bewe.co.kr/live              지금 뜬 기체 (아래)
+소개      https://shade01.bewe.co.kr/intro             체계 소개 — 기체·페이로드·LOB→FIX (anime.js, 2026-09-10)
 상태      https://shade01.bewe.co.kr/api/health
 ```
 
