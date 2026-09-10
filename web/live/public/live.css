@@ -16,9 +16,11 @@ body { height: 100%; overflow: hidden; display: flex; flex-direction: column; }
    숫자 스트립이 화면 밖으로 밀려 조용히 사라진다. */
 main {
   display: grid;
-  /* 좌 HUD·계기판 : 우 차트. 지도는 **HUD 줄 안에서** 나눈다 (#hudTop) —
-     main 칸을 하나 더 만들면 아래 계기판까지 밀려난다 (2026-09-10 정정). */
-  grid-template-columns: minmax(560px, 1.32fr) minmax(380px, 1fr);
+  /* 🔴 화면을 네 칸으로 **정확히 4등분**한다 (2026-09-11):
+       HUD | 지도
+       데이터 | 그래프
+     가로 1:1, 세로도 1:1 (#hudPane·#chartPane 의 grid-template-rows). */
+  grid-template-columns: 1fr 1fr;
   flex: 1; min-height: 0;
 }
 #hudPane, #chartPane { min-width: 0; min-height: 0; }
@@ -41,7 +43,7 @@ main {
 /* 위 4px 은 #hudBox 의 border-top 과 같은 값이라 두 그림이 같은 y 에서 시작한다.
    좌·우에도 같은 폭을 준다 — 지도가 칸 가장자리에 밀착돼 답답하다는 지적
    (좌측 칸에 있던 때와 같은 처리, 2026-09-11). */
-#mapPane { border: 4px solid #05070a; border-bottom: 1px solid var(--border); }
+#mapPane { border: 4px solid var(--panel); border-bottom: 1px solid var(--border); }
 #lmap { width: 100%; height: 100%; background: #0d1117; }
 /* 🔴 타일의 채도·밝기를 낮춘다 (2026-09-10). 계기판 전체가 무채색 + 경고색만
    쓰는데 위성 사진만 채도가 높아 눈이 자꾸 그쪽으로 끌렸다 — 「색이 보이는
@@ -79,16 +81,17 @@ main {
    그래서 HUD 를 그 비율로 주고 나머지를 스트립이 갖는다. 숫자로 박으면
    창 높이가 바뀔 때 어긋나므로 fr 로 나눈다. */
 #hudPane {
-  display: grid; grid-template-rows: 1.32fr 1fr;
+  display: grid; grid-template-rows: 1fr 1fr;
   border-right: 1px solid var(--border);
-  background: #05070a;
+  /* 네 칸 배경을 데이터 패널과 같은 --panel 로 통일한다 (2026-09-11) */
+  background: var(--panel);
 }
 /* 헤더를 없앤 뒤로 기수 테이프가 화면 맨 위 픽셀에 딱 붙는다. 잘리지는
    않지만(라벨은 테이프 안에 중앙정렬) 숨 쉴 틈이 없어 답답하다. 4px 만 준다.
    ⚠️ padding 이 아니라 border-top 이다 — padding 을 주면 hudBox 의 실측
    높이(layout() 이 viewBox 로 쓰는 값)와 SVG 그리는 영역이 어긋난다. */
 #hudBox { position: relative; min-height: 0; overflow: hidden;
-          border-top: 4px solid #05070a; }
+          border-top: 4px solid var(--panel); }
 /* SVG 는 CSS 로 100%/100%, viewBox 는 JS 가 실측 px 로 넣는다 → 배율 항상 1:1.
    preserveAspectRatio 를 아예 안 쓴다: none 이면 종횡비마다 가로/세로 배율이
    달라져 45° 뱅크가 30° 로 보이고, meet 는 레터박스, slice 는 테이프를 잘라 먹는다. */
@@ -306,19 +309,21 @@ a.btn { display: inline-block; text-decoration: none; }
    아랫선이 HUD 아랫선과 정확히 맞는다 (요구: HUD 와 같은 수직 범위).
    하단 조작 바는 행을 차지하지 않는다 — 행에 넣으면 그 26px 만큼 우측만
    짧아져 두 아랫선이 어긋난다 (실측 15px). 차트 위에 겹쳐 띄운다. */
-#chartPane { position: relative; display: grid; grid-template-rows: 1.32fr 1fr; }
+#chartPane { position: relative; display: grid; grid-template-rows: 1fr 1fr; }
 #chartPane > .msgs { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; }
 /* 겹친 바가 마지막 차트의 x축 눈금을 가리지 않게 그만큼 비워 둔다 */
 #charts { padding-bottom: 26px; }
 /* 켠 단이 세로를 나눠 갖는다 — 3단이면 한 화면에 딱 차고, 더 켜면 최소
    높이(150px) 아래로는 안 줄어 스크롤이 생긴다. 고정 높이로 두면 단을
    1~2개만 켰을 때 아래가 통째로 빈다. */
-#charts { overflow-y: auto; min-height: 0; background: var(--bg);
+#charts { overflow-y: auto; min-height: 0; background: var(--panel);
           display: flex; flex-direction: column; }
 
 /* 차트 한 단. 로그 뷰어(log.html)의 .chart 와 같은 뼈대다. */
 .lchart { position: relative; border-bottom: 1px solid var(--border);
-           flex: 1 1 0; min-height: 150px; display: flex; flex-direction: column; }
+           flex: 1 1 0; min-height: 150px; display: flex; flex-direction: column;
+           /* 네 칸 배경 통일 — 계기판과 같은 --panel (2026-09-11) */
+           background: var(--panel); }
 /* 높이는 부모(.lchart)가 나눠 준 만큼 쓴다. drawChart 가 clientHeight 를
    읽어 viewBox 를 잡으므로 CSS 높이가 곧 그림 해상도다.
    위쪽 18px 는 축 머리말·현재값 자리다. */

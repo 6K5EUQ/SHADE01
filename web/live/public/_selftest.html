@@ -232,9 +232,18 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
   ok('세 칸이 같은 줄에 있다',
      Math.abs(motBox('sc-mspread').top - motBox('sc-mavg').top) < 2,
      `${motBox('sc-mspread').top.toFixed(0)} vs ${motBox('sc-mavg').top.toFixed(0)}`);
-  // 큰 값이 눌리지 않을 만큼 넓은가 — 40px 글자 4자리가 들어가야 한다.
-  ok('숫자 칸이 충분히 넓다', motBox('sc-mspread').width > 150,
-     `${motBox('sc-mspread').width.toFixed(0)}px`);
+  // 큰 값이 눌리지 않는가. 🔴 고정 150px 문턱은 화면을 4등분하기 전(2026-09-11)
+  //    좌측이 넓던 시절 값이라 낡았다. 칸 폭이 아니라 **글자가 칸을 넘는가**를 본다 —
+  //    실측 최악값 `123.4` 가 138px, 1280px 창에서 칸이 160px 라 들어간다.
+  const fits = (id) => {
+    const b = D.getElementById(id), c = b.parentElement;
+    return b.getBoundingClientRect().width <= c.getBoundingClientRect().width - 8;
+  };
+  const sv = D.getElementById('st-mspread').textContent;
+  D.getElementById('st-mspread').textContent = '88.8';
+  ok('숫자 칸에 최악값이 들어간다', fits('st-mspread'),
+     `글자 ${D.getElementById('st-mspread').getBoundingClientRect().width.toFixed(0)}px / 칸 ${motBox('sc-mspread').width.toFixed(0)}px`);
+  D.getElementById('st-mspread').textContent = sv;
 
   ok('모터 값이 원 안에 찍힌다',
      (D.getElementById('mv-LF').textContent || '').trim() !== '—',

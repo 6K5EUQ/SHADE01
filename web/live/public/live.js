@@ -204,7 +204,7 @@ function buildHUD() {
   h.warn = el('text', { x: 0, y: 110, 'text-anchor': 'middle', class: 'warnTxt', fill: 'var(--bad)' }, h.center);
 
   // ③ 좌측 테이프 — 대지속도 (🔴 대기속도가 아니다)
-  h.spdBg = el('rect', { fill: 'rgba(13,17,23,.55)' }, svg);
+  h.spdBg = el('rect', { fill: 'rgba(22,27,34,.62)' }, svg);
   const spdClip = el('g', { 'clip-path': 'url(#hudClipSpd)' }, svg);
   h.spdSlide = el('g', {}, spdClip);
   for (let v = 0; v <= 40; v++) {
@@ -231,7 +231,7 @@ function buildHUD() {
   h.spdUnit.textContent = 'm/s';
 
   // ④ 우측 테이프 — 고도 AGL + 지면대
-  h.altBg = el('rect', { fill: 'rgba(13,17,23,.55)' }, svg);
+  h.altBg = el('rect', { fill: 'rgba(22,27,34,.62)' }, svg);
   const altClip = el('g', { 'clip-path': 'url(#hudClipAlt)' }, svg);
   h.altSlide = el('g', {}, altClip);
   h.gndBand = el('rect', { y: 0, fill: 'var(--bad)', opacity: .10 }, h.altSlide);
@@ -263,7 +263,7 @@ function buildHUD() {
 
   // ⑥ 상단 기수 테이프. 🔴 359→0 이음매: 사다리를 -60..780 한 벌로 만들어
   //    어느 방향으로 몇 바퀴를 돌아도 재렌더·모듈로 로직이 0 이다.
-  h.hdgBg = el('rect', { fill: 'rgba(13,17,23,.55)' }, svg);
+  h.hdgBg = el('rect', { fill: 'rgba(22,27,34,.62)' }, svg);
   h.hdgWrap = el('g', { 'clip-path': 'url(#hudClipHdg)' }, svg);
   h.hdgSlide = el('g', {}, h.hdgWrap);
   h.hdgMinor = [];
