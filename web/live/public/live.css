@@ -38,7 +38,10 @@ main {
 /* 지도는 우측 칸 위쪽이다 (2026-09-10). HUD 와 같은 높이를 갖도록
    #chartPane 이 행 높이를 좌측 #hudPane 과 같은 비율로 나눈다.
    위쪽 4px 는 #hudBox 의 border-top 과 같은 값 — 두 칸의 그림이 같은 y 에서 시작한다. */
-#mapPane { border-top: 4px solid #05070a; border-bottom: 1px solid var(--border); }
+/* 위 4px 은 #hudBox 의 border-top 과 같은 값이라 두 그림이 같은 y 에서 시작한다.
+   좌·우에도 같은 폭을 준다 — 지도가 칸 가장자리에 밀착돼 답답하다는 지적
+   (좌측 칸에 있던 때와 같은 처리, 2026-09-11). */
+#mapPane { border: 4px solid #05070a; border-bottom: 1px solid var(--border); }
 #lmap { width: 100%; height: 100%; background: #0d1117; }
 /* 🔴 타일의 채도·밝기를 낮춘다 (2026-09-10). 계기판 전체가 무채색 + 경고색만
    쓰는데 위성 사진만 채도가 높아 눈이 자꾸 그쪽으로 끌렸다 — 「색이 보이는
