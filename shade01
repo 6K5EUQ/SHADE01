@@ -32,7 +32,7 @@ usage() {
   ./shade01 log <번호>        해당 비행 분석
   ./shade01 live on|off       실시간 트래킹 (http://localhost:4400)
 
-절차 전문: FLIGHT-SYNC.md · 비행 전 점검: skills/preflight/SKILL.md
+절차 전문: FLIGHT-SYNC.md · 비행 전 점검: skills/shade01-test/SKILL.md
 USAGE
   exit "${1:-1}"
 }

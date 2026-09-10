@@ -3,7 +3,7 @@
 > 🔴 **이 문서는 9/2 스냅샷이다. 그 뒤 6번 바뀌었다** (2026-09-06 확인 — 여기 적힌
 > `RTL_RETURN_ALT 25`·`GF_ACTION 2`·`GF_MAX_HOR_DIST 150`·`NAV_DLL_ACT 0`·
 > `MIS_TAKEOFF_ALT 5` 는 **전부 지금 값이 아니다**: 20 / 0 / 0 / 2 / 20).
-> 지금 값은 [`params/px4_params_20260906-185941.params`](../params/px4_params_20260906-185941.params),
+> 지금 값은 [`params/px4_params_20260910-151002.params`](../params/px4_params_20260910-151002.params),
 > 왜 그 값인지는 [FC_CHANGELOG.md](../FC_CHANGELOG.md). 이 문서는 **9/2 당시 구조를
 > 사람이 읽기 위한 것**으로만 남긴다 — 값을 인용하지 마라.
 
@@ -232,7 +232,7 @@ PX4 는 `RC_MAP_*_SW` 에서 **1500 초과를 ON** 으로 본다 → **내리면
 
 #### 현행 — SB 3단 + SC/SF 래치 (2026-09-04~)
 
-`params/px4_params_20260906-185941.params` 기준. 6슬롯 중 **5개만 도달 가능**하다.
+`params/px4_params_20260910-151002.params` 기준. 6슬롯 중 **5개만 도달 가능**하다.
 
 | 슬롯 | 조작 | 실측 PWM | 슬롯 여유 | 파라미터 | 모드 | FC 실제 |
 |---|---|---|---|---|---|---|
@@ -487,12 +487,15 @@ S3 를 CH9 에 뒀을 때 USB 로 아무리 돌려도 안 잡혔던 원인이 �
 | 크루즈 모터 | 미할당 | **MAIN8** 복구 |
 
 관련 파일:
-- [`QGroundControl/Missions/0824_test.plan`](../QGroundControl/Missions/0824_test.plan) — 고도 5m, 펜스 있음 (현행의 직전 판)
-- [`QGroundControl/Missions/0824_test_px4.plan`](../QGroundControl/Missions/0824_test_px4.plan) — 고도 3m, 펜스 없음 (구판)
-- [`QGroundControl/Parameters/px4_params_0824.params`](../QGroundControl/Parameters/px4_params_0824.params) — 4개짜리 부분 패치
+- `QGroundControl/Missions/0824_test.plan` — 고도 5m, 펜스 있음 (현행의 직전 판)
+- `QGroundControl/Missions/0824_test_px4.plan` — 고도 3m, 펜스 없음 (구판)
+- `QGroundControl/Parameters/px4_params_0824.params` — 4개짜리 부분 패치
 - [`px4-backup/px4_v6c_backup_20260731.params`](../px4-backup/px4_v6c_backup_20260731.params) — 최초 백업
 
-> ⚠️ [`QGroundControl/Parameters/CHANGELOG.md`](../QGroundControl/Parameters/CHANGELOG.md) 와
+> ⚠️ 위 `QGroundControl/…` 셋은 **리포에 없다** — `.gitignore` 된 QGC 앱 데이터라 그 파일을
+> 만든 PC(gram)에만 있다. 이 PC 에는 폴더가 비어 있다 (2026-09-10 확인).
+
+> ⚠️ `QGroundControl/Parameters/CHANGELOG.md` 와
 > `NEWVEHICLE_baseline.params` 는 **SHADE01 이 아니다.** ArduCopter 3.6.12 / Pixhawk PX4v3
 > Quad X 의 기록이다. 이 기체 값과 섞지 마라.
 

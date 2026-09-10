@@ -61,7 +61,9 @@ EXPECT = {
     'MPC_THR_HOVER':   (0.65, 'warn', 'FC 자체 추정과 30% 어긋나 있던 것을 맞췄다 (9/5 17:15)'),
 
     # 링크
-    'MAV_0_RATE':      (490, 'warn', '300 으로 조였다가 되돌린 값 (9/5 17:22)'),
+    'MAV_0_RATE':      (1400, 'warn', 'MAV_0_FORWARD=0 으로 "Sensor lost" 를 잡은 뒤 재배분 (9/9 14:20)'),
+    'MAV_0_FORWARD':   (0, 'warn', '1 이면 USB 브리지 트래픽이 조종기 링크로 넘어가 센서가 죽는다 (9/9 13:10)'),
+
 }
 
 # 스위치는 "매핑되어 있기만" 하면 된다. 채널 번호는 조종기 구성에 따라 바뀐다.
@@ -81,12 +83,16 @@ INFORM = {
 FLTMODE_PARAMS = ['COM_FLTMODE%d' % i for i in range(1, 7)]
 
 # PX4 비행모드 번호 → 이름. 고정익 모드가 슬롯에 있으면 진입 경로가 열린 것이다.
-# (PX4 commander_params.c 의 COM_FLTMODE1 열거)
+# 🔴 정본은 이 기체 펌웨어의 빌드 산출물이다 —
+#    PX4-Autopilot/build/px4_fmu-v6c_default/parameters.json (COM_FLTMODE1 values).
+#    3 = Mission, 4 = Hold 를 뒤바꿔 적은 탓에 2026-09-06~09 사이 미션이 안 걸렸다.
 FLTMODE = {
     -1: '없음', 0: 'Manual', 1: 'Altitude', 2: 'Position', 3: 'Mission',
     4: 'Hold', 5: 'Return', 6: 'Acro', 7: 'Offboard', 8: 'Stabilized',
-    9: 'Rattitude', 10: 'Takeoff', 11: 'Land', 12: 'Follow Me', 13: 'Precision Land',
+    9: 'Position Slow', 10: 'Takeoff', 11: 'Land', 12: 'Follow Me',
+    13: 'Precision Land', 16: 'Altitude Cruise',
 }
+MISSION_MODE = 3
 
 # 미션 이착륙 명령. 🔴 84(VTOL_TAKEOFF)는 이름과 달리 "떠서 **고정익으로 전환**하라"다 —
 # mission.cpp 가 상승 후 set_vtol_transition_item(FW) 를 부른다. 스위치를 거치지 않으므로
@@ -463,6 +469,11 @@ def check_params(r, p):
         if fw_slots:
             r.add('warn', '비행모드 슬롯', ' '.join(slots),
                   '곡예/비운용 모드가 슬롯에 있다: ' + ', '.join(fw_slots))
+        # 🔴 Mission 이 어느 슬롯에도 없으면 조종기로 미션을 걸 방법이 없다.
+        #    2026-09-06 에 COM_FLTMODE1 이 4(Hold)로 바뀌어 9/9 까지 이 상태였다.
+        elif not any(int(p[n]) == MISSION_MODE for n in FLTMODE_PARAMS if n in p):
+            r.add('warn', '비행모드 슬롯', ' '.join(slots),
+                  'Mission(3) 이 6슬롯 어디에도 없다 — 조종기로 미션 진입 불가')
         else:
             r.add('ok', '비행모드 슬롯', ' '.join(slots))
 

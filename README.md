@@ -113,6 +113,7 @@ GPS·배터리·통신 두절 대비 설정·센서 상태를 한 번에 읽고
 | `airframes/` | 기체 조립 구성 |
 | `tools/` | 로그 수집·분석 프로그램 |
 | `web/` | 비행 기록 웹 서비스 |
+| `docs/emergency/` | **현장 체크리스트** — 이륙 전 · 이륙 직후 · 비상. 종이로 들고 나가는 것 |
 | `FC_CHANGELOG.md` | 기체 설정을 언제 왜 바꿨는지 전부 기록 |
 
 기체 설정을 하나라도 바꾸면 **왜 바꿨는지 근거와 함께** 남깁니다.
@@ -245,14 +246,14 @@ QGC 대신(또는 같이) **브라우저로 볼 수 있다** — 지도 한쪽, 
 | 기체 | [Striver Mini VTOL](airframes/striver-mini-vtol/README.md) (4+1), `MAV_TYPE=22` |
 | FC | [Pixhawk 6C Mini](components/fc/holybro-pixhawk-6c-mini/README.md) — `PX4_FMU_V6C`, HW `V6C002002` |
 | 펌웨어 | **PX4 v1.17.0 커스텀** (`d6f12ad1c4f7`, 2026-08-11 빌드, CRSF 포함, 플래시 98.3%) |
-| 컴패니언 | [Raspberry Pi 5 `raspb1`](components/companion/raspberry-pi-5/README.md) |
+| 컴패니언 | [Raspberry Pi 5 `raspb1`](components/companion/raspberry-pi-5/README.md) — ⚪ **휴면** (2026-09-04~, FC USB 는 `rim3`) |
 | 조종기 | [RadioMaster Boxer](components/transmitters/radiomaster-boxer/README.md) (EdgeTX 2.12.1) |
 | 수신기 | [RP4TD-M](components/receivers/radiomaster-rp4td-m/README.md) — TELEM1, 바인딩 완료 |
 | 전원 | [PM08 DroneCAN](components/power/holybro-pm08-can/README.md) — `UAVCAN_ENABLE=2`, `BAT1_SOURCE=1` |
 | 배터리 | [Fullymax 6S 16000mAh](components/batteries/fullymax-6s-16000mah/README.md) |
 | 지상국 | **QGroundControl v5.1.4** (직접 빌드, VTOL 패치) — [빌드](gcs/qgroundcontrol/BUILD.md) · [설치 절차](gcs/qgroundcontrol/README.md#설치-ubuntu--실기-기준) |
 | 저장소 | `github.com/6K5EUQ/SHADE01` — 클론: `ku`, `rim3` |
-| 파라미터 백업 | [`params/`](params/) 최신 스냅샷 (1354개) · 미션·펜스는 [`config/*.plan`](config/) · 정리본 [`config/SETTINGS.md`](config/SETTINGS.md) |
+| 파라미터 백업 | [`params/`](params/) 최신 스냅샷 (1353개) · 미션·펜스는 [`config/*.plan`](config/) · TELEM1 스트림은 [`config/extras.txt`](config/extras.txt) · 9/2 구조 정리본 [`config/SETTINGS.md`](config/SETTINGS.md) (값 인용 금지) |
 
 ### ELRS
 
@@ -317,7 +318,7 @@ SB(3단) + SC/SF 래치가 만든다. PWM 은 전부 2026-09-09 실측이다.
 
 ---
 
-## 현재 상태 (2026-09-06 — 실기 스냅샷 `params/px4_params_20260906-185941.params` 기준)
+## 현재 상태 (2026-09-10 — 실기 스냅샷 `params/px4_params_20260910-151002.params` 기준, 문서 217건 전수 대조)
 
 | 항목 | 상태 |
 |---|---|

@@ -61,9 +61,9 @@ rim3 은 `100.117.47.105` 다. 이름이 같아 헷갈리기 딱 좋다.
 **풀려면** `rim` 을 `6K5EUQ@` tailnet 으로 옮기거나, 필요한 노드를 rim 쪽으로
 공유해야 한다. 그 전까지 `rim` 은 **labserver 하고만** 통한다.
 
-⚠️ `labserver → gram` 만 아직 막혀 있다. labserver 의 공개키
-(`labserver-love-sync`)를 gram 의 `authorized_keys` 에 넣으면 열린다 — 급하지
-않다면 ku 를 경유하면 된다.
+~~⚠️ `labserver → gram` 만 아직 막혀 있다.~~ **같은 날 뒤에 메웠다** — 위 매트릭스의
+labserver→gram ✅ 이 현행이다 (커밋 `6f7071e`). 이 문단은 그 전 커밋 `f35784a` 의
+잔재였다 (2026-09-10 정리).
 
 ### 키를 더 등록해야 할 때
 

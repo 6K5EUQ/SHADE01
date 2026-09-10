@@ -30,7 +30,8 @@ ARM·모드변경·미션업로드가 실기에 들어간다 — 그래서 기�
 | [`PARSING.md`](PARSING.md) | 🔴 **로그 파싱 정본 — 읽기 작업 전 필독** |
 | [`PROCEDURE.md`](PROCEDURE.md) | 로그 수집 → 분석 → 기록 절차 (손으로 할 때) |
 | [`skills/shade01-test/`](skills/shade01-test/SKILL.md) | **비행 전 점검** — `./shade01 test` (읽기 전용, 3~6초) |
-| [`config/SETTINGS.md`](config/SETTINGS.md) | 파라미터 스냅샷 사람이 읽는 정리본 |
+| [`docs/emergency/`](docs/emergency/README.md) | **현장 체크리스트** (이륙 전·직후·비상) — FC 값을 바꿨으면 여기 표도 같이 고쳐라 |
+| [`config/SETTINGS.md`](config/SETTINGS.md) | 9/2 스냅샷의 **구조** 정리본 — 값은 낡았다, 인용 금지 |
 | [`gcs/ACCESS.md`](gcs/ACCESS.md) | PC 별 Tailscale 주소·계정·제약 |
 | [`flights/`](flights/) | 비행별 분석 — `.ulg` 가 사라져도 남는 정본 |
 
