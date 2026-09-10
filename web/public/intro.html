@@ -17,6 +17,9 @@ section:last-of-type { border-bottom: 0; }
 h2 { font-size: 30px; margin: 0; letter-spacing: -.3px; line-height: 1.2; }
 h2 small { display: block; font-size: 13px; color: var(--dim); font-weight: 500; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 10px; }
 p.lead { font-size: 17px; color: var(--dim); max-width: 640px; margin: 0; line-height: 1.7; }
+/* 한 줄로 놓아야 하는 리드 — 640px 에서 마지막 낱말이 넘어간다 */
+p.lead.wide { max-width: none; white-space: nowrap; }
+@media (max-width: 1100px) { p.lead.wide { white-space: normal; } }
 .grid2 { display: grid; grid-template-columns: 1.15fr 1fr; gap: 40px; align-items: center; }
 @media (max-width: 860px) { .grid2 { grid-template-columns: 1fr; } section { min-height: 0; } }
 svg text { font-family: var(--mono); }
@@ -129,8 +132,6 @@ svg text { font-family: var(--mono); }
 .cta { display: flex; gap: 10px; flex-wrap: wrap; }
 .cta a.btn { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 10px 16px; font-size: 14px; }
 .cta a.btn.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
-footer { color: var(--muted); font-size: 12px; padding: 28px 0 40px; border-top: 1px solid var(--border); margin-top: 20px; line-height: 1.7; }
-footer a { color: var(--dim); }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
 </style>
 
@@ -211,14 +212,14 @@ footer a { color: var(--dim); }
 <!-- ═══════════ 2. 기체 ═══════════ -->
 <section id="craft">
   <h2><small>01 · 기체</small>수직이착륙 무인기</h2>
-  <p class="lead">활주로 필요 없이 수직으로 이·착륙하며 임무 항로를 비행하며 무선 신호를 수집·분석</p>
+  <p class="lead wide">활주로 필요 없이 수직으로 이·착륙하며 임무 항로를 비행하며 무선 신호를 수집·분석</p>
   <div class="specs" id="specs">
     <div class="spec"><div class="k">익폭</div><div class="v"><span data-to="2.1" data-dp="1">0</span><small>m</small></div><div class="n">고정익 순항</div></div>
     <div class="spec"><div class="k">이륙중량</div><div class="v"><span data-to="7" data-dp="0">0</span><small>kg</small></div><div class="n">페이로드 탑재 기준</div></div>
     <div class="spec"><div class="k">리프트 로터</div><div class="v"><span data-to="4" data-dp="0">0</span><small>+ 1</small></div><div class="n">리프트 4 · 순항 1</div></div>
     <div class="spec"><div class="k">배터리</div><div class="v"><span data-to="16" data-dp="0">0</span><small>Ah · 6S</small></div><div class="n">단일 팩</div></div>
     <div class="spec"><div class="k">비행제어</div><div class="v" style="font-size:18px">PX4</div><div class="n">Pixhawk 6C Mini</div></div>
-    <div class="spec"><div class="k">조종·텔레메트리</div><div class="v" style="font-size:18px">ELRS</div><div class="n">MAVLink · 지상 브리지</div></div>
+    <div class="spec"><div class="k">조종·텔레메트리</div><div class="v" style="font-size:18px">ELRS</div><div class="n">MAVLink + LTE</div></div>
   </div>
 </section>
 
@@ -227,7 +228,6 @@ footer a { color: var(--dim); }
   <div class="grid2">
     <div>
       <h2><small>02 · 페이로드</small>SDR 기반 신호정보 장비 동체 내부 탑재</h2>
-      <p class="lead">광대역 SDR 수신기 · 다채널 방향탐지 안테나 · 온보드 처리 컴퓨터 · 데이터링크. 비행제어와 전원·링크 공유.</p>
       <ul class="steps" id="paySteps">
         <li><span class="i">A</span><div><b>다채널 안테나 배열</b><span>기체 하부 장착 · 위상차 기반 도래 방향 측정</span></div></li>
         <li><span class="i">B</span><div><b>광대역 SDR 수신기</b><span>광대역 스펙트럼 수신 · 관심 신호 추출</span></div></li>
@@ -362,10 +362,6 @@ footer a { color: var(--dim); }
     <a class="btn primary" href="/live">실시간 계기판</a>
     <a class="btn" href="/">비행 기록</a>
   </div>
-  <footer>
-    SHADE01 — Striver Mini VTOL 4+1 · PX4 v1.17 · Pixhawk 6C Mini. 체계 개요.
-    수치·구성 정본: <a href="https://github.com/6K5EUQ/SHADE01">저장소 문서</a> · 비행 기록: <a href="/">목록</a>.
-  </footer>
 </section>
 
 </main>
