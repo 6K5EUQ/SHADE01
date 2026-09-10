@@ -355,8 +355,10 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
       const narrow = n();
       ok('시간 창을 줄이면 궤적이 실제로 잘린다', narrow < full,
          `전체 ${full} → 1분 ${narrow}`);
-      ok('잘린 뒤에도 최근 점은 남는다', narrow >= pts.length - half - 1,
-         `${narrow} >= ${pts.length - half - 1}`);
+      // 최근 점은 반드시 남아야 한다 — 다 잘리면 기체 위치를 잃는다.
+      // (개수는 데이터에 따라 다르므로 "1개 이상" 만 요구한다. 실기에서
+      //  돌리면 점 분포가 데모와 달라 개수 가정이 깨진다 — 실측으로 물렸다.)
+      ok('잘린 뒤에도 최근 점은 남는다', narrow >= 1, `${narrow}점`);
       sel.value = '0'; sel.dispatchEvent(new W.Event('change'));
       ok('전체로 되돌리면 복원된다', n() === full, `${n()} vs ${full}`);
     }

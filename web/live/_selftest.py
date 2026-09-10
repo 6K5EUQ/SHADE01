@@ -124,6 +124,18 @@ def t_gps_coords():
     M.handle(_gps_raw(0, 0, fix=0, sats=0), st3)
     check('fix 없으면 좌표를 안 쓴다', st3.d.get('lat'), None)
 
+    # 🔴 항적의 점마다 **시각**이 붙어야 한다 (2026-09-10). 프론트가 시간
+    #    창(1분/3분/10분)으로 자르는 기준이다. 예전에는 프론트가 "받은
+    #    시각" 을 붙였는데, 새로고침하면 서버가 5533점을 한 묶음으로 줘서
+    #    전부 같은 시각이 됐고 시간 창이 하나도 못 잘랐다.
+    st4 = M.State()
+    M.handle(_gps_raw(35.1795, 128.5553), st4)
+    M.handle(_gps_raw(35.1800, 128.5560), st4)
+    check('항적 점에 시각이 붙는다', len(st4.track[0]) >= 4, True)
+    if len(st4.track) >= 2 and len(st4.track[0]) >= 4:
+        import time as _t
+        check('시각이 현재 시각과 맞는다', abs(st4.track[-1][3] - _t.time()) < 5, True)
+
 
 def t_battery_pct():
     check('SYS 먼저 와도 BATTERY 가 이긴다',

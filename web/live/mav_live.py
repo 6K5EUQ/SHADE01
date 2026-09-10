@@ -932,6 +932,12 @@ def _push_track(st, lat, lon, alt):
         return
     pt = [round(lat, 7), round(lon, 7), round(alt, 1) if alt is not None else 0.0]
     if st._last_pt is None or _moved(st._last_pt, pt) > TRACK_MIN_MOVE:
+        # 🔴 네 번째 항목은 **이 점이 생긴 시각**(unix 초) 이다 (2026-09-10).
+        #    프론트가 시간 창(1분/3분/10분)으로 궤적을 자르는 데 쓴다.
+        #    예전에는 프론트가 "받은 시각" 을 붙였는데, 새로고침하면 서버가
+        #    5533점을 **한 묶음으로** 주므로 전부 같은 시각이 됐다 — 그래서
+        #    1분을 골라도 하나도 안 잘렸다. 시각은 만든 쪽이 알아야 한다.
+        pt.append(round(time.time(), 1))
         st.track.append(pt)
         st.track_total += 1              # 앞을 버려도 계속 는다 (증분 전송의 기준)
         st._last_pt = pt

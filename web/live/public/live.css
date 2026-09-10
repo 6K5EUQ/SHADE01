@@ -49,18 +49,9 @@ main {
   font-size: 9px; background: rgba(13,17,23,.7); color: var(--muted);
 }
 #lmap .leaflet-control-attribution a { color: var(--dim); }
-/* 지도 칸이 좁아 오른쪽 위에 붙인다 — 왼쪽은 궤적이 지나는 자리다.
-   따라가기 토글은 없앴다 (2026-09-10): 항상 따라가고, 손으로 끌면
-   8초 뒤 스스로 돌아온다. */
-.maptools {
-  position: absolute; z-index: 400; right: 6px; top: 6px;
-  display: flex; flex-direction: column; gap: 3px; align-items: flex-end;
-}
-.maptools button {
-  background: rgba(22,27,34,.92); color: var(--text);
-  border: 1px solid var(--border-2); border-radius: 4px;
-  font-size: 10px; padding: 3px 7px; cursor: pointer; white-space: nowrap;
-}
+/* 지도 위 버튼을 전부 없앴다 (2026-09-10). 칸이 좁아 버튼이 궤적을 가린다.
+   따라가기는 항상 켜져 있고(손으로 끌면 8초 뒤 복귀), 타일은 위성 고정,
+   줌은 휠·핀치로 한다. */
 
 /* GPS 가 없으면 지도가 빈 회색판이 된다 — 왜 비었는지 말해야 한다.
    「안 보이는 것」도 정상 동작인 이상 그 사실이 화면에 있어야 한다. */

@@ -945,10 +945,10 @@ const MAX_ZOOM = 20;
 //    ⚠️ Esri 위성은 z18 까지만 실제 타일을 준다 — z19 는 마지막 타일을
 //    확대한 것이라 흐리다. 궤적·기체 아이콘은 벡터라 선명하다.
 const ZOOM_50M = 19;
-// 🔴 위성이 기본이다 (2026-09-10). OSM 은 흰 바탕이라 어두운 계기판 옆에서
-//    그 칸만 밝게 튀어 눈이 그리로 쏠린다. 위성 사진은 어둡고, 무엇보다
-//    비행장에서는 활주로·장애물이 지도보다 사진에 더 잘 보인다.
-let lmap = null, tileMode = 'sat', tiles = {};
+// 🔴 위성 사진만 쓴다 (2026-09-10). OSM 은 흰 바탕이라 어두운 계기판 옆에서
+//    그 칸만 밝게 튀고, 비행장에서는 활주로·장애물이 지도보다 사진에 더 잘
+//    보인다. 전환 버튼도 없앴다 — 좁은 칸에서 버튼이 궤적을 가린다.
+let lmap = null, tiles = {};
 let trkLine = null, acMarker = null, homeMarker = null;
 // [[lat, lon, t], ...] — t 는 **받은 시각**(초, performance 기준).
 // 🔴 서버가 주는 점에는 시각이 없다([lat,lon,alt]). 시간 창으로 자르려면
@@ -978,28 +978,21 @@ function initMap() {
   //    검사가 끝나지 않는다 (실측: 180초를 줘도 "검사 중…"). `?notiles=1` 로
   //    타일만 끈다 — 지도·마커·궤적·레이아웃은 그대로 검사된다.
   const noTiles = new URLSearchParams(location.search).has('notiles');
+  // 🔴 +/− 버튼을 안 붙인다 (2026-09-10). 칸이 좁아 버튼이 궤적을 가리고,
+  //    줌은 기본값(50m 급)이 맞춰져 있어 평소 건드릴 일이 없다.
+  //    필요하면 휠·핀치로 조절된다 — scrollWheelZoom 은 그대로 살아 있다.
   lmap = L.map(box, { zoomControl: false, attributionControl: true });
-  L.control.zoom({ position: 'bottomright' }).addTo(lmap);
   // 🔴 레이어를 붙이기 전에 뷰를 반드시 정한다 — 뷰 없는 지도에 Path 를 넣으면
   //    Leaflet 이 _bounds 없는 상태로 _clipPoints 를 돌려 터진다 (log.html 과 같은 함정).
   lmap.setView([36.5, 127.8], 6);
   // maxNativeZoom: Esri 는 없는 타일을 404 가 아니라 안내 이미지로 200 을 준다.
   // 그 너머는 마지막 타일을 확대해 쓴다 — 흐릿할 뿐 궤적 벡터는 선명하다.
-  tiles.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    { maxZoom: MAX_ZOOM, maxNativeZoom: 19, attribution: '© OpenStreetMap' });
   tiles.sat = L.tileLayer(
     'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     { maxZoom: MAX_ZOOM, maxNativeZoom: 18, attribution: 'Esri World Imagery' });
-  if (!noTiles) tiles[tileMode].addTo(lmap);
+  if (!noTiles) tiles.sat.addTo(lmap);
 
-  const tb = $('tileBtn');
-  if (tb) tb.onclick = () => {
-    if (lmap.hasLayer(tiles[tileMode])) lmap.removeLayer(tiles[tileMode]);
-    tileMode = tileMode === 'osm' ? 'sat' : 'osm';
-    tiles[tileMode].addTo(lmap);
-    tb.textContent = tileMode === 'osm' ? '위성' : '지도';
-  };
-  if (tb) tb.textContent = tileMode === 'osm' ? '위성' : '지도';
+
   // 손으로 끌면 8초간 멈춘다 — 보려던 곳에서 곧바로 튕겨 나가면 못 쓴다.
   // 그 뒤에는 스스로 기체로 돌아온다 (버튼이 없으므로 자동 복귀가 유일한 길이다).
   // ⚠️ dragstart 만 본다. zoomstart 를 같이 걸면 첫 좌표에서 부르는
@@ -1033,7 +1026,9 @@ function drawTrack() {
   if (!trkLine) return;
   let pts = trkPts;
   if (winSec > 0 && trkPts.length) {
-    const cut = trkPts[trkPts.length - 1][2] - winSec;
+    // 기준은 **지금**이다. 마지막 점 기준으로 하면 링크가 끊겨 점이 안 들어올 때
+    // 창이 그 자리에 얼어붙어 옛 궤적이 계속 남는다.
+    const cut = (Date.now() / 1000) - winSec;
     // 창 안 첫 점을 찾는다. 시각이 오름차순이라 뒤에서부터 훑으면 빠르다.
     let i = trkPts.length - 1;
     while (i > 0 && trkPts[i - 1][2] >= cut) i--;
@@ -1049,14 +1044,19 @@ function renderMap(s) {
 
   // 항적 증분. track_from 이 0 이면 "처음부터 다시" 라는 뜻이다(서버 주석).
   if (Array.isArray(s.track) && s.track.length) {
-    const now = performance.now() / 1000;
+    const now = Date.now() / 1000;
     if (s.track_from === 0) trkPts = [];
     for (const p of s.track) {
-      // 서버는 [lat, lon, ...] 형태로 준다. 유한한 값만 쓴다.
+      // 서버는 [lat, lon, alt, t] 로 준다. 유한한 값만 쓴다.
       const la = Array.isArray(p) ? p[0] : p && p.lat;
       const lo = Array.isArray(p) ? p[1] : p && p.lon;
+      // 🔴 시각은 **서버가 준 것**을 쓴다 (p[3], unix 초). 받은 시각을 붙이면
+      //    새로고침 때 5533점이 한 묶음으로 와서 전부 같은 시각이 되고,
+      //    시간 창이 하나도 못 자른다 (2026-09-10 실측). 옛 서버가 시각을
+      //    안 주면 지금 시각으로 떨어뜨린다 — 그때는 안 잘리지만 안 깨진다.
+      const ts = (Array.isArray(p) && typeof p[3] === 'number') ? p[3] : now;
       if (typeof la === 'number' && typeof lo === 'number'
-          && isFinite(la) && isFinite(lo)) trkPts.push([la, lo, now]);
+          && isFinite(la) && isFinite(lo)) trkPts.push([la, lo, ts]);
     }
     // 무한히 자라지 않게. 차트 버퍼(KEEP_N = 1시간치)와 같은 한도를 쓴다 —
     // "전체" 가 두 계기에서 다른 길이를 뜻하면 안 된다.
