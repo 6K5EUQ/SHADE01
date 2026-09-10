@@ -191,6 +191,9 @@ main {
 #strip .sc[hidden] { display: none; }
 #strip .k { font-size: 11px; color: var(--muted);
             letter-spacing: .3px; white-space: nowrap; text-align: center; }
+/* 단위는 라벨 옆 괄호 안에 (2026-09-10). 값 아래 따로 두면 세로 공간을
+   먹고, 값에서 눈을 떼야 단위를 읽는다. 이름과 같은 줄이면 한 번에 읽힌다. */
+#strip .k em { font-style: normal; color: var(--border-2); }
 /* 곁눈질로 읽는 값이라 크게. tabular-nums 라 자릿수가 바뀌어도 안 흔들린다.
    칸이 세로로 커졌으니 글자도 같이 키운다 — 안 키우면 여백만 늘어난다. */
 #strip b {
@@ -198,10 +201,7 @@ main {
   font-variant-numeric: tabular-nums; color: var(--text);
   min-width: 0; text-align: center;
 }
-/* 단위는 값 아래 작게. 값 옆에 붙이면 값의 가운데가 단위 폭만큼 밀린다 —
-   자릿수가 바뀔 때마다 숫자가 좌우로 흔들려 읽기 나쁘다. */
-#strip i { font-style: normal; font-size: 10px; color: var(--border-2);
-           text-align: center; }
+/* 단위는 라벨로 올라갔다 (2026-09-10) — 값 아래 <i> 는 더 이상 안 쓴다. */
 
 /* 🔴 색 예산 — 평소엔 전부 무채색이다. 색이 보이는 것 자체가 신호다.
    구분선을 없앤 뒤로는 칸 배경을 칠하면 그 칸만 네모로 도드라져 격자가
@@ -229,7 +229,9 @@ main {
    min-height:0 인 flex 칸 + height:100% 인 SVG 라야 칸이 정한 높이에
    맞춰 접힌다. viewBox 가 정사각이고 preserveAspectRatio 는 기본값(meet)
    이라 칸이 가로로 길어져도 그림은 안 찌그러지고 가운데 선다. */
-#sc-frame { padding: 6px; min-height: 0; overflow: hidden; }
+/* 그림이 칸을 꽉 쓴다 (2026-09-10). 라벨("모터 부하")도 뺐다 — 기수 화살표와
+   네 로터가 그 자체로 무엇인지 말한다. 여백은 잘리지 않을 만큼만. */
+#sc-frame { padding: 2px; min-height: 0; overflow: hidden; }
 /* flex-basis 0 이 핵심이다. flex:1 의 기본 basis 는 auto 라 SVG 가 제
    본래 높이(viewBox 300px)를 최소치로 주장하고, 그만큼 스트립이 부풀어
    좁은 창에서 화면 밖으로 밀린다 (자체검사 「좁아도 스트립이 화면 안」).
@@ -237,7 +239,7 @@ main {
    그림이 칸 크기를 정하지 않는다. */
 #mframe { flex: 1 1 0; width: 100%; height: auto; min-height: 0; display: block; }
 /* 동체·기수는 배경 수준으로 어둡게. 주인공은 로터다. */
-#mframe .fuse { stroke: var(--border-2); stroke-width: 2.5; stroke-linecap: round; }
+#mframe .fuse { stroke: var(--border-2); stroke-width: 4; stroke-linecap: round; }
 #mframe .nose { fill: var(--border-2); }
 /* 팔은 부하에 따라 굵어진다 — stroke-width 를 스크립트가 준다. */
 #mframe .arm {
@@ -247,12 +249,12 @@ main {
 /* 로터: r 과 fill 을 스크립트가 준다. 테두리는 항상 있어서 값이 0이거나
    데이터가 끊겨도 자리가 남는다 — 사라지면 "모터가 없다" 로 오독된다. */
 #mframe .rot {
-  fill: var(--panel-2); stroke: var(--border-2); stroke-width: 1.5;
+  fill: var(--panel-2); stroke: var(--border-2); stroke-width: 2;
   transition: r .18s linear, fill .18s linear, stroke .18s linear;
 }
 /* 값은 로터 안에. dominant-baseline 으로 원 중심에 세로 정렬한다. */
 #mframe .mv {
-  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  font-family: var(--mono); font-size: 17px; font-weight: 700;
   fill: var(--text); text-anchor: middle; dominant-baseline: central;
   font-variant-numeric: tabular-nums;
 }
@@ -260,9 +262,9 @@ main {
    편차로 칠하던 것을 걷어냈다 — 한 로터가 상황마다 다른 이유로 칠해지면
    색의 뜻이 흔들린다. 편차는 오른쪽 숫자 칸이 색으로 계속 경고한다.
    테두리뿐 아니라 채움도 물들여야 작은 화면에서 눈에 걸린다. */
-#mframe .rot.warn { stroke: var(--warn); stroke-width: 2.5; }
+#mframe .rot.warn { stroke: var(--warn); stroke-width: 3.5; }
 #mframe .arm.warn { stroke: var(--warn); }
-#mframe .rot.bad  { stroke: var(--bad);  stroke-width: 3; }
+#mframe .rot.bad  { stroke: var(--bad);  stroke-width: 4; }
 #mframe .arm.bad  { stroke: var(--bad); }
 /* 값 글자는 흰색을 지킨다 — 채움이 이미 색을 가지므로 글자까지 물들이면
    원 안에서 대비가 떨어져 숫자가 안 읽힌다. 색은 테두리·채움이 낸다. */

@@ -242,6 +242,20 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
   const vals = ['st-cur', 'st-batt', 'st-spd', 'st-alt', 'st-sats', 'st-eph']
     .map((id) => (D.getElementById(id) || {}).textContent);
   ok('스트립 값이 채워진다', vals.every((v) => v && v !== ''), vals.join(' / '));
+  // 🔴 단위는 라벨 옆 괄호 안에 있다 (2026-09-10). 값 아래 따로 두면 세로
+  //    공간을 먹고 값에서 눈을 떼야 읽는다. 단위가 사라지면 숫자만 남아
+  //    "3.3" 이 미터인지 m/s 인지 알 수 없다.
+  const unitOf = (id) => {
+    const em = D.getElementById(id).querySelector('.k em');
+    return em ? em.textContent.trim() : '';
+  };
+  ok('고도 라벨에 단위 (m)', unitOf('sc-alt') === '(m)', unitOf('sc-alt'));
+  ok('속도 라벨에 단위 (m/s)', unitOf('sc-spd') === '(m/s)', unitOf('sc-spd'));
+  ok('전류 라벨에 단위 (A)', unitOf('sc-cur') === '(A)', unitOf('sc-cur'));
+  ok('편차 라벨에 단위 (%p)', unitOf('sc-mspread') === '(%p)', unitOf('sc-mspread'));
+  // 값 아래 <i> 는 걷어냈다 — 남아 있으면 단위가 두 곳에 보인다.
+  ok('값 아래 단위는 없다', D.querySelectorAll('#strip i').length === 0,
+     `${D.querySelectorAll('#strip i').length}개`);
   // 편차가 평소 범위면 색이 없어야 한다 — 평소에 색이 보이면 색이 신호가 아니게 된다.
   ok('평소 편차엔 색이 없다',
      !D.getElementById('sc-mspread').classList.contains('warn') &&

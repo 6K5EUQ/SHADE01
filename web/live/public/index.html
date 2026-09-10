@@ -44,16 +44,16 @@
          왼쪽 위 로터가 실제 좌전 모터다 — 어느 팔이 무리하는지 눈이
          바로 짚는다. 오른쪽 두 칸이 그 그림을 숫자로 요약한다. -->
     <div id="strip">
-      <div class="sc" id="sc-alt"><span class="k">고도</span><b id="st-alt">—</b><i>m</i></div>
-      <div class="sc" id="sc-batt"><span class="k">배터리</span><b id="st-batt">—</b><i>%</i></div>
-      <div class="sc" id="sc-sats"><span class="k">위성</span><b id="st-sats">—</b><i>기</i></div>
+      <div class="sc" id="sc-alt"><span class="k">고도 <em>(m)</em></span><b id="st-alt">—</b></div>
+      <div class="sc" id="sc-batt"><span class="k">배터리 <em>(%)</em></span><b id="st-batt">—</b></div>
+      <div class="sc" id="sc-sats"><span class="k">위성 <em>(기)</em></span><b id="st-sats">—</b></div>
 
-      <div class="sc" id="sc-spd"><span class="k">속도</span><b id="st-spd">—</b><i>m/s</i></div>
-      <div class="sc" id="sc-cur"><span class="k">전류</span><b id="st-cur">—</b><i>A</i></div>
+      <div class="sc" id="sc-spd"><span class="k">속도 <em>(m/s)</em></span><b id="st-spd">—</b></div>
+      <div class="sc" id="sc-cur"><span class="k">전류 <em>(A)</em></span><b id="st-cur">—</b></div>
       <!-- eph — 위성 수가 많아도 이 값이 부풀면 위치가 흔들린다.
            실측 평소 0.15~0.23m 라 1m 를 넘는 것 자체가 신호다.
            위성 수 바로 아래에 둔다 — 개수와 오차를 세로로 같이 읽는다. -->
-      <div class="sc" id="sc-eph"><span class="k">위치 오차</span><b id="st-eph">—</b><i>m</i></div>
+      <div class="sc" id="sc-eph"><span class="k">위치 오차 <em>(m)</em></span><b id="st-eph">—</b></div>
 
       <!-- 모터는 숫자 넷이 아니라 **기체 그림 위의 넷**이다 (2026-09-09).
            숫자만 보면 "48 과 41 중 어느 쪽이 어느 팔인가" 를 매번 머리로
@@ -61,28 +61,30 @@
            짚는다 — 부하가 큰 팔이 굵고 밝다.
            원의 크기·밝기가 값이고, 숫자는 확인용으로 원 안에 같이 둔다. -->
       <div class="sc" id="sc-frame">
-        <span class="k">모터 부하</span>
-        <!-- viewBox 가 가로로 넓다 (140×100). 칸이 3:1 로 넓어졌으므로
-             정사각으로 두면 좌우에 빈 띠만 생기고 로터가 작아진다.
-             preserveAspectRatio 기본값(meet)이라 찌그러지지 않는다. -->
-        <svg id="mframe" viewBox="0 0 140 100" aria-label="모터별 부하">
+        <!-- 🔴 viewBox 를 칸 비율(약 400×140, 2.8:1)에 맞췄다 (2026-09-10).
+             예전 140×100(1.4:1)은 칸보다 세로로 길어, meet 로 맞추면 좌우에
+             빈 띠가 생기고 로터가 그만큼 작아졌다. 칸 비율에 가깝게 두면
+             같은 자리에서 로터가 훨씬 커진다.
+             라벨을 뺐으므로 그림이 칸 높이를 다 쓴다. -->
+        <svg id="mframe" viewBox="0 0 280 100" aria-label="모터별 부하">
           <!-- 동체·기수. 기수(위)가 전방이다 — HUD 의 기수 방향과 같다. -->
-          <path class="fuse" d="M70 30 L70 72" />
-          <path class="nose" d="M70 14 L63 28 L77 28 Z" />
-          <!-- 팔 4개. X 배치 그대로. 로터가 커진 만큼 벌려 놓는다. -->
-          <path class="arm" id="arm-LF" d="M70 50 L32 24" />
-          <path class="arm" id="arm-RF" d="M70 50 L108 24" />
-          <path class="arm" id="arm-LB" d="M70 50 L32 76" />
-          <path class="arm" id="arm-RB" d="M70 50 L108 76" />
+          <path class="fuse" d="M140 30 L140 72" />
+          <path class="nose" d="M140 10 L131 28 L149 28 Z" />
+          <!-- 팔 4개. X 배치 그대로. 로터를 바깥으로 벌려 동체·기수가
+               가려지지 않게 한다 — 전후 구분이 이 그림의 절반이다. -->
+          <path class="arm" id="arm-LF" d="M140 51 L52 20" />
+          <path class="arm" id="arm-RF" d="M140 51 L228 20" />
+          <path class="arm" id="arm-LB" d="M140 51 L52 82" />
+          <path class="arm" id="arm-RB" d="M140 51 L228 82" />
           <!-- 로터. r 은 스크립트가 값에 따라 키운다. -->
-          <circle class="rot" id="rot-LF" cx="32" cy="24" r="16" />
-          <circle class="rot" id="rot-RF" cx="108" cy="24" r="16" />
-          <circle class="rot" id="rot-LB" cx="32" cy="76" r="16" />
-          <circle class="rot" id="rot-RB" cx="108" cy="76" r="16" />
-          <text class="mv" id="mv-LF" x="32" y="24">—</text>
-          <text class="mv" id="mv-RF" x="108" y="24">—</text>
-          <text class="mv" id="mv-LB" x="32" y="76">—</text>
-          <text class="mv" id="mv-RB" x="108" y="76">—</text>
+          <circle class="rot" id="rot-LF" cx="52" cy="20" r="18" />
+          <circle class="rot" id="rot-RF" cx="228" cy="20" r="18" />
+          <circle class="rot" id="rot-LB" cx="52" cy="82" r="18" />
+          <circle class="rot" id="rot-RB" cx="228" cy="82" r="18" />
+          <text class="mv" id="mv-LF" x="52" y="20">—</text>
+          <text class="mv" id="mv-RF" x="228" y="20">—</text>
+          <text class="mv" id="mv-LB" x="52" y="82">—</text>
+          <text class="mv" id="mv-RB" x="228" y="82">—</text>
         </svg>
       </div>
 
@@ -90,10 +92,10 @@
            절대 부하는 무겁거나 바람이 불면 다 같이 오르지만, 편차는
            **한쪽만** 무리하고 있을 때만 오른다 — 그것이 이상 신호다.
            실측: 무풍 3~4%p, 2026-09-09 강풍 세션 8~10%p. -->
-      <div class="sc" id="sc-mspread"><span class="k">모터 편차</span><b id="st-mspread">—</b><i>%p</i></div>
+      <div class="sc" id="sc-mspread"><span class="k">모터 편차 <em>(%p)</em></span><b id="st-mspread">—</b></div>
       <!-- 넷의 평균. 편차가 "치우침" 이면 이쪽은 "얼마나 힘든가" 다.
            호버 65% 근처가 이 기체의 정상이다 (MPC_THR_HOVER=0.65). -->
-      <div class="sc" id="sc-mavg"><span class="k">모터 평균</span><b id="st-mavg">—</b><i>%</i></div>
+      <div class="sc" id="sc-mavg"><span class="k">모터 평균 <em>(%)</em></span><b id="st-mavg">—</b></div>
     </div>
   </section>
 

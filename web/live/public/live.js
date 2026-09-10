@@ -1143,7 +1143,7 @@ function renderMotors(mt) {
     if (!rot) continue;
     if (v == null) {
       // 값이 없어도 자리는 남긴다 — 사라지면 "모터가 없다" 로 오독된다.
-      rot.setAttribute('r', 16);
+      rot.setAttribute('r', 18);
       rot.style.fill = ''; arm.style.strokeWidth = '';
       rot.classList.remove('warn', 'bad'); arm.classList.remove('warn', 'bad');
       txt.classList.remove('warn', 'bad');
@@ -1155,7 +1155,8 @@ function renderMotors(mt) {
     //    40~90% 를 반지름 9~22 로 펴서 그 구간의 차이를 크게 만든다.
     //    (하한·상한 밖은 잘라 붙인다 — 원이 사라지거나 칸을 넘지 않게.)
     const f = Math.max(0, Math.min(1, (v - 40) / 50));
-    rot.setAttribute('r', (9 + f * 13).toFixed(1));
+    // viewBox 가 280×100 이라 반지름도 그 스케일이다 (2026-09-10 확대).
+    rot.setAttribute('r', (13 + f * 12).toFixed(1));
     // 밝기로도 부하를 준다. 평소엔 무채색 회색조라 색 예산을 안 쓴다 —
     // 14%(어두움) ~ 66%(밝음) 사이를 오간다.
     // 임계를 넘으면 채움도 그 색조로 옮겨간다. 테두리만 칠하면 작은 화면에서
@@ -1165,7 +1166,7 @@ function renderMotors(mt) {
                    : v >= MOT_WARN ? `hsl(38 40% ${(L * 0.60).toFixed(0)}%)`
                    : `hsl(210 9% ${L.toFixed(0)}%)`;
     // 팔은 부하에 비례해 굵어진다. 그림을 곁눈질할 때 먼저 잡히는 신호다.
-    arm.style.strokeWidth = (3 + f * 6).toFixed(1);
+    arm.style.strokeWidth = (5 + f * 8).toFixed(1);
     // 🔴 색은 **그 모터 자신의 부하**가 정한다 — 70%↑ 노랑, 80%↑ 빨강.
     //    편차로 칠하던 것을 걷어냈다: 한 로터가 상황마다 다른 이유로
     //    칠해지면 색의 뜻이 흔들린다. 편차는 오른쪽 숫자 칸이 경고한다.
