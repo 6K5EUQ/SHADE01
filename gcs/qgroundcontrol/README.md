@@ -317,6 +317,63 @@ nmcli -t -f DEVICE,TYPE dev status | grep ':wifi$'   # 아무것도 안 나오�
 (아래 1·2 단계는 완료된 상태), 동글 인식만 확인하고 바로 실행하면 된다. 스크립트는 WiFi 가
 없으면 nmcli 오류 대신 그 사실을 말하고 멈춘다.
 
+### 🔴 백팩 SSID 가 `SHADE01` 로 바뀌었다 — 자동 재연결이 그래서 안 된다 (2026-09-11)
+
+**증상**: 조종기를 껐다 켜면 AP 는 다시 뜨는데 rim3 가 **안 붙는다.** `eduroam` 에
+남아 있다. 손으로 붙이려 해도 목록에 `ExpressLRS TX Backpack 17B49E` 가 없다.
+
+**원인은 프로파일 설정이 아니라 이름이다.** 백팩 AP 가 **`SHADE01`** 로 방송하는데
+(BSSID `60:C5:A8:F0:A7:CD`, WPA2, 2437MHz), rim3 의 프로파일은 옛 이름
+`ExpressLRS TX Backpack 17B49E` 를 `802-11-wireless.ssid` 로 들고 있다. NM 은
+**SSID 로 맞춘다** — 이름이 다르면 프로파일이 아무리 `autoconnect yes`,
+`priority 100` 이어도 **매칭될 AP 가 없어서** 영영 안 붙는다.
+
+실측 (2026-09-11, rim3):
+
+```
+방송 중인 AP        SHADE01                        신호 97
+프로파일의 ssid     ExpressLRS TX Backpack 17B49E  ← 안 맞는다
+SHADE01 프로파일    없음
+```
+
+⚠️ 옛 프로파일의 `autoconnect` 는 이미 `no` → **`yes`** 로 바뀌어 있었다. 위
+"새 PC" 절차의 `no` 와 다르다 — 누군가 자동 재연결을 노리고 고쳤지만, 이름이
+안 맞아 효과가 없었다. **`autoconnect` 만 보고 "설정은 맞다" 고 판단하면 안 된다.
+`802-11-wireless.ssid` 가 실제 방송 이름과 같은지를 같이 봐라.**
+
+**해결 — 새 이름으로 프로파일을 만든다** (rim3 에서 직접, `nmcli` 는 sudo/폴킷이
+필요해 SSH 로는 `Insufficient privileges` 가 난다):
+
+```bash
+nmcli con add type wifi con-name "SHADE01" ifname wlo1 ssid "SHADE01" \
+  wifi-sec.key-mgmt wpa-psk wifi-sec.psk 'expresslrs' \
+  connection.autoconnect yes \
+  connection.autoconnect-priority 100 \
+  ipv4.method auto ipv4.never-default yes ipv6.never-default yes ipv4.dns-priority 200
+```
+
+`never-default yes` 가 여전히 핵심이다 (바로 위 절). `autoconnect` 는 여기서는
+**`yes`** 다 — "조종기 켜면 알아서 붙어라" 가 요구사항이므로. 평시에 라디오를
+뺏기는 것이 싫으면 `no` 로 두고 `nmcli con up SHADE01` 로 쓴다.
+
+확인:
+
+```bash
+nmcli -f connection.autoconnect,connection.autoconnect-priority,ipv4.never-default \
+  con show SHADE01                      # yes / 100 / yes
+nmcli con up SHADE01 && ip -4 addr show wlo1 | grep inet   # 10.0.0.x 가 떠야 한다
+```
+
+⚠️ **PSK 는 확인 못 했다.** 위 `expresslrs` 는 ELRS 백팩 기본값이자 이 리포에
+적힌 값이다. SSID 를 바꾸면서 비밀번호도 바꿨다면 그것으로 대체하라.
+
+⚠️ **옛 프로파일(`ExpressLRS TX Backpack 17B49E`)은 안 지웠다.** 백팩을 옛 이름으로
+되돌릴 수 있고, `gram-labtop` 은 아직 그 이름을 쓸지 모른다. 두 프로파일이 공존해도
+SSID 가 달라 서로 안 다툰다.
+
+⚠️ **`elrs-backpack` 스크립트는 아직 옛 이름을 기본값으로 쓴다** (`ELRS_AP`).
+새 이름으로 쓰려면 `ELRS_AP=SHADE01 ./gcs/qgroundcontrol/elrs-backpack`.
+
 ### 새 PC 에 백팩 링크 붙이기
 
 스크립트 자체는 PC 를 안 가린다 — WiFi 장치·복귀망·QGC 바이너리를 **실행할 때 감지**한다
