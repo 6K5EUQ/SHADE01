@@ -360,6 +360,23 @@ const CHARTS = [
       { key: 'vib', color: '#f0883e', label: '진동', axis: 'left', weight: 2 }],
     thresholds: [{ v: 10, label: '경고 10', color: '#d29922' },
                  { v: 30, label: '위험 30', color: '#f85149' }] },
+  // 🔴 조종기 링크가 아니라 **ELRS 백팩 텔레메트리 링크**다. FC 가 조종
+  //    링크 품질을 로그에 안 남긴다 (input_rc.rssi 는 100 고정, rssi_dbm·
+  //    link_quality 는 전부 무효 — 2026-09-11 실측 유한값 0/269).
+  //    조종 링크가 끊겼는지는 「조종 입력」 단의 rc_lost 로 본다.
+  //
+  //    기체 RSSI 를 주선으로 둔다. 지상 RSSI 는 91% 가 254(포화)라 변별력이
+  //    없다 — 그래도 같이 그려야 "둘 다 나쁜가, 한쪽만인가" 가 갈린다.
+  { id: 'c12', title: '통신', bands: true, series: [
+      { key: 'rssi_air', color: '#58a6ff', label: '기체 RSSI', axis: 'left', weight: 2 },
+      { key: 'rssi_gnd', color: '#8b949e', label: '지상 RSSI(포화)', axis: 'left', dash: true },
+      { key: 'rf_noise', color: '#f0883e', label: '노이즈', axis: 'left' },
+      { key: 'home_dist', color: '#3fb950', label: '홈 거리', axis: 'right', unit: 'm' }] },
+  // 송신 버퍼 여유(%). 떨어지면 링크가 밀리고 있다는 뜻이다 — 2026-09-09
+  // "Sensor lost" 를 쫓을 때 이 값이 먼저 움직였다.
+  { id: 'c13', title: '링크 여유', bands: true, series: [
+      { key: 'tx_buf', color: '#d29922', label: '송신 버퍼 여유', axis: 'left', unit: '%' },
+      { key: 'home_dist', color: '#3fb950', label: '홈 거리', axis: 'right', unit: 'm' }] },
   { id: 'c9', title: 'GPS 품질', bands: true, series: [
       { key: 'sats', color: '#3fb950', label: '위성 수', axis: 'left', weight: 2 },
       { key: 'eph', color: '#f85149', label: '위치 오차', axis: 'right', unit: 'm' }] },

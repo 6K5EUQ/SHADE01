@@ -330,6 +330,48 @@ def build_track(ulog, t0, t1):
             if src in cp.data:
                 trk[dst] = to_grid(tcp, clean(cp.data[src][mcp], 10.0) * 100, grid)
 
+    # ── 통신 (ELRS 백팩 텔레메트리 링크) ────────────────────────
+    # 🔴 조종기 링크가 아니다. `input_rc` 의 rssi 는 이 기체에서 **100 고정**
+    #    이고 rssi_dbm·link_quality 는 전부 무효다 (2026-09-11 실측: 유한값
+    #    0/269). FC 가 ELRS 링크 품질을 로그에 안 남긴다.
+    #
+    #    대신 `radio_status` 가 백팩 링크를 말한다. 여기서 볼 것은
+    #    **remote_rssi**(기체 쪽 수신)다 — 로컬 `rssi` 는 91% 가 254(포화)라
+    #    변별력이 없다. 그래서 둘 다 넣되 원격을 주선으로 둔다.
+    rs, trs, mrs = win(ulog, "radio_status", t0, t1)
+    if rs is not None:
+        # 0 은 "값 없음" 이다. clean() 은 못 거르므로 NaN 으로 바꿔 둔다 —
+        # 안 그러면 링크가 잠깐 쉰 자리가 바닥까지 떨어진 선으로 보인다.
+        def _rssi(key):
+            a = clean(rs.data[key][mrs], 300.0)
+            a[a <= 0] = np.nan
+            return a
+        if "remote_rssi" in rs.data:
+            trk["rssi_air"] = to_grid(trs, _rssi("remote_rssi"), grid)
+        if "rssi" in rs.data:
+            trk["rssi_gnd"] = to_grid(trs, _rssi("rssi"), grid)
+        if "noise" in rs.data:
+            trk["rf_noise"] = to_grid(trs, clean(rs.data["noise"][mrs], 300.0), grid)
+        # txbuf 는 송신 버퍼 여유(%)다. 떨어지면 링크가 밀리고 있다는 뜻 —
+        # 2026-09-09 "Sensor lost" 때 이 값이 먼저 움직였다.
+        if "txbuf" in rs.data:
+            trk["tx_buf"] = to_grid(trs, clean(rs.data["txbuf"][mrs], 200.0), grid)
+
+    # 홈에서의 거리. 통신을 거리와 같이 봐야 "멀어서 나빠진 것인가" 를 가린다.
+    if trk.get("lat") and trk.get("lon"):
+        hp = qgclog.get(ulog, "home_position")
+        if hp is not None and len(hp.data.get("lat", [])):
+            hlat, hlon = float(hp.data["lat"][-1]), float(hp.data["lon"][-1])
+            dd = []
+            for la, lo in zip(trk["lat"], trk["lon"]):
+                if la is None or lo is None:
+                    dd.append(None)
+                    continue
+                dx = (la - hlat) * 111320.0
+                dy = (lo - hlon) * 111320.0 * math.cos(math.radians(hlat))
+                dd.append(round(math.hypot(dx, dy), 1))
+            trk["home_dist"] = dd
+
     # ── 배터리 ──────────────────────────────────────────────────
     b, tb, mb = win(ulog, "battery_status", t0, t1)
     if b is not None:
