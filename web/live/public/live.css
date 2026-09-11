@@ -313,15 +313,21 @@ a.btn { display: inline-block; text-decoration: none; }
 #chartPane > .msgs { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; }
 /* 겹친 바가 마지막 차트의 x축 눈금을 가리지 않게 그만큼 비워 둔다 */
 #charts { padding-bottom: 26px; }
-/* 켠 단이 세로를 나눠 갖는다 — 3단이면 한 화면에 딱 차고, 더 켜면 최소
-   높이(150px) 아래로는 안 줄어 스크롤이 생긴다. 고정 높이로 두면 단을
-   1~2개만 켰을 때 아래가 통째로 빈다. */
-#charts { overflow-y: auto; min-height: 0; background: var(--panel);
+/* 켠 단이 세로를 나눠 갖는다. 고정 높이로 두면 단을 1~2개만 켰을 때 아래가
+   통째로 빈다.
+   🔴 스크롤바를 만들지 마라 (2026-09-11). overflow-y:auto + .lchart 의
+      min-height:150px 이었는데, 3단부터 379px 영역에 안 들어가 우측에
+      스크롤바가 생겼다. 네 칸 레이아웃에서 그 폭만큼 차트가 좁아지고
+      HUD 와 폭이 어긋난다. 넘치게 두지 말고 나눠 갖게 한다. */
+#charts { overflow: hidden; min-height: 0; background: var(--panel);
           display: flex; flex-direction: column; }
 
 /* 차트 한 단. 로그 뷰어(log.html)의 .chart 와 같은 뼈대다. */
 .lchart { position: relative; border-bottom: 1px solid var(--border);
-           flex: 1 1 0; min-height: 150px; display: flex; flex-direction: column;
+           /* min-height 를 두면 그 값 아래로 안 줄어 넘친다. 7단(최대)까지
+              균등하게 나눠 갖도록 0 으로 둔다 — 얇아져도 전부 보인다. */
+           flex: 1 1 0; min-height: 0; overflow: hidden;
+           display: flex; flex-direction: column;
            /* 네 칸 배경 통일 — 계기판과 같은 --panel (2026-09-11) */
            background: var(--panel); }
 /* 높이는 부모(.lchart)가 나눠 준 만큼 쓴다. drawChart 가 clientHeight 를
