@@ -308,6 +308,8 @@ fi
 
 # ═══ 3. 없는 것만 받기 ══════════════════════════════════════════════
 FETCHED=()
+# 받은 뒤 온전성을 검사할 목록. 4단계에서 회수한 직후 본다.
+SUSPECT=()
 if [ "$nwant" -gt 0 ] || [ "${NEEDNUM:-0}" -gt 0 ]; then
   [ "$nwant" -gt 0 ] && step "3/7 FC → $FC_HOST"
   t0=$(date +%s)
@@ -336,6 +338,7 @@ if [ "$nwant" -gt 0 ] || [ "${NEEDNUM:-0}" -gt 0 ]; then
       printf '   ✅ %-26s %sMB\n' "$dest" "$mb"; FETCHED+=("$dest")
       [ "$VOTE_N" -ge 3 ] 2>/dev/null && \
         printf '%s\n' "$out" | grep -E '의견 갈린|leave-one-out|⚠️' | sed 's/^ */      /'
+      SUSPECT+=("$dest")
     else
       printf '   ✗ %-26s 받기 실패 (3회 시도)\n' "$dest"
       printf '%s\n' "$out" | tail -3 | sed 's/^/        /'
@@ -370,6 +373,27 @@ if [ ${#FETCHED[@]} -gt 0 ]; then
       || printf '   ✗ %s 회수 실패\n' "$dest"
   done
   say "  로컬 $(ls "$LOCAL"/*.ulg 2>/dev/null | wc -l)개"
+
+  # 🔴 받은 것이 온전한지 **여기서** 본다 (2026-09-11 추가).
+  #    fcfetch 는 크기만 맞으면 성공으로 친다. MAVFTP 전송은 512바이트 블록이
+  #    조용히 어긋나는데(FLIGHT-SYNC.md) 크기는 그대로라 아무도 모른다.
+  #    실제로 08_26_41.ulg 가 그렇게 깨진 채 서버까지 올라갔고, 웹 뷰어에서
+  #    전력·진동·모터출력·GPS·센서불일치 다섯 단이 통째로 사라졌다 —
+  #    사용자가 "전류 항목이 없다" 고 지적해서야 발견됐다.
+  #
+  #    CRC 로는 못 잡는다 (FLIGHT-SYNC.md 「단순 CRC 검증은 넣지 않았다」).
+  #    대신 파싱해서 있어야 할 토픽이 있는지 본다.
+  if [ ${#SUSPECT[@]} -gt 0 ]; then
+    paths=()
+    for dest in "${SUSPECT[@]}"; do
+      [ -e "$LOCAL/$dest" ] && paths+=("$LOCAL/$dest")
+    done
+    if [ ${#paths[@]} -gt 0 ]; then
+      if ! "$PY" "$REPO/tools/qgclog/logcheck.py" "${paths[@]}"; then
+        fail "받은 로그 중 깨진 것이 있다 — 위 목록을 --verify 로 다시 받아라"
+      fi
+    fi
+  fi
 fi
 
 # 브리지는 여기서 되살린다 — 아래는 FC 와 무관하다.

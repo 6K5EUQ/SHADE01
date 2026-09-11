@@ -42,7 +42,7 @@ description: 비행이 끝난 뒤 한 줄로 FC 로그를 웹에 올린다. "qgc
 | 1 | 브리지 정지 | 유닛 스코프를 알아서 가른다 |
 | 2 | **대조** | FC 전체 ↔ 랩서버 보유 + 삭제 기록 (**집합 차이**) |
 | 3 | 받기 | 없는 것만. 1MB 미만은 받지도 않는다 |
-| 4 | 회수 | rim3 → 이 PC |
+| 4 | 회수 + **온전성 검사** | rim3 → 이 PC. 받은 `.ulg` 를 파싱해 핵심 토픽이 있는지 본다 |
 | 5 | 업로드 | 랩서버 `~/shade01-data/logs/` |
 | 6 | **판정·삭제** | **랩서버 안에서** 돈다. 야외 비행이 아니면 지우고 기록 |
 | 5b | **`.tlog`** | 실시간 기록(`logs/live/*.tlog`)을 랩서버 `logs/live/` 로. 야외 ARM·링크별 크기 문턱(ELRS 50KB·USB 1MB)을 이미 넘긴 것만 남아 있어 다시 판정하지 않는다. `--no-tlog` 으로 끈다 |
@@ -66,6 +66,7 @@ description: 비행이 끝난 뒤 한 줄로 FC 로그를 웹에 올린다. "qgc
 | `→ log_246_…` | FC 비행 번호가 붙었다 |
 | `− … ground` / `abort` / `indoor` | 야외가 아니라 랩서버에서 지웠다. 정상 |
 | `✅ 브리지 복구` | **이 줄이 없으면 사용자에게 알려라** |
+| `🔴 <파일> 핵심 토픽 N개 없음` | 🔴 **전송 중 깨졌다. 그 파일만 다시 받아라** — 아래 절 |
 
 ## 놓친 것 같을 때만
 
@@ -207,6 +208,59 @@ ssh $FC_HOST 'fuser -v /dev/ttyACM0'
 **뒤쪽 폴더부터 실패하는 것이 이 고장의 지문이다.** 날짜가 최근일수록 파일이
 많아 조회가 길고, 그만큼 경합에 오래 노출된다 — 앞쪽 6개는 통과하고 뒤쪽
 5개가 죽었다.
+
+## 🔴 받은 로그가 깨지면 4단계가 잡는다 (2026-09-11 추가)
+
+**크기만으로는 못 잡는다.** MAVFTP 손상은 512바이트 블록이 제자리에서 바뀌는
+것이라 **바이트 수가 그대로다.** `fcfetch` 는 성공으로 치고 `✅` 를 찍는다.
+
+그래서 2026-09-11 에 깨진 로그가 서버까지 올라갔다:
+
+```
+2026-09-11_08_26_41.ulg   9.0MB   토픽 65개    ← 정의 섹션이 깨졌다
+같은 날 다른 9편                  토픽 88~101개
+```
+
+`battery_status`·`vehicle_imu_status`·`sensor_gps` 가 통째로 안 읽혀, 웹 로그
+뷰어에서 **전력·진동·모터출력·GPS·센서불일치 다섯 단이 사라졌다.** 차트 코드는
+정상이었고(「데이터 없는 단은 숨긴다」는 설계대로), **사용자가 "전류 항목이
+없다" 고 지적해서야 발견됐다.**
+
+이제 4단계가 받은 것을 파싱해 본다 (`tools/qgclog/logcheck.py`):
+
+| 검사 | 기준 |
+|---|---|
+| 핵심 토픽 | `actuator_armed` · `vehicle_attitude` · `vehicle_local_position` · `battery_status` · `vehicle_imu_status` · `sensor_gps` |
+| 토픽 수 | 60 미만이면 의심 (정상 81~101) |
+
+실측 오탐 0 — 2026-09-01 세션 14편 중 4편이 걸렸고 **넷 다 실제로 깨진 것**이었다.
+
+### 걸렸을 때 — 그 편만 다시 받는다
+
+전체를 `--verify` 로 돌리면 오래 걸린다. **한 편만 고칠 때는 `fcvote.py` 직접:**
+
+```bash
+systemctl --user stop shade-bridge.service    # 포트를 비운다
+.venv/bin/python tools/qgclog/fcvote.py \
+    /fs/microsd/log/<날짜>/<이름>.ulg /tmp/restored.ulg 5
+systemctl --user start shade-bridge.service   # 🔴 반드시 되살린다
+```
+
+복원본을 로컬·서버 양쪽에 덮어쓰고, 서버는 캐시를 다시 굽는다:
+
+```bash
+cp /tmp/restored.ulg logs/<원래이름>.ulg
+scp /tmp/restored.ulg ku@ku-labserver:~/shade01-data/logs/<서버이름>.ulg
+ssh ku@ku-labserver 'sudo systemctl restart lab-shade01'
+```
+
+🔴 **서버 파일을 덮기 전에 백업하라** — `cp <파일> /tmp/<이름>.bak`.
+
+실측 (9.0MB, 5회 다수결): 토픽 **65 → 92개**, 누락 4개 전부 복구.
+`leave-one-out: 동일` 이 나오면 복원이 안정적이라는 뜻이다.
+
+⚠️ `표차 1 이하 N개` 경고가 뜨면 그 자리는 확신이 낮다. 정밀 수치가 필요하면
+횟수를 7로 올려라.
 
 ## ⚠️ 받은 로그는 매번 다르다 — `--verify` 가 고친다
 
