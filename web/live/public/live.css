@@ -17,12 +17,9 @@ body { height: 100%; overflow: hidden; display: flex; flex-direction: column; }
 main {
   display: grid;
   /* 🔴 화면을 네 칸으로 **정확히 4등분**한다 (2026-09-11):
-       HUD  | 데이터
-       지도 | 그래프
-     가로 1:1, 세로도 1:1 (#hudPane·#chartPane 의 grid-template-rows).
-     🔴 2026-09-11 2차: 데이터와 지도를 맞바꿨다. 자세(HUD)와 숫자(데이터)가
-        윗줄에 나란히 서고, 위치(지도)와 추이(그래프)가 아랫줄에 선다 —
-        "지금 값" 과 "흐름" 이 줄로 갈린다. */
+       HUD | 지도
+       데이터 | 그래프
+     가로 1:1, 세로도 1:1 (#hudPane·#chartPane 의 grid-template-rows). */
   grid-template-columns: 1fr 1fr;
   flex: 1; min-height: 0;
 }
@@ -38,7 +35,7 @@ main {
    로그 뷰어(log.html)와 같은 Leaflet·같은 타일을 쓴다. */
 #mapPane {
   position: relative; overflow: hidden;
-  background: #0d1117;
+  border-right: 1px solid var(--border); background: #0d1117;
 }
 /* 지도는 우측 칸 위쪽이다 (2026-09-10). HUD 와 같은 높이를 갖도록
    #chartPane 이 행 높이를 좌측 #hudPane 과 같은 비율로 나눈다.
@@ -46,9 +43,7 @@ main {
 /* 위 4px 은 #hudBox 의 border-top 과 같은 값이라 두 그림이 같은 y 에서 시작한다.
    좌·우에도 같은 폭을 준다 — 지도가 칸 가장자리에 밀착돼 답답하다는 지적
    (좌측 칸에 있던 때와 같은 처리, 2026-09-11). */
-/* 지도는 좌측 칸 **아래**다 (2026-09-11 2차). 4px 여백은 그대로 두고,
-   칸을 가르는 1px 선만 아래 → 위로 옮긴다 — 위로는 HUD 와 맞닿는다. */
-#mapPane { border: 4px solid var(--panel); border-top: 1px solid var(--border); }
+#mapPane { border: 4px solid var(--panel); border-bottom: 1px solid var(--border); }
 #lmap { width: 100%; height: 100%; background: #0d1117; }
 /* 🔴 타일의 채도·밝기를 낮춘다 (2026-09-10). 계기판 전체가 무채색 + 경고색만
    쓰는데 위성 사진만 채도가 높아 눈이 자꾸 그쪽으로 끌렸다 — 「색이 보이는

@@ -358,20 +358,19 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
   ok('지도 칸이 있다', !!mapPane);
   if (mapPane && hudBox) {
     const mb = mapPane.getBoundingClientRect(), hb = hudBox.getBoundingClientRect();
-    // 🔴 2026-09-11 2차 배치: 지도는 HUD **바로 아래**다 (데이터와 맞바꿨다).
-    //    좌측 칸을 HUD 와 위아래로 나눠 갖는다 — 같은 폭, HUD 아랫선에 맞닿는다.
-    ok('지도가 HUD 아래', mb.top >= hb.bottom - 1, `map.top=${mb.top.toFixed(0)} hud.bottom=${hb.bottom.toFixed(0)}`);
-    ok('지도가 HUD 와 같은 폭', Math.abs(mb.width - hb.width) <= 4,
-       `map=${mb.width.toFixed(0)} hud=${hb.width.toFixed(0)}`);
+    // 🔴 2026-09-10 배치 변경: 지도는 HUD 왼쪽이 아니라 **우측 칸 위**다.
+    //    HUD 는 좌측 폭을 다 쓰고, 지도는 차트 위에서 HUD 와 같은 높이를 갖는다.
+    ok('지도가 HUD 오른쪽', mb.left >= hb.right - 1, `map=${mb.left.toFixed(0)} hud.right=${hb.right.toFixed(0)}`);
+    ok('지도 아랫선이 HUD 아랫선과 같다', Math.abs(mb.bottom - hb.bottom) <= 2,
+       `map=${mb.bottom.toFixed(0)} hud=${hb.bottom.toFixed(0)}`);
     ok('지도가 눌리지 않았다', mb.width > 100 && mb.height > 100,
        `${mb.width.toFixed(0)}x${mb.height.toFixed(0)}`);
-    // 🔴 계기판은 우측 칸 **위**로 갔다 (2026-09-11 2차). HUD 와 같은 줄에
-    //    나란히 서므로 윗변이 맞아야 한다 — 폭은 이제 HUD 와 무관하다.
+    // 🔴 지도는 **HUD 줄 안에서만** 폭을 나눈다. 아래 계기판은 그 분할과
+    //    무관하게 hudPane 폭을 그대로 써야 한다 (2026-09-10 정정 — 처음에
+    //    main 칸을 하나 더 만들었더니 계기판까지 밀려났다).
     const strip = D.getElementById('strip').getBoundingClientRect();
-    ok('계기판이 HUD 오른쪽', strip.left >= hb.right - 1,
-       `strip.left=${strip.left.toFixed(0)} hud.right=${hb.right.toFixed(0)}`);
-    ok('계기판 윗변이 HUD 윗변과 같다', Math.abs(strip.top - hb.top) <= 4,
-       `strip=${strip.top.toFixed(0)} hud=${hb.top.toFixed(0)}`);
+    ok('계기판이 HUD 폭을 그대로 쓴다', Math.abs(strip.width - hb.width) <= 4,
+       `strip=${strip.width.toFixed(0)} hud=${hb.width.toFixed(0)}`);
   }
   // 🔴 GPS 를 받으면 그 자리가 중심이고, 배율은 50m 급이다 (실내·실외 무관).
   const LM = W.__lmap;
@@ -431,16 +430,14 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
   const pane = D.getElementById('hudPane').getBoundingClientRect();
   box = D.getElementById('hudBox').getBoundingClientRect();
   strip = D.getElementById('strip').getBoundingClientRect();
-  // 🔴 2026-09-11 2차: 스트립이 chartPane **안으로** 들어갔다 (차트 위 칸).
-  //    그래서 chartPane 과 스트립을 비교하면 당연히 겹친다 — 부모와 자식이다.
-  //    지키려던 것은 "차트가 계기 숫자를 가리지 않는다" 이므로, 이제 형제인
-  //    #charts 와 견준다.
-  const mp = D.getElementById('charts').getBoundingClientRect();
+  // 지도를 뺀 뒤로 우측은 chartPane 이다 (2026-09-05). mapPane 을 계속 읽다가
+  // null.getBoundingClientRect() 로 자체검사가 통째로 죽어 있었다.
+  const mp = D.getElementById('chartPane').getBoundingClientRect();
   vb = svg.viewBox.baseVal;
   ok('HUD 가 제 부모 안에 담긴다', box.bottom <= pane.bottom + 1,
      `hudBox.bottom=${box.bottom.toFixed(0)} pane.bottom=${pane.bottom.toFixed(0)}`);
-  ok('차트가 스트립을 안 덮는다', mp.top >= strip.bottom - 1,
-     `charts.top=${mp.top.toFixed(0)} strip.bottom=${strip.bottom.toFixed(0)}`);
+  ok('차트 패널이 스트립을 안 덮는다', mp.top >= strip.bottom - 1,
+     `chart.top=${mp.top.toFixed(0)} strip.bottom=${strip.bottom.toFixed(0)}`);
   // 전류·상태 밴드는 HUD 밖(HTML 스트립)으로 나갔다 (2026-09-05).
   // 좁은 화면에서 스트립이 안 잘리는지가 그 자리를 대신하는 검사다.
   const st = D.getElementById('strip').getBoundingClientRect();

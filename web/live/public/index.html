@@ -31,18 +31,6 @@
          모터는 **기체 그림 위에** 놓는다. 기수가 위인 X 형상이라 화면
          왼쪽 위 로터가 실제 좌전 모터다 — 어느 팔이 무리하는지 눈이
          바로 짚는다. 오른쪽 두 칸이 그 그림을 숫자로 요약한다. -->
-    <div id="mapPane">
-      <div id="lmap"></div>
-
-        <!-- GPS 를 한 번도 못 봤으면 지도가 빈 판이 된다. 왜 비었는지 말해야 한다. -->
-      <div id="mapEmpty">GPS 대기 중</div>
-    </div>
-  </section>
-
-  <!-- 우: 흘러가는 차트 + FC 메시지 서랍.
-       로그 뷰어(log.html)와 같은 배치·같은 chart.js 를 쓴다 — 지난 비행과
-       지금 비행을 같은 그림으로 읽어야 눈이 안 흔들린다. -->
-  <section id="chartPane">
     <div id="strip">
       <div class="sc" id="sc-alt"><span class="k">고도 <em>(m)</em></span><b id="st-alt">—</b></div>
       <div class="sc" id="sc-batt"><span class="k">배터리 <em>(%)</em></span><b id="st-batt">—</b></div>
@@ -97,6 +85,18 @@
            호버 65% 근처가 이 기체의 정상이다 (MPC_THR_HOVER=0.65). -->
       <div class="sc" id="sc-mavg"><span class="k">모터 평균 <em>(%)</em></span><b id="st-mavg">—</b></div>
     </div>
+  </section>
+
+  <!-- 우: 흘러가는 차트 + FC 메시지 서랍.
+       로그 뷰어(log.html)와 같은 배치·같은 chart.js 를 쓴다 — 지난 비행과
+       지금 비행을 같은 그림으로 읽어야 눈이 안 흔들린다. -->
+  <section id="chartPane">
+    <div id="mapPane">
+      <div id="lmap"></div>
+
+        <!-- GPS 를 한 번도 못 봤으면 지도가 빈 판이 된다. 왜 비었는지 말해야 한다. -->
+      <div id="mapEmpty">GPS 대기 중</div>
+    </div>
     <div id="charts"></div>
     <!-- 하단 바. 화면 위를 한 줄도 안 쓰려고 여기 다 모았다.
          링크 상태는 글자가 아니라 점 하나다 — 초록/노랑/빨강. -->
@@ -105,9 +105,9 @@
         <span id="dot" class="dot" title="링크 상태">●</span>
         <!-- 지금 데이터가 어느 경로로 오는지. ELRS(조종기 백팩) / USB(FC 직결).
              둘은 갱신 주기가 3배 넘게 차이나므로 무엇을 보고 있는지 알아야 한다.
-             누르면 자동 -> ELRS -> USB 로 돌며 경로를 고정한다 (2026-09-11 에
-             기본 우선이 ELRS 로 바뀌면서 순서도 같이 뒤집었다). 자동이 이미
-             ELRS 를 고르므로, 고정은 주로 반대쪽(USB)을 굳이 볼 때 쓴다. -->
+             누르면 자동 -> USB -> ELRS 로 돌며 경로를 고정한다: USB 가 붙어
+             있으면 ELRS 는 영영 안 나오는데, 정작 비행 중 기체가 쓰는 것은
+             그쪽이라 무엇이 몇 Hz 로 도착하는지 눈으로 봐야 할 때가 있다. -->
         <button id="linkSrc" type="button" title="데이터 원천 — 눌러서 경로 고정">—</button>
         <!-- 기록 상태. 야외(GPS fix)에서 arm 하면 저절로 켜지므로, 조종자가
              "왜 안 찍히나" 를 물어야 할 때가 온다 — 그때 답이 여기 있다.
