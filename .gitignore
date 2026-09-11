@@ -35,3 +35,6 @@ web/tools/hosts.conf
 
 # npm — anime.js 는 web/public/vendor/animejs/ 에 벤더링한다 (Leaflet 과 같은 이유). 설치본은 커밋하지 않는다
 web/node_modules/
+
+# extras_push.py 가 되읽기 검증에 쓰는 임시 파일
+*.readback
