@@ -49,13 +49,18 @@ VIB_BAD = 30.0            # 동 위험
 INNOV_WARN = 1.0          # EKF innovation test ratio 정상 상한
 TILT_WARN = 45.0          # 멀티로터 자세 경고 (deg)
 
+# 🔴 정본은 이 펌웨어의 msg/versioned/VehicleStatus.msg 다 (2026-09-11 대조).
+#    옛 표를 그대로 쓰면 조용히 틀린 이름이 나온다 — 6/7/8/9/11/16 이 통째로
+#    바뀌었다. 특히 **16 은 RATTITUDE 가 아니라 FREE1** 이고, 6 은
+#    AUTO_RCRECOVER 가 아니라 POSITION_SLOW 다. 실측으로 걸렸다.
 NAV_STATE = {
     0: "MANUAL", 1: "ALTCTL", 2: "POSCTL", 3: "AUTO_MISSION", 4: "AUTO_LOITER",
-    5: "AUTO_RTL", 6: "AUTO_RCRECOVER", 7: "AUTO_RTGS", 8: "AUTO_LANDENGFAIL",
-    9: "AUTO_LANDGPSFAIL", 10: "ACRO", 11: "UNUSED", 12: "DESCEND",
-    13: "TERMINATION", 14: "OFFBOARD", 15: "STAB", 16: "RATTITUDE",
+    5: "AUTO_RTL", 6: "POSITION_SLOW", 7: "FREE5", 8: "ALTITUDE_CRUISE",
+    9: "FREE3", 10: "ACRO", 11: "FREE2", 12: "DESCEND",
+    13: "TERMINATION", 14: "OFFBOARD", 15: "STAB", 16: "FREE1",
     17: "AUTO_TAKEOFF", 18: "AUTO_LAND", 19: "AUTO_FOLLOW_TARGET",
     20: "AUTO_PRECLAND", 21: "ORBIT", 22: "AUTO_VTOL_TAKEOFF",
+    23: "EXTERNAL1", 24: "EXTERNAL2",
 }
 VTOL_STATE = {0: "UNDEFINED", 1: "TRANSITION_TO_FW", 2: "TRANSITION_TO_MC",
               3: "MC", 4: "FW"}
