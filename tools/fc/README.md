@@ -1,4 +1,20 @@
-# FC 파일 올리기 — `extras.txt`
+# FC 에 올리기 — `extras.txt` · 미션
+
+| 도구 | 대상 | 경로 |
+|---|---|---|
+| [`extras_push.py`](extras_push.py) | `/fs/microsd/etc/extras.txt` (TELEM1 스트림) | MAVFTP |
+| [`mission_push.py`](mission_push.py) | **미션 전량** | MISSION 프로토콜 |
+| [`reboot.py`](reboot.py) | 재부팅 | — |
+
+둘 다 `backup` / `verify` / `push` 세 갈래이고 **`push` 만 FC 에 쓴다.**
+붙을 때마다 `SAFETY_ARMED` 를 보고 **ARM 이면 중단**한다.
+
+미션은 [`missions/README.md`](../../missions/README.md) 가 정본이다 —
+금지 명령(84·85·3000)과 5초 호버를 적는 법이 거기 있다.
+
+---
+
+## `extras.txt`
 
 FC SD 의 `/fs/microsd/etc/extras.txt` 를 MAVFTP 로 받고 올린다.
 2026-09-11 실제 적용에 쓴 스크립트다.

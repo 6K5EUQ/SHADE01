@@ -31,6 +31,7 @@ ARM·모드변경·미션업로드가 실기에 들어간다 — 그래서 기�
 | [`PROCEDURE.md`](PROCEDURE.md) | 로그 수집 → 분석 → 기록 절차 (손으로 할 때) |
 | [`skills/shade01-test/`](skills/shade01-test/SKILL.md) | **비행 전 점검** — `./shade01 test` (읽기 전용, 3~6초) |
 | [`docs/emergency/`](docs/emergency/README.md) | **현장 체크리스트** (이륙 전·직후·비상) — FC 값을 바꿨으면 여기 표도 같이 고쳐라 |
+| [`missions/`](missions/README.md) | **미션 `.plan` 정본** — 번호로 관리. 올리는 법·금지 명령 |
 | [`config/SETTINGS.md`](config/SETTINGS.md) | 9/2 스냅샷의 **구조** 정리본 — 값은 낡았다, 인용 금지 |
 | [`gcs/ACCESS.md`](gcs/ACCESS.md) | PC 별 Tailscale 주소·계정·제약 |
 | [`flights/`](flights/) | 비행별 분석 — `.ulg` 가 사라져도 남는 정본 |

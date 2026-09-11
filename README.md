@@ -260,7 +260,7 @@ QGC 대신(또는 같이) **브라우저로 볼 수 있다** — 지도 한쪽, 
 | 배터리 | [Fullymax 6S 16000mAh](components/batteries/fullymax-6s-16000mah/README.md) |
 | 지상국 | **QGroundControl v5.1.4** (직접 빌드, VTOL 패치) — [빌드](gcs/qgroundcontrol/BUILD.md) · [설치 절차](gcs/qgroundcontrol/README.md#설치-ubuntu--실기-기준) |
 | 저장소 | `github.com/6K5EUQ/SHADE01` — 클론: `ku`, `rim3` |
-| 파라미터 백업 | [`params/`](params/) 최신 스냅샷 (1353개) · 미션·펜스는 [`config/*.plan`](config/) · TELEM1 스트림은 [`config/extras.txt`](config/extras.txt) · 9/2 구조 정리본 [`config/SETTINGS.md`](config/SETTINGS.md) (값 인용 금지) |
+| 파라미터 백업 | [`params/`](params/) 최신 스냅샷 (1353개) · 미션은 [`missions/`](missions/README.md) · TELEM1 스트림은 [`config/extras.txt`](config/extras.txt) · 9/2 구조 정리본 [`config/SETTINGS.md`](config/SETTINGS.md) (값 인용 금지) |
 
 ### ELRS
 
@@ -340,7 +340,7 @@ SB(3단) + SC/SF 래치가 만든다. PWM 은 전부 2026-09-09 실측이다.
 | ✅ TELEM1 스트림 | **보조자 화면 기준으로 재배분** (2026-09-11, 2회). 자세 `5`→**`10Hz`**, EKF·진동 되살림(`0.01`→**`2`**), 배터리 `4`→**`5`**, 홈 `0.5`→**`0.1`**. 실측 **936 B/s = 예산 67%**, 도달률 94%, `BAD_DATA` 0. 여유 **464 B/s** ([경위](FC_CHANGELOG.md#-2026-09-11-1032--남은-예산을-보조자-화면에-ekf진동-되살림)) |
 | GPS | ✅ 위성 21~32, fix 4, eph 0.15~0.23m (야외 실측) |
 | 진동 | ✅ 평균 2.5 / 최대 5.0 (8/25 세션 8~10 대비 개선) |
-| 미션 | ✅ `TAKEOFF`(22) → WP×4 → `LAND`(21), 경로 163.6m ([백업](config/)). `MIS_TAKEOFF_ALT=20` (9/5, 5→20) |
+| 미션 | ✅ **이륙 5m → 5초 호버 → 착륙** 3항목 (2026-09-11 교체, [`missions/02-hover-test.plan`](missions/02-hover-test.plan)). 이전 5포인트 사각(163.6m)은 [`01-square-5pt.plan`](missions/01-square-5pt.plan) 으로 남겼다. 이착륙은 `22`/`21` — 쿼드 전용이라 `84`/`85` 금지. `MIS_TAKEOFF_ALT=20` (9/5, 5→20) |
 | 지오펜스 | ⛔ **꺼져 있다 — 의도한 것** (`GF_ACTION=0`, 거리 0, 2026-09-05 14:16). `2`(Hold) 는 조종권을 뺏는다. 거리 관리는 조종자 몫 |
 | failsafe | ✅ RC 상실 → RTL (`NAV_RCL_ACT=2`, `COM_RCL_EXCEPT=0`, 1s) · 저전압 → RTL |
 | RTL | ✅ `RTL_RETURN_ALT=20` / `RTL_DESCEND_ALT=10` (9/5 17:15 — 순항 5m 인데 60m 로 솟던 것을 내렸다). **실비행 미검증** |
