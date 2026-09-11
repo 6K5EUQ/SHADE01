@@ -1,13 +1,13 @@
 ms5525dso start -X -b 2 -a 0x76
-mavlink stream -d /dev/ttyS5 -s ATTITUDE -r 5
+mavlink stream -d /dev/ttyS5 -s ATTITUDE -r 10
 mavlink stream -d /dev/ttyS5 -s BATTERY_STATUS -r 4
 mavlink stream -d /dev/ttyS5 -s GPS_RAW_INT -r 3
 mavlink stream -d /dev/ttyS5 -s GLOBAL_POSITION_INT -r 3
-mavlink stream -d /dev/ttyS5 -s HEARTBEAT -r 3
-mavlink stream -d /dev/ttyS5 -s VIBRATION -r 5
-mavlink stream -d /dev/ttyS5 -s SERVO_OUTPUT_RAW_0 -r 5
+mavlink stream -d /dev/ttyS5 -s HEARTBEAT -r 2
+mavlink stream -d /dev/ttyS5 -s VIBRATION -r 0.01
+mavlink stream -d /dev/ttyS5 -s SERVO_OUTPUT_RAW_0 -r 2
 mavlink stream -d /dev/ttyS5 -s STATUSTEXT -r 5
-mavlink stream -d /dev/ttyS5 -s HOME_POSITION -r 0.5
+mavlink stream -d /dev/ttyS5 -s HOME_POSITION -r 0.1
 mavlink stream -d /dev/ttyS5 -s SYS_STATUS -r 0.5
 mavlink stream -d /dev/ttyS5 -s HIGHRES_IMU -r 0.01
 mavlink stream -d /dev/ttyS5 -s ODOMETRY -r 0.01

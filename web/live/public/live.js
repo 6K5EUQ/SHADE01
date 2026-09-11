@@ -693,7 +693,7 @@ function render(s) {
   if (frz) setText(h.freezeTxt, frz);
 
   // 데이터 원천. ELRS(조종기 백팩) 인지 USB(FC 직결) 인지 — 갱신 주기가
-  // 크게 달라서(실측 백팩 285 B/s vs USB 28.4 KB/s) 화면에 드러나야 한다.
+  // 크게 달라서 화면에 드러나야 한다 (수치: mav_live.py 「낡은 실측값」).
   const ls = $('linkSrc');
   const kind = s.link || null;
   const pin = s.pin || null;
