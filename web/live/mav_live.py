@@ -1043,7 +1043,17 @@ def handle(msg, st):
         # 🔴 잔량은 BATTERY_STATUS 가 이겨야 한다 — 아래 참조. 조건 없이 대입하던
         #    때는 두 메시지가 이 칸을 번갈아 덮어써서, 웹의 % 가 조종기 화면과
         #    어긋나 보였다. 조종기(ELRS)는 BATTERY_STATUS 만 읽는다.
-        if d.get('batt_pct_src') != 'battery_status':
+        # 🔴 FC 가 **무효를 명시하면** 그것이 최신 사실이다 (2026-09-12).
+        #    voltage 65535 · remaining -1 은 "배터리가 없다" 는 뜻이지
+        #    "값을 못 받았다" 가 아니다. 배터리를 뽑으면 이 상태가 된다.
+        #    예전에는 battery_status 로 굳으면 이 분기를 통째로 건너뛰어,
+        #    배터리를 뽑아도 화면에 5% · 15184mAh 가 그대로 남았다 —
+        #    "잔재값" 으로 보이던 것이 이것이다.
+        if msg.voltage_battery == 65535 and msg.battery_remaining == -1:
+            for k in ('batt_pct', 'mah', 'batt_temp', 'volt', 'cur'):
+                d.pop(k, None)
+            d.pop('batt_pct_src', None)
+        elif d.get('batt_pct_src') != 'battery_status':
             d['batt_pct'] = msg.battery_remaining if msg.battery_remaining != -1 else None
             d['batt_pct_src'] = 'sys_status'
         d['load'] = msg.load / 10.0

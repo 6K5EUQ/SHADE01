@@ -139,6 +139,34 @@ def t_gps_coords():
         check('시각이 현재 시각과 맞는다', abs(st4.track[-1][3] - _t.time()) < 5, True)
 
 
+def _sys_invalid():
+    """배터리를 뽑았을 때 FC 가 보내는 SYS_STATUS — 무효를 **명시**한다."""
+    return _M('SYS_STATUS', voltage_battery=65535, current_battery=-1,
+              battery_remaining=-1, load=250)
+
+
+def t_battery_removed():
+    """🔴 배터리를 뽑으면 값이 **지워져야** 한다 (2026-09-12).
+
+    voltage 65535 · remaining -1 은 "못 받았다" 가 아니라 "배터리가 없다" 다.
+    예전에는 batt_pct_src 가 battery_status 로 굳으면 SYS_STATUS 분기를
+    통째로 건너뛰어, 배터리를 뽑아도 화면에 5% · 15184mAh 가 그대로 남았다.
+    링크 끊김은 고려했는데 배터리 분리는 고려하지 않았던 것이다.
+    """
+    st = M.State()
+    M.handle(_batt_status(62), st)          # 먼저 정상값이 들어온다
+    check('배터리 있을 때 pct 가 찬다', st.d.get('batt_pct'), 62)
+    M.handle(_sys_invalid(), st)            # 배터리를 뽑았다
+    for k in ('batt_pct', 'mah', 'volt', 'cur', 'batt_temp'):
+        check('배터리 뽑으면 %s 가 지워진다' % k, st.d.get(k), None)
+    check('소스 표시도 지워진다', st.d.get('batt_pct_src'), None)
+    # 🔴 링크만 끊긴 것과 구별해야 한다 — 그때는 마지막 값이 남아야 한다.
+    st2 = M.State()
+    M.handle(_batt_status(62), st2)
+    M.handle(_sys_status(80), st2)          # 유효한 SYS 가 와도 battery 가 이긴다
+    check('유효한 SYS 는 battery 를 못 덮는다', st2.d.get('batt_pct'), 62)
+
+
 def t_battery_pct():
     check('SYS 먼저 와도 BATTERY 가 이긴다',
           _pct_after([_sys_status(80), _batt_status(62)]), 62)
@@ -292,7 +320,7 @@ def t_prune():
 
 
 if __name__ == '__main__':
-    for fn in (t_arbitration, t_gps_coords, t_battery_pct, t_parse, t_toggle, t_recording,
+    for fn in (t_arbitration, t_gps_coords, t_battery_removed, t_battery_pct, t_parse, t_toggle, t_recording,
                t_recording_keeps_takeoff, t_prune):
         fn()
     print('\n%d PASS · %d FAIL' % (PASS, FAIL))
