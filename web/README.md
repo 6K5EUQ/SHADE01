@@ -269,9 +269,61 @@ ssh ku@<서버> 'cd ~/SHADE01 && ./web/deploy/deploy.sh'
 
 | 증상 | 확인 | 대응 |
 |---|---|---|
+| **`git pull` 이 `Could not resolve host: github.com`** | `ssh ku@<서버> 'getent hosts github.com'` | 아래 「기관 DNS 가 죽으면」 절 |
 | 500 / 페이지 안 뜸 | `systemctl status lab-shade01`, `tail ~/shade01-data/server.log` | `sudo systemctl restart lab-shade01` |
 | 502 / 도메인만 죽음 | `systemctl status lab-tunnel-shade01` | 터널만 재시작. 다른 도메인엔 영향 없다 |
 | 전부 "파싱 실패" | `curl .../api/health` 의 `upload`·`logs` | venv 가 깨졌다. 위 2단계를 다시 |
 | 업로드 401 | `.env` 의 `UPLOAD_PASSWORD` | 비어 있으면 업로드가 막힌다 (의도된 동작) |
 | 수치가 옛날 값 | `/api/health` 의 `fingerprint` | 파서를 고쳤으면 지문이 바뀌어 자동 재계산된다 |
 | 디스크 | `df -h /`, `du -sh ~/shade01-data` | 실측 67개 = 209MB. 여유 205GB |
+
+### 🔴 기관 DNS 가 죽으면 배포가 멈춘다 (2026-09-12)
+
+**네트워크는 멀쩡한데 이름만 못 찾는 상태가 된다.** 랩서버는 기관 DNS
+`203.253.179.3` · `203.253.179.2` 만 쓰고 있었는데, 그 둘이 동시에 응답을
+멈췄다. `git pull` 이 `Could not resolve host: github.com` 으로 죽고 배포가
+통째로 막힌다. ssh·Tailscale 은 IP 직접 연결이라 멀쩡해서 더 헷갈린다.
+
+진단 — **공용 DNS 로 직접 물어보면 갈린다:**
+
+```bash
+ssh ku@<서버> 'getent hosts github.com'            # 실패
+ssh ku@<서버> 'nslookup github.com 1.1.1.1'        # 성공  ← resolver 문제
+ssh ku@<서버> 'nslookup github.com 203.253.179.3'  # timed out ← 기관 DNS 사망
+```
+
+⚠️ **`systemd-resolved` 재시작으로는 안 풀린다.** 서버가 죽은 것이라
+resolver 는 잘못이 없다. `FallbackDNS=` 도 소용없다 — 그것은 DNS 가 **하나도
+설정되지 않았을 때만** 쓰이고, 링크에 DNS 가 있으면 그것만 시도하다 타임아웃한다.
+
+고친 방법 — **링크 DNS 목록 뒤에 공용 DNS 를 덧붙인다:**
+
+```bash
+ssh ku@<서버> '
+  sudo nmcli con mod netplan-enp4s0 \
+      ipv4.dns "203.253.179.3,203.253.179.2,1.1.1.1,8.8.8.8"
+  sudo nmcli con up netplan-enp4s0
+  resolvectl status enp4s0 | grep "DNS Server"'
+```
+
+🔴 **기관 DNS 를 앞에 둔다.** 기관 내부 이름(랩 장비 등)은 그쪽만 안다.
+살아 있으면 기관 DNS 가 쓰이고, 죽었을 때만 공용으로 넘어간다.
+
+⚠️ **`nmcli` 로 바꿔야 영구적이다.** `/etc/netplan/90-NM-*.yaml` 은
+NetworkManager 가 생성하는 파일이라 직접 고치면 덮인다. `nmcli con mod` 는
+그 파일까지 같이 갱신한다.
+
+#### DNS 가 죽은 동안 배포하는 법 — git bundle
+
+고치기 전에 급히 배포해야 하면 rim3 에서 번들로 밀어넣는다 (github 경유 없이):
+
+```bash
+SRV=$(ssh ku@<서버> 'cd ~/SHADE01 && git rev-parse HEAD')
+git bundle create /tmp/u.bundle ${SRV}..HEAD --branches=main
+scp /tmp/u.bundle ku@<서버>:/tmp/
+ssh ku@<서버> 'cd ~/SHADE01 && git fetch /tmp/u.bundle HEAD && git merge --ff-only FETCH_HEAD'
+```
+
+⚠️ `git bundle create <범위>` 만 쓰면 브랜치 이름이 안 담겨 `couldn't find
+remote ref main` 이 난다. `--branches=main` 을 붙이거나, 받는 쪽에서
+`HEAD` 를 참조하라 (위 예시가 후자다).
