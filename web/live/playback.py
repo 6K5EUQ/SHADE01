@@ -196,6 +196,8 @@ def load_flight(path):
     #
     # 🔴 인덱스는 기체 배치에 묶여 있다 — README 「출력 배치」:
     #    MAIN3/4/6/7 = VTOL 우후/우전/좌후/좌전 → output[] 은 0부터라 2,3,5,6.
+    #    실시간(mav_live.py)은 MAVLink `SERVO_OUTPUT_RAW` 를 읽는데 그쪽 필드는
+    #    servo1_raw 부터라 **1 부터** 세어 3,4,6,7 이다. 같은 핀이고 둘 다 맞다.
     #    MAIN1/2 는 에일러론 서보(로그에서 1500 고정), MAIN8 은 크루즈(1000 고정).
     #    서보를 추력으로 그리면 거짓말이 된다.
     mot = _track(ulog, 'actuator_outputs',
