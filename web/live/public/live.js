@@ -410,21 +410,17 @@ const CHARTS = [
   // minSpan — 축이 최소한 이만큼은 담는다. 없으면 지상 정지 중 ±1cm 노이즈가
   // 화면을 가득 채우고 눈금이 `0 / -0 / 0` 이 된다 (실측 rim3: climb -0.0013).
   // 값이 실제로 안 움직이면 **평평하게 보이는 것이 사실**이다.
-  { id: 'k-alt', title: '고도', on: true, series: [
+  // 🔴 고도와 속도를 한 칸에 둔다 (2026-09-11, 조종자 지시). 보조자가 기본으로
+  //    보는 것은 이 칸과 자세 둘뿐이고, 둘을 나란히 놓으면 「높이 대 빠르기」가
+  //    한눈에 읽힌다. 상승률은 뺐다 — 고도선의 기울기가 같은 것을 말한다.
+  //    속도는 **GPS 속도**(GLOBAL_POSITION_INT 의 vx·vy 합성, EKF 융합)다.
+  //    피토관(VFR_HUD.airspeed)은 이 기체에서 고장품이라 뺐다 — 정지 시
+  //    −4.7~−5.0 m/s (SENS_DPRES_OFF=-4.52). 영점을 고치면 그때 되살려라.
+  { id: 'k-alt', title: '고도+속도', on: true, series: [
       { key: 'alt', color: 'var(--c-alt)', label: '고도', axis: 'left', weight: 2, unit: 'm', minSpan: 4 },
-      { key: 'climb', color: 'var(--c-spd)', label: '상승률', axis: 'right', unit: 'm/s', minSpan: 2 }],
+      { key: 'spd', color: 'var(--c-spd)', label: 'GPS 속도', axis: 'right', weight: 2, unit: 'm/s', minSpan: 4, nonNeg: true }],
     // 기준선은 축을 그 값까지 늘린다(chart.js) — 평소 5m 비행에서도 30m 가 어디인지 보인다.
     thresholds: [{ v: 30, label: '30m', color: '#d29922' }] },
-  // 두 속도의 출처가 다르다 — 이름에 그대로 적는다.
-  //   GPS 속도    GLOBAL_POSITION_INT 의 vx·vy 합성 (EKF 융합). 믿는 값.
-  //   피토관 속도  VFR_HUD.airspeed. 🔴 이 기체는 고장품이다 — 정지 시
-  //               −4.7~−5.0 m/s (SENS_DPRES_OFF=-4.52). dim 으로 흐리게 둬
-  //               같은 굵기로 나란히 놓이지 않게 한다 (HUD 가 좌측 테이프를
-  //               '대지속도' 로 못박은 것과 같은 이유).
-  { id: 'k-spd', title: '속도', on: true, series: [
-      { key: 'spd', color: 'var(--c-spd)', label: 'GPS 속도', axis: 'left', weight: 2, unit: 'm/s', minSpan: 4, nonNeg: true },
-      { key: 'aspd', color: '#a371f7', label: '피토관 속도(고장)', axis: 'left', dim: true, unit: 'm/s', minSpan: 4, nonNeg: true }],
-    thresholds: [{ v: 10, label: '10 m/s', color: '#d29922' }] },
   { id: 'k-pwr', title: '전력', on: false, series: [
       { key: 'cur', color: 'var(--c-cur)', label: '전류', axis: 'left', weight: 2, unit: 'A', minSpan: 10, nonNeg: true },
       // 6S 는 만충 25.2V·저전압 21.0V 라 폭이 4V 면 비행 전체가 담긴다.
@@ -432,7 +428,7 @@ const CHARTS = [
     // 60A — 조종자가 정한 경계 (2026-09-10). 45A(XT90 연속 정격)는 호버만 해도
     // 넘겨서 선이 늘 그래프 아래 깔려 있었다. 60 은 9/5 최대 90.2A 로 가는 길목이다.
     thresholds: [{ v: 60, label: '60A', color: '#d29922' }] },
-  { id: 'k-att', title: '자세', on: false, series: [
+  { id: 'k-att', title: '자세', on: true, series: [
       { key: 'roll', color: '#d55e00', label: '롤', axis: 'left', weight: 2, unit: '°', minSpan: 20 },
       { key: 'pitch', color: '#e69f00', label: '피치', axis: 'left', weight: 2, unit: '°', minSpan: 20 }] },
   { id: 'k-vib', title: '진동', on: false, series: [
