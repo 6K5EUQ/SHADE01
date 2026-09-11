@@ -160,7 +160,17 @@ restore() {
 }
 # 정리는 restore 와 따로 둔다 — restore 는 브리지를 멈췄을 때만 돈다.
 cleanup() { restore; rm -rf "$SCRATCH" 2>/dev/null || true; }
-trap cleanup EXIT INT TERM HUP PIPE
+
+# 🔴 신호를 받으면 **정리하고 실제로 멈춘다** (2026-09-11 실측으로 물렸다).
+#    예전에는 INT/TERM 에도 cleanup 만 부르고 스크립트가 계속 돌았다. ssh 를
+#    기다리는 중이면 신호 처리가 그 뒤로 밀리는데, 그 사이 $SCRATCH 는 이미
+#    지워져 있다 — 6단계가 del.txt 를 못 만들어 **판정은 하고 삭제는 못 하는**
+#    상태로 끝났다. 그날 지상시험 62개가 서버에 그대로 남았다.
+#
+#    EXIT 는 그대로 cleanup 만 한다(정상 종료 경로). 중단 신호만 exit 한다.
+on_signal() { cleanup; exit 130; }
+trap cleanup EXIT
+trap on_signal INT TERM HUP PIPE
 
 # ═══ 1. 브리지 정지 ═════════════════════════════════════════════════
 step "1/7 FC 준비"
@@ -448,7 +458,16 @@ else
       printf '%s\t%s\n' "$b" "$why" >> "$SCRATCH/del.txt"
     fi
   done <<< "$verdicts"
-  ndel=$(grep -c . "$SCRATCH/del.txt" || true)
+  # 🔴 목록을 못 만들었으면 **말하고 멈춘다.** 예전에는 ndel 이 빈 문자열이
+  #    되어 `[: : integer expression expected` 로 새고, 삭제가 조용히 건너뛰어졌다.
+  if [ ! -f "$SCRATCH/del.txt" ]; then
+    fail "삭제 목록을 못 만들었다 ($SCRATCH/del.txt 없음) — 판정은 됐지만 아무것도 안 지웠다"
+    fail "  서버에 안 올라갈 것이 남아 있을 수 있다. sync 를 다시 돌려라"
+    ndel=0
+  else
+    ndel=$(grep -c . "$SCRATCH/del.txt" || true)
+  fi
+  [ -n "$ndel" ] || ndel=0
   say "  야외 비행 ${keep}개 유지 / ${ndel}개 삭제"
 
   if [ "$ndel" -gt 0 ]; then
