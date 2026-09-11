@@ -121,6 +121,25 @@ local AP_MULTI       = 0xF2   -- sub_type: count, then that many pairs
 local APPID_GPS      = 0x5002
 
 local ephDm = nil             -- last eph in decimetres, nil until one arrives
+local ephAt = nil             -- getTime() when that value arrived, nil if never
+
+-- 🔴 A stale eph is worse than no eph. ephDm used to be kept forever: once a
+--    value landed it stayed until the next 0x5002 replaced it, with nothing on
+--    the page saying how old it was. GPS_RAW_INT arrives at 2.80Hz (measured
+--    at the backpack, 2026-09-11), but pollEph drains only a few frames per
+--    redraw and 0x5002 shares that queue with 0x5003/4/6/B/D, so it can be
+--    missed for several redraws in a row. While the aircraft sat on the ground
+--    converging its fix, an eph of 39m was caught and held on screen while the
+--    web already read 3.97m -- which looked like a ten-times decode error and
+--    sent the hunt after the decoder. The decoder was right; the value was old.
+--
+--    prep_number's low bit is the x10 flag, so 0x4E is 3.9m and 0x4F is 39m --
+--    one bit apart. That is why a stale reading can look like a clean decimal
+--    shift rather than the old number it actually is.
+--
+-- getTime() counts 10ms ticks. 5s is 14x the measured interval, so a healthy
+-- link never reaches it, and a dead one blanks instead of lying.
+local EPH_TTL = 500           -- ticks (10ms each) = 5s
 
 -- Undo prep_number(value, digits=2, power=1) from
 -- ardupilot_custom_telemetry.cpp: 7 bits of mantissa, low bit says whether to
@@ -170,8 +189,11 @@ end
 -- between draws, so keep the newest 0x5002 rather than stopping at the first.
 -- The bound is a guard against a busy queue starving the draw, not a count of
 -- anything meaningful.
+-- 24, not 8. 0x5002 shares the queue with 0x5003/0x5004/0x5006/0x500B/0x500D,
+-- so a burst can push it past a short drain and cost a whole redraw's update.
+-- Popping is still destructive and still happens only while this page is up.
 local function pollEph()
-  for _ = 1, 8 do
+  for _ = 1, 24 do
     local cmd, packet = crossfireTelemetryPop()
     if cmd == nil then return end
     if cmd == ARDUPILOT_RESP and packet ~= nil then
@@ -179,7 +201,7 @@ local function pollEph()
       if sub == AP_SINGLE then
         if u16(packet, 2) == APPID_GPS then
           local d = u32(packet, 4)
-          if d ~= nil then ephDm = ephFromGpsStatus(d) end
+          if d ~= nil then ephDm, ephAt = ephFromGpsStatus(d), getTime() end
         end
       elseif sub == AP_MULTI then
         -- sub_type, count, then count x (appid u16, data u32)
@@ -188,7 +210,7 @@ local function pollEph()
           local base = 3 + n * 6
           if u16(packet, base) == APPID_GPS then
             local d = u32(packet, base + 2)
-            if d ~= nil then ephDm = ephFromGpsStatus(d) end
+            if d ~= nil then ephDm, ephAt = ephFromGpsStatus(d), getTime() end
           end
         end
       end
@@ -294,7 +316,11 @@ end
 --    only shade.lua leaves the old screen running. Delete the .luac when
 --    installing, or the next change will look like it did nothing.
 local function fmtEph()
-  if ephDm == nil then return pad3("--") end
+  if ephDm == nil or ephAt == nil then return pad3("--") end
+  -- getTime() wraps. The subtraction stays in the radio's own tick space, so a
+  -- wrap reads as a large age and blanks rather than pinning a stale number on
+  -- screen forever.
+  if getTime() - ephAt > EPH_TTL then return pad3("--") end
   return string.format("%.1f", ephDm / 10)
 end
 
