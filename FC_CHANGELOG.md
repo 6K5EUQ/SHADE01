@@ -26,7 +26,7 @@ FC 는 **PC 4대 어디에서나** 브리지를 통해 쓸 수 있다. 상행이
 ```bash
 git add FC_CHANGELOG.md params/ config/
 git commit -m "fc: <무엇을 바꿨는지>"
-git push 6k5euq main
+git push origin main
 ```
 
 한 줄에 담을 것:
@@ -62,13 +62,45 @@ hostname
 - 🟡 **정본은 언제나 FC 다.** 이 파일과 스냅샷은 기록일 뿐이다. 비행 전에는
   QGC 로 실제 값을 다시 확인한다.
 
+### 🔴 포트를 쓰는 작업은 "상태 파악 → 잠시 끄고 → 우리 것 → 되살리기"
+
+MAVFTP·`fcfetch`·파라미터 쓰기는 `/dev/ttyACM0` 을 **독점**한다. 브리지가 쥐고
+있으면 붙지 못한다. **끄기 전에 무엇이 어떤 상태였는지부터 적어 둔다** — 되살릴
+때 그 기록이 정본이다.
+
+```bash
+# 1. 상태 파악 — 끄기 전에 반드시
+ssh rim3@rim3 'systemctl --user is-enabled shade-bridge; systemctl --user is-active shade-bridge'
+ssh rim3@rim3 'fuser -v /dev/ttyACM0; ss -ulnp | grep 14550'
+
+# 2. 멈추고, 포트가 실제로 빌 때까지 기다린다 (즉시 안 빈다)
+ssh rim3@rim3 'systemctl --user stop shade-bridge
+  for i in $(seq 1 15); do fuser /dev/ttyACM0 >/dev/null 2>&1 || { echo "빈다"; break; }; sleep 1; done'
+
+# 3. 우리 작업
+
+# 4. 🔴 되살린다 — 이걸 빼먹으면 다른 PC 에서 기체가 그냥 사라진다
+ssh rim3@rim3 'systemctl --user start shade-bridge'
+ssh rim3@rim3 'systemctl --user is-active shade-bridge; fuser -v /dev/ttyACM0'
+```
+
+- 🔴 **`kill` 하지 마라.** 유닛이 `Restart=always` 라 3초 뒤 되살아나 포트를 다시
+  잡는다. `systemctl --user stop` 을 써야 한다.
+- ⚠️ **`systemctl` 은 `--user` 다.** 시스템 레벨로 보면 `inactive` 가 나와서
+  "서비스가 아니라 누가 손으로 띄웠다" 고 오판한다 — 2026-09-11 에 실제로 그랬다.
+  `ps -o ppid` 가 `systemd --user`(보통 PID 2538) 를 가리키면 서비스가 맞다.
+- ⚠️ **점유자가 브리지가 아닐 수 있다.** QGC·`fcfetch.py`(남의 다운로드)면 남의 일을
+  끊는 것이다. **PID 와 명령줄을 먼저 확인하고, 브리지가 아니면 물어봐라.**
+- 왜 기다리나: 포트는 즉시 안 빈다. 안 기다리면 2단계가 조용히 실패한다 —
+  [FLIGHT-SYNC.md `wait_port_free`](FLIGHT-SYNC.md#고친-방법--wait_port_free) 가 같은 교훈이다.
+
 ---
 
 ## 변경 이력
 
 | 일시 (KST) | PC | 경로 | 대상 | 변경 | 이유 |
 |---|---|---|---|---|---|
-| 2026-09-11 | `ku` | **(미적용 — 파일만 준비)** | `extras.txt` 스트림 5종 | 자세 `5`→**`10`** / 진동 `5`→**`0.01`** / 서보 `5`→**`2`** / 하트비트 `3`→**`2`** / 홈 `0.5`→**`0.1`** | 자세를 2배로 올리면서 총 트래픽은 216 B/s 줄였다. 예산 97%→**82%**. 아래 절 |
+| 2026-09-11 10:00 | `ku` | `rim3` USB 직결 (MAVFTP) | `extras.txt` 스트림 5종 | 자세 `5`→**`10`** / 진동 `5`→**`0.01`** / 서보 `5`→**`2`** / 하트비트 `3`→**`2`** / 홈 `0.5`→**`0.1`** | 자세를 2배로 올리면서 총 트래픽은 216 B/s 줄였다. 예산 97%→**82%**. 아래 절 |
 | 2026-09-10 15:10 | `ku` | `rim3` USB 직결 | **(읽기 전용)** 전량 스냅샷 | 변경 없음 — 1353개 덤프 | 리포 ↔ 실기 전수 대조. 아래 절 |
 | 2026-09-09 14:20 | `ku` | `rim3` USB 직결 | `MAV_0_RATE` · `extras.txt` | `990` → **`1400`** / 32B → **1726B** | "Sensor lost" 근본 해결 후 스트림 재배분. 진동·모터출력을 웹으로 올렸다. 아래 절 |
 | 2026-09-09 13:10 | `ku` | `rim3` USB 직결 | `MAV_0_FORWARD` · `extras.txt` | `1` → **`0`** / 신규 | 🔴 **"Sensor lost" 진짜 원인.** USB 브리지 트래픽이 조종기 링크로 넘어가고 있었다. 아래 절 |
@@ -85,11 +117,31 @@ hostname
 | 2026-09-04 16:37 | `ku` | rim3 USB 직결 | `RC_MAP_KILL_SW` `RC_MAP_RETURN_SW` `COM_FLTMODE1~6` | 아래 절 | 조종기 채널 재배치 (SB/SC/SF 구성) |
 | 2026-09-04 16:32 | `ku` | rim3 USB 직결 | `RC_MAP_TRANS_SW` | `7` → **`0`** | 고정익 사용 중지 — 쿼드 전용 제한 |
 
-### 🟡 2026-09-11 — TELEM1 스트림 재배분 (자세 10Hz) — **아직 FC 에 안 올렸다**
+### ✅ 2026-09-11 10:00 — TELEM1 스트림 재배분 (자세 10Hz) — **FC 적용 완료**
 
-🔴 **상태: 파일만 고쳤다.** [`config/extras.txt`](config/extras.txt) 가 바뀌었을 뿐
-**FC 의 SD 카드에는 안 올라갔고 재부팅도 안 했다.** 실기는 여전히 이전 값으로 돈다.
-올리는 절차는 이 절 마지막에 있다.
+**작업**: `rim3` USB 직결(`/dev/ttyACM0`), MAVFTP 업로드 → 재부팅 → 되읽기 검증.
+**DISARM 확인** 후 진행했다 (FC 에 붙을 때마다 `HEARTBEAT` 의 `SAFETY_ARMED` 를 봤다).
+
+| 단계 | 결과 |
+|---|---|
+| 브리지 정지 | `systemctl --user stop shade-bridge` → 포트 **1초** 만에 비었다 |
+| FC 백업 | **1726 B · crc32 `b3ae29e2`** → `rim3:~/fc-backup/extras.txt.fcbak-20260911-100011` |
+| 백업 ↔ 리포 대조 | 리포 변경 전(`9432f40`)과 **바이트 단위 동일** — 실기 드리프트 없었다 |
+| 첫 줄 검증 | `ms5525dso start -X -b 2 -a 0x76` **동일** |
+| 업로드 | **1730 B · crc32 `3216b3f4`** |
+| 되읽기 | crc32 **일치** — 바이트 단위 동일 |
+| 재부팅 | `MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN` ACK `result:0` → 1차 시도에 복귀 |
+| 부팅 후 | 에어스피드 **2.41 m/s** = `extras.txt` 1번째 줄이 실행됐다는 증거 |
+| 파라미터 | `MAV_0_RATE` **1400** · `MAV_0_FORWARD` **0** · `MAV_0_CONFIG` **101** (9/9 상태 유지) |
+| 브리지 복구 | `active`, 같은 UDP 바인딩, 시리얼 **22 KB/s** 수신 확인 |
+
+⚠️ **`cmd_put` 직후 같은 세션으로 되읽으면 `no sessions available` 이 난다.**
+쓰기 세션이 안 닫혀서다. **연결을 새로 열어** 되읽어야 한다 — 이번에 실제로 겪었고,
+그때 업로드가 실패한 줄 알았으나 파일은 멀쩡했다. 되읽기 CRC 로만 판정해라.
+
+🔴 **아직 실측 안 된 것: 조종기(ELRS)로 실제 몇 Hz 가 도착하는가.**
+위 검증은 전부 USB 인스턴스로 한 것이고, USB 의 Hz 는 TELEM1 의 Hz 가 아니다.
+**다음 야외 비행에서 백팩 경로로 확인해야 한다.**
 
 **목적**: 웹 실시간 화면의 자세 갱신을 높인다. 브라우저 폴은 20Hz, 차트 격자는 5Hz
 인데 소스가 5Hz 라 그 위로는 의미가 없었다.
@@ -146,18 +198,34 @@ MAVLink v2 프레임(오버헤드 12B + 페이로드)으로 계산한 **수요**
 실제로 저질렀다.** 수치를 지우고 `mav_live.py` 의 `LINK_PRIORITY` 위에 경위를
 적은 경고 블록을 남겼다. 링크 제원 정본은 README 「ELRS」 와 이 문서 9/9 항목이다.
 
-#### 올리는 절차 (아직 안 했다)
+#### 되돌리려면
 
 ```bash
-# 1. FC 의 현재 파일을 먼저 받아 둔다 (되돌릴 근거)
-#    MAVFTP 로 /fs/microsd/etc/extras.txt 를 받는다
-# 2. 첫 줄이 바이트 단위로 같은지 확인한다 — 에어스피드 센서 기동 줄이다
-diff <(head -1 <받은파일>) <(head -1 config/extras.txt)
-# 3. config/extras.txt 를 /fs/microsd/etc/extras.txt 로 올린다
-# 4. FC 재부팅 — extras.txt 는 부팅 때만 읽힌다
-# 5. 재부팅 후 확인
-#    mavlink status  →  rate_multiplier 1.000 / txbuf 100 / inf 스트림 0개
+# rim3 에서. 백업이 두 곳에 있다 — rim3:~/fc-backup/ 과 ku 의 작업 사본.
+systemctl --user stop shade-bridge
+cd ~/SHADE01 && .venv/bin/python /tmp/extras_push.py push \
+    --new ~/fc-backup/extras.txt.fcbak-20260911-100011
+.venv/bin/python /tmp/reboot.py
+systemctl --user start shade-bridge
 ```
+
+리포 쪽 되돌림은 `git show 9432f40:config/extras.txt` 다.
+
+#### 올린 절차 (실제로 쓴 것)
+
+```bash
+# rim3 에서 (FC 가 붙은 PC). 스크립트는 /tmp/extras_push.py · /tmp/reboot.py
+systemctl --user stop shade-bridge          # 포트를 넘겨받는다
+.venv/bin/python /tmp/extras_push.py backup --backup ~/fc-backup/extras.txt.fcbak-$(date +%Y%m%d-%H%M%S)
+.venv/bin/python /tmp/extras_push.py verify --backup <백업> --new config/extras.txt
+.venv/bin/python /tmp/extras_push.py push   --new config/extras.txt
+.venv/bin/python /tmp/extras_push.py backup --backup /tmp/readback   # 새 연결로 되읽기
+.venv/bin/python /tmp/reboot.py             # extras.txt 는 부팅 때만 읽힌다
+systemctl --user start shade-bridge         # 반드시 되살린다
+```
+
+⚠️ **남은 검증**: `mavlink status` 로 `rate_multiplier 1.000` / `txbuf 100` /
+`inf` 스트림 0개를 보는 것은 **아직 못 했다** — nsh 콘솔이 필요하다.
 
 🔴 **`SET_MESSAGE_INTERVAL` 로는 안 된다.** 스트림 레이트는 **MAVLink 인스턴스별**
 이고(`mavlink_receiver.cpp:2249`), USB 직결·rim3 브리지는 전부 USB 인스턴스라
