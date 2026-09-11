@@ -4,10 +4,29 @@ import sys, time
 from pymavlink import mavutil
 
 m = mavutil.mavlink_connection('/dev/ttyACM0', baud=115200)
+def hb_wait(conn, timeout=30):
+    """HEARTBEAT 하나를 받는다.
+
+    ⚠️ pymavlink 2.4.49 는 인스턴스 필드가 있는 메시지에서 산발적으로
+       `TypeError: 'NoneType' object does not support item assignment` 로 죽는다
+       (mavutil.py:98). 다음 패킷으로 넘어가면 된다 — FETCHING.md 의 알려진 버그다.
+       2026-09-11 재부팅 때 실제로 여기서 걸렸다.
+    """
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        try:
+            m2 = conn.recv_match(type='HEARTBEAT', blocking=True, timeout=2)
+        except TypeError:
+            continue
+        if m2 is not None:
+            return m2
+    return None
+
+
 print('하트비트 대기...', flush=True)
-if not m.wait_heartbeat(timeout=30):
+hb = hb_wait(m, 30)
+if hb is None:
     sys.exit('하트비트 없음')
-hb = m.recv_match(type='HEARTBEAT', blocking=True, timeout=10)
 armed = bool(hb.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED)
 print('sys %d  ARM: %s' % (m.target_system, '🔴 ARMED' if armed else 'disarmed'))
 if armed:
@@ -27,7 +46,7 @@ time.sleep(8)
 for attempt in range(1, 13):
     try:
         m2 = mavutil.mavlink_connection('/dev/ttyACM0', baud=115200)
-        if m2.wait_heartbeat(timeout=10):
+        if hb_wait(m2, 10) is not None:
             print('✅ 돌아왔다 (%d차) sys %d' % (attempt, m2.target_system))
             sys.exit(0)
         m2.close()
