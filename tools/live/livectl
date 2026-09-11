@@ -99,7 +99,7 @@ cmd_on() {
   install_unit
 
   # 🔴 경로를 **고르지 않는다.** 둘 다 열어 두고 트래커가 살아 있는 쪽을
-  #    쓰게 한다 (둘 다면 USB 우선 — mav_live.py 의 LINK_PRIORITY).
+  #    쓰게 한다 (둘 다면 ELRS 우선 — mav_live.py 의 LINK_PRIORITY).
   #
   #    예전에는 여기서 하나를 골라 그 포트로만 열었다. 그래서 USB 를 뽑고
   #    백팩으로 갈아탈 때마다 `./qgc live on` 을 다시 돌려야 했고, 안 돌리면
@@ -281,7 +281,7 @@ print('  링크: %s   패킷 %s   %s%s' % (
     format(s.get('packets',0),','), s.get('src') or '-',
     '  [%s]' % s['link'] if s.get('link') else ''))
 # 두 경로를 동시에 듣는다. 둘 다 붙어 있으면 둘 다 보여 준다 —
-# 화면이 쓰는 것은 위의 [경로] 하나뿐이다 (둘 다면 USB 우선).
+# 화면이 쓰는 것은 위의 [경로] 하나뿐이다 (둘 다면 ELRS 우선).
 lk = s.get('links') or {}
 if len(lk) > 1:
     print('  붙어 있는 경로: %s' % '  '.join(

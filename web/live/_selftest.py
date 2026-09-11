@@ -39,17 +39,18 @@ def check(name, got, want):
 def t_arbitration():
     st = M.State()
     check('프레임 전에는 경로가 없다', st.active_link(), None)
+    st.touch(('127.0.0.1', 14550), 1, 'USB')
+    check('USB 만 → USB', st.active_link(), 'USB')
     st.touch(('10.0.0.1', 14555), 1, 'ELRS')
-    check('ELRS 만 → ELRS', st.active_link(), 'ELRS')
-    st.touch(('127.0.0.1', 14550), 1, 'USB')
-    check('둘 다 → USB 우선', st.active_link(), 'USB')
-    st.link_seen['USB'] = time.monotonic() - 5.0
-    check('USB 조용 → ELRS 로 폴백', st.active_link(), 'ELRS')
-    st.touch(('127.0.0.1', 14550), 1, 'USB')
-    check('USB 복귀 → 다시 USB', st.active_link(), 'USB')
-    st.link_seen['USB'] = time.monotonic() - 50.0
-    st.link_seen['ELRS'] = time.monotonic() - 9.0
-    check('둘 다 조용 → 마지막에 말한 쪽', st.active_link(), 'ELRS')
+    # 🔴 2026-09-11 에 뒤집었다 — 날 때 쓰는 링크를 지상에서도 본다.
+    check('둘 다 → ELRS 우선', st.active_link(), 'ELRS')
+    st.link_seen['ELRS'] = time.monotonic() - 5.0
+    check('ELRS 조용 → USB 로 폴백', st.active_link(), 'USB')
+    st.touch(('10.0.0.1', 14555), 1, 'ELRS')
+    check('ELRS 복귀 → 다시 ELRS', st.active_link(), 'ELRS')
+    st.link_seen['ELRS'] = time.monotonic() - 50.0
+    st.link_seen['USB'] = time.monotonic() - 9.0
+    check('둘 다 조용 → 마지막에 말한 쪽', st.active_link(), 'USB')
 
 
 # ── 1-2. 배터리 % 출처 ────────────────────────────────────────────────
@@ -78,7 +79,8 @@ def _sys_status(pct):
 def _batt_status(pct):
     return _M('BATTERY_STATUS', current_battery=1200,
               voltages=[24000] + [65535] * 9, voltages_ext=[],
-              battery_remaining=pct, current_consumed=5000, id=124)
+              battery_remaining=pct, current_consumed=5000, id=124,
+              temperature=32767)
 
 
 def _pct_after(seq):

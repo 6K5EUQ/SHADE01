@@ -711,7 +711,7 @@ function render(s) {
              : '데이터 없음')
              + (pin ? ' — 고정됨' : ' — 자동')
              + (age != null ? ' (' + age.toFixed(1) + 's 전)' : '')
-             + '\n눌러서 자동 → USB → ELRS';
+             + '\n눌러서 자동 → ELRS → USB';
   }
 
   // 기록 상태. 야외 판정(GPS 3D fix + 위성 6기)을 통과한 arm 구간만 적으므로
@@ -1653,18 +1653,19 @@ doLayout();
 
 $('win').onchange = (e) => { winSec = +e.target.value; renderCharts(); drawTrack(); };
 
-// 데이터 원천 배지를 누르면 경로를 고정한다: 자동 → USB → ELRS → 자동.
-// USB 가 붙어 있으면 자동 선택은 늘 USB 라 ELRS 가 화면에 안 나오는데,
-// 비행 중 기체가 실제로 쓰는 것은 ELRS 쪽이다. 그 링크로 무엇이 몇 Hz 로
-// 도착하는지는 그 경로를 직접 봐야만 알 수 있다.
+// 데이터 원천 배지를 누르면 경로를 고정한다: 자동 → ELRS → USB → 자동.
+// 🔴 순서를 뒤집었다 (2026-09-11). 기본 우선이 ELRS 로 바뀌었으므로
+//    (mav_live.py 의 LINK_PRIORITY), 고정 순서도 그것을 따라간다 —
+//    첫 번째 누름이 "지금 자동으로 고른 그 경로" 를 굳히는 동작이어야
+//    누를 때마다 그림이 튀지 않는다.
 //
 // 🔴 읽기 전용은 그대로다. 이 요청은 서버가 이미 듣고 있는 두 스트림 중
 //    무엇을 그릴지만 바꾼다 — FC 로 나가는 바이트는 없다.
 $('linkSrc').onclick = async () => {
   const cur = $('linkSrc').dataset.k || '';
   const pin = cur.split('/')[1];
-  const next = pin === 'null' || pin === 'undefined' ? 'USB'
-             : pin === 'USB' ? 'ELRS' : 'auto';
+  const next = pin === 'null' || pin === 'undefined' ? 'ELRS'
+             : pin === 'ELRS' ? 'USB' : 'auto';
   try {
     await fetch('/api/link?pin=' + next);
   } catch (e) {
