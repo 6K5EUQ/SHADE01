@@ -269,7 +269,7 @@ QGC 대신(또는 같이) **브라우저로 볼 수 있다** — 지도 한쪽, 
 | 배터리 | [Fullymax 6S 16000mAh](components/batteries/fullymax-6s-16000mah/README.md) |
 | 지상국 | **QGroundControl v5.1.4** (직접 빌드, VTOL 패치) — [빌드](gcs/qgroundcontrol/BUILD.md) · [설치 절차](gcs/qgroundcontrol/README.md#설치-ubuntu--실기-기준) |
 | 저장소 | `github.com/6K5EUQ/SHADE01` — 클론: `ku`, `rim3` |
-| 파라미터 백업 | [`params/`](params/) 최신 스냅샷 (1353개) · 미션은 [`missions/`](missions/README.md) · TELEM1 스트림은 [`config/extras.txt`](config/extras.txt) · 9/2 구조 정리본 [`config/SETTINGS.md`](config/SETTINGS.md) (값 인용 금지) |
+| 파라미터 백업 | [`params/`](params/) 최신 스냅샷 (1342개, 펌웨어 교체 후) · 미션은 [`missions/`](missions/README.md) · TELEM1 스트림은 [`config/extras.txt`](config/extras.txt) · 9/2 구조 정리본 [`config/SETTINGS.md`](config/SETTINGS.md) (값 인용 금지) |
 
 ### ELRS
 
@@ -338,7 +338,7 @@ SB(3단) + SC/SF 래치가 만든다. PWM 은 전부 2026-09-09 실측이다.
 
 ---
 
-## 현재 상태 (2026-09-10 — 실기 스냅샷 `params/px4_params_20260910-151002.params` 기준, 문서 217건 전수 대조)
+## 현재 상태 (2026-09-12 — 실기 스냅샷 `params/px4_params_20260912-184540-preflash.params` 기준. 펌웨어 교체 후 실측 재검증)
 
 | 항목 | 상태 |
 |---|---|

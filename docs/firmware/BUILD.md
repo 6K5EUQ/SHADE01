@@ -253,4 +253,4 @@ EOF
 
 플래시 절차와 복원은 [`FLASHING.md`](FLASHING.md) 에 따로 있다.
 🔴 **플래시는 파라미터를 전부 날린다.** 복원 정본은
-`params/px4_params_20260912-final.params` (1353개) 다.
+`params/px4_params_20260912-184540-preflash.params` (1354개) 다.
