@@ -29,6 +29,7 @@ ARM·모드변경·미션업로드가 실기에 들어간다 — 그래서 기�
 | [`FLIGHT-SYNC.md`](FLIGHT-SYNC.md) | **비행 직후 한 줄** — `./qgc sync` 로 FC → 웹 |
 | [`PARSING.md`](PARSING.md) | 🔴 **로그 파싱 정본 — 읽기 작업 전 필독** |
 | [`PROCEDURE.md`](PROCEDURE.md) | 로그 수집 → 분석 → 기록 절차 (손으로 할 때) |
+| [`docs/firmware/`](docs/firmware/BUILD.md) | **펌웨어 빌드·플래시** — `.px4` 는 git 에 없다, 절차가 정본 |
 | [`skills/shade01-test/`](skills/shade01-test/SKILL.md) | **비행 전 점검** — `./shade01 test` (읽기 전용, 3~6초) |
 | [`docs/emergency/`](docs/emergency/README.md) | **현장 체크리스트** (이륙 전·직후·비상) — FC 값을 바꿨으면 여기 표도 같이 고쳐라 |
 | [`missions/`](missions/README.md) | **미션 `.plan` 정본** — 번호로 관리. 올리는 법·금지 명령 |
