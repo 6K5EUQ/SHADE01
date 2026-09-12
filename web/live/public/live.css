@@ -34,7 +34,13 @@ main {
 /* ── 지도 ─────────────────────────────────────────────────────
    로그 뷰어(log.html)와 같은 Leaflet·같은 타일을 쓴다. */
 #mapPane {
-  position: relative; overflow: hidden;
+  /* 🔴 z-index 를 반드시 준다 (2026-09-12). position:relative 만으로는 쌓임
+     맥락이 안 생겨서, Leaflet 이 제 안에서 쓰는 z-index 가 **전역으로 샌다** —
+     타일 200 / 오버레이 400 / 마커 600 / 팝업 700 / 컨트롤 800·1000 이라
+     재생 창(#pbPick, 50)과 하단 바(#pbBar, 40)를 통째로 덮었다.
+     여기에 값을 주면 그 숫자들이 이 칸 안에서만 겨루고, 바깥과는 아래 1 로만
+     비교된다. */
+  position: relative; overflow: hidden; z-index: 1;
   border-right: 1px solid var(--border); background: #0d1117;
 }
 /* 지도는 우측 칸 위쪽이다 (2026-09-10). HUD 와 같은 높이를 갖도록
@@ -488,7 +494,7 @@ body.replaying #playToggle { color: var(--warn); font-weight: 700; }
    🔴 재생 바는 켜져 있을 때만 나타난다(`hidden`). 실시간으로 보는 동안
       화면 아래를 한 줄이라도 뺏으면 안 된다 — 그때는 계기가 전부다. */
 #pbBar {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 1040;
   display: flex; align-items: center; gap: 8px;
   padding: 6px 10px;
   background: var(--panel-2); border-top: 1px solid var(--border);
@@ -516,8 +522,11 @@ body.playback main { outline: 2px solid var(--accent); outline-offset: -2px; }
 body.playback { padding-bottom: 38px; }
 
 /* ── 로그 고르기 ─────────────────────────────────────────────────── */
+/* 🔴 지도(#mapPane)가 쌓임 맥락을 만들기 전에는 Leaflet 의 1000 이 이 창을
+   덮었다. 이제 갇혔지만, 전면 오버레이는 그래도 네 자리로 둔다 — 지도가
+   격리되지 않은 상태로 되돌아가도 살아남게. */
 #pbPick {
-  position: fixed; inset: 0; z-index: 50;
+  position: fixed; inset: 0; z-index: 1050;
   background: rgba(0, 0, 0, .55);
   display: flex; align-items: center; justify-content: center;
 }
