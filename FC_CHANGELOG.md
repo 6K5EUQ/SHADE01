@@ -100,6 +100,9 @@ ssh rim3@rim3 'systemctl --user is-active shade-bridge; fuser -v /dev/ttyACM0'
 
 | 일시 (KST) | PC | 경로 | 대상 | 변경 | 이유 |
 |---|---|---|---|---|---|
+| 2026-09-12 17:19 | `rim3` | `rim3` USB 직결 (MAVLink) | **(읽기 전용)** 전량 스냅샷 | 변경 없음 — 1353개 덤프 | 펌웨어 플래시 대비 복원 정본 확보. ⚠️ **이 스냅샷은 `SYS_DM_BACKEND=1` 인 상태로 찍혔다 — 복원에 쓰지 마라.** 아래 절 |
+| 2026-09-12 (테스트) | `rim3` | `rim3` USB 직결 (MAVLink) | `SYS_DM_BACKEND` | `0` → **`1`** → **`0`** (원복) | dataman 미션 실패가 SD 하드웨어 탓인지 가르려고 RAM 백엔드로 전환해 시험. **RAM 에서도 `NO_MISSION` 이라 SD 문제가 아님이 확정됐다.** 시험 후 원복·저장·되읽기 완료. 아래 절 |
+| 2026-09-12 17:28 | `rim3` | `rim3` USB 직결 (MAVLink) | **(읽기 전용)** 전량 스냅샷 | 변경 없음 — 1353개 덤프 | 🔴 **복원 정본은 이것이다** — `params/px4_params_20260912-final.params`. 아래 절 |
 | 2026-09-11 저녁 (시각 미상) | **조종자** | **(미상)** | `SENS_DPRES_OFF` | `-1.8096` → **`-3.0643`** | 에어스피드 재보정. ⚠️ **과보정이다** — 정지 대기속도가 `-1.3` 에서 **`+2.21 m/s`** 로 부호가 뒤집혔다 (15초 151표본). 아래 절 |
 | 2026-09-11 15:33 | `ku` | `rim3` USB 직결 (MISSION 프로토콜) | **미션 전량** | 5포인트 사각 순회(6항목) → **이륙·5초 호버·착륙(3항목)** | 미션 테스트용 최소 구성. 되읽어 항목별 대조 일치. 아래 절 |
 | 2026-09-11 (시각 미상) | **(미상)** | **(미상)** | `SENS_DPRES_OFF` | `-4.52` → **`-1.8096`** | 에어스피드 영점 재보정. ⚠️ **이 줄은 사후 기록이다** — 누가 언제 어느 경로로 썼는지 모른다. 검증은 2026-09-11 에 했다. 아래 절 |
@@ -120,6 +123,114 @@ ssh rim3@rim3 'systemctl --user is-active shade-bridge; fuser -v /dev/ttyACM0'
 | 2026-09-05 14:04 | `ku` | rim3 USB 직결 | 미션·RTL·failsafe 6개 | 아래 표 | 공개 로그 16대 대조에서 우리 값이 최저 이상치 |
 | 2026-09-04 16:37 | `ku` | rim3 USB 직결 | `RC_MAP_KILL_SW` `RC_MAP_RETURN_SW` `COM_FLTMODE1~6` | 아래 절 | 조종기 채널 재배치 (SB/SC/SF 구성) |
 | 2026-09-04 16:32 | `ku` | rim3 USB 직결 | `RC_MAP_TRANS_SW` | `7` → **`0`** | 고정익 사용 중지 — 쿼드 전용 제한 |
+
+### 🔬 2026-09-12 — `SYS_DM_BACKEND` 1 ↔ 0 (dataman 원인 규명 시험)
+
+9/11 야외에서 **미션을 3회 걸어 3회 다 실패**했다 (`flights/2026-09-11-outdoor-session.md`).
+전부 `dataman_client timeout` 이었다. 원인이 **SD 하드웨어**인지 **dataman 소프트웨어**인지
+가르려고 백엔드를 RAM 으로 바꿔 시험했다.
+
+| 값 | 뜻 |
+|---|---|
+| `0` | SD 파일 백엔드 (`/fs/microsd/dataman`) — **정상 운용값** |
+| `1` | RAM 백엔드 — **SD 를 아예 안 거친다** |
+
+#### 결과 — SD 문제가 아니다
+
+`SYS_DM_BACKEND=1` 로 SD 를 완전히 우회했는데도 **3회 연속 `NO_MISSION`** 이었다.
+저장 매체를 빼도 증상이 같으므로 **dataman 소프트웨어 결함**으로 좁혀진다.
+
+관련 업스트림 (v1.17.0 에 **미포함**):
+
+| PR | 내용 |
+|---|---|
+| [#27552](https://github.com/PX4/PX4-Autopilot/pull/27552) | 큐에 남은 응답을 비운다 — 타임아웃된 요청의 응답이 다음 요청에 잘못 매칭되는 것을 막는다. **우리 증상(500ms → 5000ms → 진입거부)과 일치** |
+| [#28202](https://github.com/PX4/PX4-Autopilot/pull/28202) | dataman 스택 1420 → 2000 |
+| [#28464](https://github.com/PX4/PX4-Autopilot/pull/28464) | 추가 수정 |
+
+미해결 이슈 [#27135](https://github.com/PX4/PX4-Autopilot/issues/27135) 가 동일 증상,
+[#24608](https://github.com/PX4/PX4-Autopilot/issues/24608) 는 v1.15 `dataman_client` 회귀
+(v1.14.4 에서는 정상)를 보고한다.
+
+#### 원복 확인
+
+시험 후 `0` 으로 되돌리고 `MAV_CMD_PREFLIGHT_STORAGE`(param1=1) 저장 `ACCEPTED`,
+되읽어 `0` 확인했다. **현재 실기 값은 `0` 이다.**
+
+🔴 **`params/px4_params_20260912-171950.params` 는 이 시험 도중에 찍혔다.**
+그 파일에는 `SYS_DM_BACKEND=1` 이 들어 있다 — **복원에 쓰면 미션이 재부팅마다
+날아간다.** 쓰지 마라.
+
+### 📦 2026-09-12 17:28 — 펌웨어 플래시 대비 파라미터 백업 (읽기 전용)
+
+**복원 정본: `params/px4_params_20260912-final.params` (1353개)**
+
+`tools/fc/param_backup.py` 로 떴다. `PARAM_REQUEST_LIST` 만 보내고 `PARAM_SET` 을
+보내지 않는다 — FC 값이 안 바뀐다.
+
+17:19 판과의 차이는 정확히 두 줄뿐이다:
+
+```
+SYS_DM_BACKEND   1 → 0      ← 이것 때문에 다시 떴다
+_HASH_CHECK      (자동 변경)
+```
+
+#### 무엇이 복원되나
+
+| 묶음 | 개수 | |
+|---|---|---|
+| `CAL_ACC0_*` | 20 | XOFF `-0.0655` · YOFF `-0.0853` · ZOFF `0.0454` |
+| `CAL_GYRO0_*` | 14 | 실측 오프셋 있음 |
+| `CAL_MAG0_*` | 42 | 실측 오프셋 있음 |
+| `CAL_*_ID` | 3 | ACC `6946826` · GYRO `6684682` · MAG `396809` |
+| `CA_*` · `PWM_MAIN_FUNC*` | — | `CA_AIRFRAME=2` · 로터 5 · 서보 5 · 모터 매핑 |
+
+🔴 **캘리브레이션은 파라미터다.** 값과 센서 ID 가 전부 백업에 있으므로 플래시 후
+**가속도·자이로·나침반을 다시 보정할 필요가 없다.**
+
+#### 복원 안 되는 것 — 하나뿐
+
+`RC_CRSF_PRT_CFG` — 표준 펌웨어에는 `crsf_rc` 가 없어 이 파라미터가 사라진다.
+**현재 값이 `0`(포트 미할당)이라 사라져도 동작이 같다.**
+
+#### ⚠️ 아직 확정 아닌 것
+
+표준 v1.17.0 이 내는 파라미터 목록과 이 백업을 **아직 대조하지 않았다.** 커스텀
+빌드에만 있는 파라미터가 더 있을 수 있다. **플래시 전에 빌드 산출물과 diff 해서
+사라지는 것을 전량 확인해야 "동일 체감" 이 보증된다.**
+
+### ✅ 2026-09-12 — CRSF 미사용 확인 (읽기 전용)
+
+펌웨어에서 `crsf_rc` 를 빼도 되는지 가르려고 전 경로를 확인했다. **안 쓴다.**
+
+🔴 **"CRSF" 가 두 곳에서 다른 뜻으로 쓰인다.** 헷갈리면 안 된다:
+
+| | FC 의 `crsf_rc` 드라이버 | 조종기의 CRSF 전송 계층 |
+|---|---|---|
+| 위치 | Pixhawk 안 | Boxer(EdgeTX) · 백팩 |
+| 상태 | 🔴 **꺼짐** (`RC_CRSF_PRT_CFG=0` · `RC_CRSF_TEL_EN=0`) | ✅ 살아 있음 |
+| 재빌드 영향 | **제거 대상** | **영향 없음** |
+
+실제 경로 — 백팩이 CRSF ↔ MAVLink 를 변환하고 **FC 는 MAVLink 만 받는다**:
+
+```
+Boxer ─CRSF─ ELRS 2.4G ─ RX ─CRSF─ 백팩 ─MAVLink 460800─ Telem1/UART7 ─ FC
+```
+
+근거 3중:
+
+| | |
+|---|---|
+| 파라미터 | `RC_CRSF_PRT_CFG=0` · `RC_CRSF_TEL_EN=0` (되읽음) |
+| 비행 로그 | `input_rc.input_source = 6 (MAVLINK)`, 10편 전부. **`CRSF(13)` 0회** |
+| 링크 구성 | `MAV_0_CONFIG=101` · `SER_TEL1_BAUD=460800` |
+
+`shade.lua:197` 의 `crossfireTelemetryPop()` 은 **조종기 쪽 EdgeTX API** 이지 FC
+드라이버가 아니다. 스크립트 주석이 직접 말한다 —
+*"the FC speaks MAVLink rather than CRSF"* (`shade.lua:3`).
+
+`elrs-battery-telemetry-fix.md` 는 CRSF 전환을 명시적으로 기각해 뒀다: 그 경로로
+바꾸면 **MAVLink over ELRS 가 끊겨 노트북 QGC 링크가 죽는다.**
 
 ### ✅ 2026-09-11 — 에어스피드 영점 검증 (`SENS_DPRES_OFF` -4.52 → -1.8096)
 
