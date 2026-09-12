@@ -1,9 +1,9 @@
 # 야외 비행 세션 — 10편 20분 (2026-09-11)
 
-미션 자동비행을 걸어 보려던 날이다. **한 번도 못 걸었다** — 원인은 기체가 아니라
-조종기 스위치였다(아래 §2). 대신 RTL 을 네 번 확인했고
-([별도 문서](2026-09-11-rtl-measured.md)), 링크 품질에 관한 오래된 오해 하나가
-이날 데이터로 풀렸다(§5).
+미션 자동비행을 걸어 보려던 날이다. **세 번 걸었고 세 번 다 실패했다** —
+원인은 조종기도 미션 내용도 아니라 **FC 가 SD 에서 미션을 못 읽은 것**이다(§2).
+대신 RTL 을 네 번 확인했고([별도 문서](2026-09-11-rtl-measured.md)), 링크 품질에
+관한 오래된 오해 하나가 이날 데이터로 풀렸다(§5).
 
 FC 는 `rim3` USB 직결. 분석은 랩서버 원본으로 했다 —
 [절차](../tools/qgclog/FETCHING.md).
@@ -19,7 +19,7 @@ FC 는 `rim3` USB 직결. 분석은 랩서버 원본으로 했다 —
 | 최대속도 | **10.2 m/s** (17:17 편) |
 | 최대 홈거리 | **188 m** (17:23 편) |
 | 고정익 전환 | **없음** — 10편 전부 MC ([금지 유지](../README.md#-고정익-사용-금지--쿼드-전용-2026-09-04)) |
-| 미션 | ⛔ **0회** — 모드 진입 자체가 없었다 |
+| 미션 | 🔴 **3회 시도 전부 실패** — `dataman` 타임아웃 (SD 접근) |
 | 종료 | Kill 다수. 마지막 편은 배터리 failsafe 후 Kill |
 
 ## 편별
@@ -47,55 +47,90 @@ FC 는 `rim3` USB 직결. 분석은 랩서버 원본으로 했다 —
 Preflight Fail: heading estimate not stable
 ```
 
-**이것이 미션의 실질 장애물이다.** 미션은 heading 에 의존하는데, 전류가 흐르면
-기수 추정이 흔들린다. 스위치 문제(§2)를 고쳐도 이게 남는다.
+미션은 heading 에 의존하므로 이것도 장벽이다 — 다만 그날 미션이 실패한 직접
+원인은 아니었다(§2 의 `dataman` 타임아웃). **SD 를 고쳐도 이것이 남는다.**
 
 대책은 그대로다 — GPS 마스트 높이기, 전력선 이격·트위스트
 ([9/5 분석](2026-09-05-hover-compass-interference.md)).
 
-## 2. ⛔ 미션 — 걸린 적이 없다
+## 2. 🔴 미션 — 세 번 시도, 전부 `dataman` 타임아웃
 
-10편 전부의 `nav_state` 전환을 뽑았다. **`AUTO_MISSION` 이 한 번도 없다:**
+**조종기·미션 내용 문제가 아니다. FC 가 SD 에서 미션을 읽지 못했다.**
 
-```
-STAB → ALTCTL → POSCTL → AUTO_RTL → AUTO_LOITER
-```
+그날 미션을 **세 번** 걸었다. CH6 은 세 번 다 **988**(슬롯1 Mission)에
+정확히 들어갔고, 두 번은 `AUTO_MISSION` 모드에 실제로 진입했다.
 
-`POSCTL`·`AUTO_RTL`·`AUTO_LOITER` 는 나오는데 미션만 없다.
-
-### 원인 — CH6 가 988 에 안 갔다
-
-| 편 | CH6 최소 PWM | 988 근처 샘플 |
-|---|---|---|
-| 10편 전부 | **1173** | **0개** |
+### 1차 — KST 16:53 (`07_53_49.ulg`)
 
 ```
-988  = 슬롯1 Mission   ← 한 번도 도달 안 함
-1173 = 슬롯2 Stabilized ← 오늘 최소값
-1350 / 1520 / 2010 = Alt / Pos / RTL
+ 0.0s  Armed by RC switch
+ 2.0s  AUTO_MISSION 진입          ← 모드는 들어갔다
+ 7.8s  [dataman_client] timeout after 500 ms!    ← 🔴 원인
+ 7.8s  [navigator] Waypoint could not be read.
+ 7.8s  Failsafe activated → RTL
+11.0s  Disarmed by auto preflight disarming
 ```
 
-2010(RTL)은 나왔으니 **SC/SF 래치는 동작한다.** Mission 쪽 조합(`SC위+SF`)만
-안 쓰였다. 미션이 실패한 게 아니라 **시작조차 안 했다.**
-
-### 별개로, 그날 저녁 미션 자체도 무효였다
-
-세션 뒤(17:53경) 미션을 걸려 하자 FC 가 거부했다:
+### 2차 — KST 17:09 (`08_09_54.ulg`)
 
 ```
-[CRIT] No valid mission available, refusing takeoff
-[CRIT] Waypoint could not be read.
+ 3.0s  AUTO_MISSION 진입
+ 8.4s  [dataman_client] timeout after 5000 ms!   ← 10배로 늘었다
+ 8.4s  [navigator] mission check failed
+ 8.4s  No valid mission available, refusing takeoff
+ 8.9s  [dataman_client] timeout after 500 ms!
+ 8.9s  Waypoint could not be read.
+ 9.0s  Failsafe activated → RTL
 ```
 
-원인은 **세 점이 완전히 같은 축퇴 경로**였다 —
-`02-hover-test.plan` 이 TAKEOFF·LOITER·LAND 를 모두 같은 좌표에 두고 있었다.
-PX4 는 이동 거리가 0 인 미션을 `mission_state=1(NO_MISSION)` 로 거부한다.
+### 3차 — KST 17:10 (`08_10_30.ulg`)
 
-좌표를 6m 씩 벌려 고친 뒤 `mission_state=2(NOT_STARTED)` 로 정상이 됐다.
+```
+ 2.5s  Switching to Mission is currently not available
+```
 
-⚠️ **다만 경로가 12.2m 로 매우 짧다.** `NAV_ACC_RAD=3` 이라 도달 반경이 3m 인데
-웨이포인트 간격이 6m 다 — 미션이 순식간에 지나간다. LOITER 5초를 실제로 보려면
-간격을 15~20m 로 늘리는 편이 낫다.
+CH6 은 988 인데 **모드 진입 자체가 거부**됐다. 앞선 두 번의 실패로 FC 가
+미션을 무효로 확정한 상태였다.
+
+### `mission_result` 가 원인을 가른다
+
+1·2차 공통:
+
+```
+valid     = 0    ← FC 가 미션을 무효로 판정
+seq_total = 3    ← 항목 3개는 인식하고 있다
+failure   = 0    ← 🔴 미션 **내용** 결함은 아니다
+warning   = 1
+```
+
+**항목이 3개 있다는 것은 알면서 읽지를 못했다.** `failure=0` 이므로
+좌표·명령 같은 내용 문제가 아니라 **읽기 실패**다.
+
+### `dataman` 이 무엇인가
+
+PX4 가 **미션을 저장하는 SD 카드 영역**(`/fs/microsd/dataman`)이다.
+미션 모드로 들어가 첫 웨이포인트를 읽으려는데 응답이 없어 타임아웃했다.
+
+🔴 **이것은 SD 접근 문제다.** 같은 날 `08_26_41.ulg` 가 전송 중 깨진 것(§8),
+그리고 [FLIGHT-SYNC 가 남은 용의자로 지목한 "NuttX 의 FAT/SD 계층"](../FLIGHT-SYNC.md)
+과 같은 자리를 가리킨다.
+
+⚠️ 2026-09-09 정정은 **"MAVFTP 전송 손상"** 에 대한 것이었고 "카드가 정상"
+이라는 결론은 **그 현상에 한정**된다. `dataman` 타임아웃은 전송이 아니라
+**FC 내부 SD 접근**이라 그 정정이 덮지 않는 영역이다.
+
+### 미션 내용은 별개로 문제가 있었다
+
+세션 뒤 USB 로 읽어 보니 `02-hover-test.plan` 이 TAKEOFF·LOITER·LAND 를
+**모두 같은 좌표**에 두고 있었다. PX4 는 이동 거리 0 인 미션을 거부한다.
+
+좌표를 6m 씩 벌려 고쳐 `mission_state=2(NOT_STARTED)` 가 됐다.
+
+⚠️ **다만 이것이 그날 실패의 원인은 아니다** — 비행 중 로그의 `failure=0` 이
+내용 결함을 배제한다. 두 가지가 겹쳐 있었을 뿐이다.
+
+⚠️ 고친 경로도 12.2m 로 짧다. `NAV_ACC_RAD=3` 에 웨이포인트 간격 6m 면
+미션이 순식간에 지나간다. **15~20m 로 늘리는 편이 낫다.**
 
 ## 3. 진동 — 대체로 양호, 스파이크 하나
 
@@ -207,8 +242,11 @@ GPS 대지속도<0.7 m/s 구간 514샘플의 생압 중앙값이 **−11.03 Pa**
 
 ## 다음 비행 전
 
-1. 🔴 **CH6 이 988 이 되는 조합(SC위+SF)을 지상에서 먼저 확인** — 미션의 전부다
-2. 🔴 **나침반 −0.95** — 미션을 걸어도 heading 불안정이 남는다
+1. 🔴 **`dataman` / SD 를 먼저 본다** — 미션 실패의 직접 원인이다.
+   미션을 다시 업로드해 왕복(업로드→다운로드)이 되는지 확인하고,
+   같은 날 전송 손상(§8)과 함께 **SD 카드 교체를 검토**한다.
+   ⚡ 카드를 빼서 PC 리더로 읽으면 FC·MAVFTP 를 통째로 우회해 판정된다
+2. 🔴 **나침반 −0.95** — SD 를 고쳐도 heading 불안정이 남는다
 3. 🔴 **배터리 누적 10000 mAh 에서 끊기**
 4. 🔴 **커넥터 교체** (XT120/AS150) — 평균이 정격을 넘는다
 5. 🟡 **진동 185.4 재발 여부** 관찰
