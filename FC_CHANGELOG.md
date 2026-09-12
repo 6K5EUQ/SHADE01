@@ -102,6 +102,7 @@ ssh rim3@rim3 'systemctl --user is-active shade-bridge; fuser -v /dev/ttyACM0'
 |---|---|---|---|---|---|
 | 2026-09-12 17:19 | `rim3` | `rim3` USB 직결 (MAVLink) | **(읽기 전용)** 전량 스냅샷 | 변경 없음 — 1353개 덤프 | 펌웨어 플래시 대비 복원 정본 확보. ⚠️ **이 스냅샷은 `SYS_DM_BACKEND=1` 인 상태로 찍혔다 — 복원에 쓰지 마라.** 아래 절 |
 | 2026-09-12 (테스트) | `rim3` | `rim3` USB 직결 (MAVLink) | `SYS_DM_BACKEND` | `0` → **`1`** → **`0`** (원복) | dataman 미션 실패가 SD 하드웨어 탓인지 가르려고 RAM 백엔드로 전환해 시험. **RAM 에서도 `NO_MISSION` 이라 SD 문제가 아님이 확정됐다.** 시험 후 원복·저장·되읽기 완료. 아래 절 |
+| 2026-09-12 18:45 | `rim3` | `rim3` USB 직결 (px_uploader) | 🔴 **펌웨어 플래시 + 파라미터 전량 복원** | `d6f12ad1c4f7` → **`37e76b278a`** (v1.17.0 + dataman 수정 2개, 모듈 6종 제거) | 9/11 미션 3회 실패의 원인인 dataman 읽기 타임아웃을 고치려고. 플래시 98.3% → **89.7%**. 아래 절 |
 | 2026-09-12 17:28 | `rim3` | `rim3` USB 직결 (MAVLink) | **(읽기 전용)** 전량 스냅샷 | 변경 없음 — 1353개 덤프 | 🔴 **복원 정본은 이것이다** — `params/px4_params_20260912-final.params`. 아래 절 |
 | 2026-09-11 저녁 (시각 미상) | **조종자** | **(미상)** | `SENS_DPRES_OFF` | `-1.8096` → **`-3.0643`** | 에어스피드 재보정. ⚠️ **과보정이다** — 정지 대기속도가 `-1.3` 에서 **`+2.21 m/s`** 로 부호가 뒤집혔다 (15초 151표본). 아래 절 |
 | 2026-09-11 15:33 | `ku` | `rim3` USB 직결 (MISSION 프로토콜) | **미션 전량** | 5포인트 사각 순회(6항목) → **이륙·5초 호버·착륙(3항목)** | 미션 테스트용 최소 구성. 되읽어 항목별 대조 일치. 아래 절 |
@@ -123,6 +124,100 @@ ssh rim3@rim3 'systemctl --user is-active shade-bridge; fuser -v /dev/ttyACM0'
 | 2026-09-05 14:04 | `ku` | rim3 USB 직결 | 미션·RTL·failsafe 6개 | 아래 표 | 공개 로그 16대 대조에서 우리 값이 최저 이상치 |
 | 2026-09-04 16:37 | `ku` | rim3 USB 직결 | `RC_MAP_KILL_SW` `RC_MAP_RETURN_SW` `COM_FLTMODE1~6` | 아래 절 | 조종기 채널 재배치 (SB/SC/SF 구성) |
 | 2026-09-04 16:32 | `ku` | rim3 USB 직결 | `RC_MAP_TRANS_SW` | `7` → **`0`** | 고정익 사용 중지 — 쿼드 전용 제한 |
+
+### 🔴 2026-09-12 18:45 — 펌웨어 교체 (dataman 수정 + 슬림화)
+
+9/11 야외에서 미션을 3회 걸어 3회 다 `dataman_client timeout` 으로 실패했다
+(분석: [`flights/2026-09-11-outdoor-session.md`](flights/2026-09-11-outdoor-session.md)).
+v1.17.0 태그 커밋은 **2026-01-16** 이라 upstream 의 dataman 수정이 하나도 안 들어 있다.
+
+빌드 절차는 [`docs/firmware/BUILD.md`](docs/firmware/BUILD.md),
+플래시 절차는 [`docs/firmware/FLASHING.md`](docs/firmware/FLASHING.md) 가 정본이다.
+
+#### 무엇이 바뀌었나
+
+| | 이전 | **지금** |
+|---|---|---|
+| git-hash | `d6f12ad1c4f7` (= v1.17.0 태그 그 자체) | **`37e76b278a`** |
+| 빌드 | 2026-08-11 | **2026-09-12 18:38** |
+| 플래시 | 98.30% (여유 33KB) | **89.70% (여유 156KB)** |
+| dataman 스택 | 1420 (여유 **308 B**) | **2000 (여유 932 B)** |
+
+적용한 수정 2개 (v1.17.0 기준 브랜치 `shade01-v1.17.0-dataman`):
+
+- `5fd7fed8d8` — 큐에 남은 응답 제거. 주석이 우리 증상을 그대로 서술한다:
+  *"타임아웃된 작업의 응답이 다음 요청에 매칭되지 않도록"*
+- `e9c1c83e35` — dataman 스택 1420 → 2000 (충돌해서 손으로 적용)
+
+뺀 모듈: uXRCE-DDS · SIH · 온도보상 · Gimbal · Septentrio · `crsf_rc`.
+**전부 파라미터로 "안 쓴다" 를 확인한 것만이다.**
+
+🔴 **UAVCAN 과 PX4IO 는 남겼다.** UAVCAN 은 PM08 전원 모니터(DroneCAN),
+PX4IO 는 AUX 서보 3개(`PWM_AUX_FUNC1/2/3`)가 달려 있다. PX4IO 는 한 번 뺐다가
+`PWM_AUX_*` 52개가 사라지는 것을 **플래시 전 파라미터 diff 로 잡아** 되돌렸다.
+
+#### 복원 결과
+
+정본 `params/px4_params_20260912-184540-preflash.params` (1354개) 로 복원했다.
+`tools/fc/param_restore.py` 로 쓰고 저장하고 되읽어 대조했다.
+
+```
+값이 다른 것    0개
+무시된 것      13개  (새 펌웨어에 없는 파라미터 — 전부 "꺼짐" 값)
+```
+
+무시된 13개: `MNT_MODE_IN=-1` · `RC_CRSF_PRT_CFG=0` · `SEP_PORT1/2_CFG=0` ·
+`TC_A/B/G/M_ENABLE=0` · `UXRCE_DDS_CFG=0` · `SYS_CAL_ACCEL/BARO/GYRO=0` ·
+`MIS_DIST_1WP`(기본값 10000, 미션 업로드 때 재생성).
+
+✅ **캘리브레이션은 그대로 복원됐다** — `CAL_ACC0_*`·`CAL_GYRO0_*`·`CAL_MAG0_*`
+값과 센서 ID 가 플래시 전과 바이트 단위로 같다. **재보정 불필요.**
+
+✅ 안전 핵심값 확인: `RC_MAP_TRANS_SW=0` · `VT_ELEV_MC_LOCK=1` ·
+`NAV_RCL_ACT=2` · `NAV_DLL_ACT=2` · `RC_MAP_KILL_SW=9` · `CA_AIRFRAME=2` ·
+`UAVCAN_ENABLE=2` · `PWM_AUX_DIS2=1500`.
+
+✅ 미션 3항목(`22`/`19`/`21`)이 SD 에 그대로 살아남았다. 플래시는 dataman 을
+지우지 않는다.
+
+#### 검증
+
+`./shade01 test` — 정상 23항목. 확인 필요 5개는 전부 실내 조건
+(GPS 5기·배터리 없음·RC 없음·EKF 미기동).
+
+실내 미션 검증 (전역 원점·홈을 수동 지정해 GPS 없이):
+
+```
+mission_state  1(NO_MISSION) → 2(NOT_STARTED) → 3(ACTIVE)
+mission_result valid=1  warning=0  failure=0
+dataman        읽기 20회 전부 성공, 평균 583us
+```
+
+🔴 **실내 통과가 고쳐졌다는 증거는 아니다.** 9/11 실패는 야외에서만 났고,
+실내에서는 부하 조건이 재현되지 않는다 (플래시 전에도 재검증 10회·재업로드
+5회가 전부 성공했다). **최종 판정은 야외 재시도뿐이다.**
+
+### ⚠️ `ODOMETRY: estimator_type 8 unsupported` — 플래시가 만든 것이 아니다
+
+플래시 후 `./shade01 test` 에 이 CRIT 이 새로 보였다. **원인을 갈랐더니 기존
+구성이었다.**
+
+```
+USB_MAV_MODE = 2 (onboard)     PX4 기본값. 플래시 전후 동일
+mavlink instance #1: /dev/ttyACM0, mode Onboard
+```
+
+Onboard 모드가 ODOMETRY 를 스트리밍하고, 그것이 자기 수신부로 돌아와
+`mavlink_receiver.cpp:1554` 에서 거부된다. 초당 약 20회.
+
+| 왜 무해한가 | |
+|---|---|
+| 처리 | 해당 줄에서 `return` — 메시지를 버리기만 한다 |
+| EKF | `EKF2_EV_CTRL=0` — 외부 오도메트리를 애초에 안 쓴다 |
+| 야외 | USB 가 없으면 instance #1 자체가 안 뜬다. 9/11 비행 로그 3편에 이 문구가 **0회** |
+
+**끄고 싶으면** `USB_MAV_MODE=0`(normal) 로 바꾸면 된다 — 다만 컴패니언 연결이
+필요해지면 되돌려야 하므로 지금은 두었다.
 
 ### 🔬 2026-09-12 — `SYS_DM_BACKEND` 1 ↔ 0 (dataman 원인 규명 시험)
 

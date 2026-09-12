@@ -252,7 +252,7 @@ QGC 대신(또는 같이) **브라우저로 볼 수 있다** — 지도 한쪽, 
 |---|---|
 | 기체 | [Striver Mini VTOL](airframes/striver-mini-vtol/README.md) (4+1), `MAV_TYPE=22` |
 | FC | [Pixhawk 6C Mini](components/fc/holybro-pixhawk-6c-mini/README.md) — `PX4_FMU_V6C`, HW `V6C002002` |
-| 펌웨어 | **PX4 v1.17.0 커스텀** (`d6f12ad1c4f7`, 2026-08-11 빌드, CRSF 포함, 플래시 98.3%) |
+| 펌웨어 | **PX4 v1.17.0 커스텀** (`37e76b278a`, 2026-09-12 빌드, dataman 수정 2개, 플래시 89.7%) — [빌드](docs/firmware/BUILD.md)·[플래시](docs/firmware/FLASHING.md) |
 | 컴패니언 | 🔴 **없음** — [Raspberry Pi 5 `raspb1`](components/companion/raspberry-pi-5/README.md) 쇼트 사망 (2026-09-10 확정). FC USB 는 `rim3` |
 | 조종기 | [RadioMaster Boxer](components/transmitters/radiomaster-boxer/README.md) (EdgeTX 2.12.1) |
 | 수신기 | [RP4TD-M](components/receivers/radiomaster-rp4td-m/README.md) — TELEM1, 바인딩 완료 |
