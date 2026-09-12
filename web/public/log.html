@@ -360,13 +360,21 @@ const CHARTS = [
       { key: 'vib', color: '#f0883e', label: '진동', axis: 'left', weight: 2 }],
     thresholds: [{ v: 10, label: '경고 10', color: '#d29922' },
                  { v: 30, label: '위험 30', color: '#f85149' }] },
-  // 🔴 조종기 링크가 아니라 **ELRS 백팩 텔레메트리 링크**다. FC 가 조종
-  //    링크 품질을 로그에 안 남긴다 (input_rc.rssi 는 100 고정, rssi_dbm·
-  //    link_quality 는 전부 무효 — 2026-09-11 실측 유한값 0/269).
-  //    조종 링크가 끊겼는지는 「조종 입력」 단의 rc_lost 로 본다.
+  // 🔴 이것이 **조종 링크** 세기다 (2026-09-12 규명). 앞서 "조종 링크가
+  //    아니다" 라고 적었던 것은 틀렸다.
   //
-  //    기체 RSSI 를 주선으로 둔다. 지상 RSSI 는 91% 가 254(포화)라 변별력이
-  //    없다 — 그래도 같이 그려야 "둘 다 나쁜가, 한쪽만인가" 가 갈린다.
+  //    ELRS 백팩이 링크 통계를 MAVLink RADIO_STATUS 로 변환해 88Hz 로
+  //    흘린다. CRSF 직결(RC_CRSF_PRT_CFG)이 꺼져 있어도 값이 온다.
+  //    `input_rc.rssi` 가 100 고정인 것은 PX4 내부 필드라 그럴 뿐, 링크
+  //    정보 자체는 이쪽 경로로 멀쩡히 들어온다.
+  //
+  //    근거 셋 (2026-09-11 세션 실측):
+  //      스케일  remote_rssi 중앙 73 → -73dBm. ELRS 실사용 -40~-105 범위와 일치
+  //      거리    188m 편에서 거리 상관 +0.83 — 고정 더미가 아니다
+  //      주기    88.5Hz, 12369샘플
+  //
+  //    기체 RSSI 를 주선으로 둔다. 지상 RSSI 는 91% 가 254(포화)라 이
+  //    백팩이 안 채우는 값이다 — 그래도 같이 그려야 어느 쪽인지 갈린다.
   { id: 'c12', title: '통신', bands: true, series: [
       { key: 'rssi_air', color: '#58a6ff', label: '기체 RSSI', axis: 'left', weight: 2 },
       { key: 'rssi_gnd', color: '#8b949e', label: '지상 RSSI(포화)', axis: 'left', dash: true },

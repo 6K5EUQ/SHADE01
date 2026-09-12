@@ -330,14 +330,19 @@ def build_track(ulog, t0, t1):
             if src in cp.data:
                 trk[dst] = to_grid(tcp, clean(cp.data[src][mcp], 10.0) * 100, grid)
 
-    # ── 통신 (ELRS 백팩 텔레메트리 링크) ────────────────────────
-    # 🔴 조종기 링크가 아니다. `input_rc` 의 rssi 는 이 기체에서 **100 고정**
-    #    이고 rssi_dbm·link_quality 는 전부 무효다 (2026-09-11 실측: 유한값
-    #    0/269). FC 가 ELRS 링크 품질을 로그에 안 남긴다.
+    # ── 통신 (조종 링크) ────────────────────────────────────────
+    # 🔴 이것이 **조종 링크** 세기다 (2026-09-12 규명). ELRS 백팩이 링크
+    #    통계를 MAVLink RADIO_STATUS 로 변환해 88Hz 로 흘린다 — CRSF 직결이
+    #    꺼져 있어도(RC_CRSF_PRT_CFG=0) 값이 온다.
     #
-    #    대신 `radio_status` 가 백팩 링크를 말한다. 여기서 볼 것은
-    #    **remote_rssi**(기체 쪽 수신)다 — 로컬 `rssi` 는 91% 가 254(포화)라
-    #    변별력이 없다. 그래서 둘 다 넣되 원격을 주선으로 둔다.
+    #    `input_rc.rssi` 가 100 고정인 것은 PX4 내부 필드라 그럴 뿐이다.
+    #    링크 정보 자체는 이쪽 경로로 멀쩡히 들어온다.
+    #
+    #    근거 (2026-09-11 실측): remote_rssi 중앙 73 → -73dBm 으로 ELRS
+    #    실사용 범위(-40~-105)와 일치하고, 188m 편에서 거리 상관 +0.83.
+    #
+    #    **remote_rssi**(기체 쪽 수신)가 주선이다 — 로컬 `rssi` 는 91% 가
+    #    254(포화)로 이 백팩이 안 채우는 값이다.
     rs, trs, mrs = win(ulog, "radio_status", t0, t1)
     if rs is not None:
         # 0 은 "값 없음" 이다. clean() 은 못 거르므로 NaN 으로 바꿔 둔다 —

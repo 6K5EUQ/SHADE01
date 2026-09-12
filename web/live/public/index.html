@@ -43,6 +43,13 @@
            위성 수 바로 아래에 둔다 — 개수와 오차를 세로로 같이 읽는다. -->
       <div class="sc" id="sc-eph"><span class="k">위치 오차 <em>(m)</em></span><b id="st-eph">—</b></div>
 
+      <!-- 🔴 조종 링크 세기 (2026-09-12). ELRS 백팩이 MAVLink RADIO_STATUS
+           로 실어 보내는 값이라 CRSF 직결 없이도 안다 — remrssi 를 음수
+           dBm 으로 읽는다(73 → -73dBm). 거리 상관 +0.83 실측.
+           비행 중 "지금 신호가 버티나" 는 배터리만큼 급하다. -->
+      <div class="sc" id="sc-link"><span class="k">링크 <em>(dBm)</em></span><b id="st-link">—</b></div>
+      <div class="sc" id="sc-noise"><span class="k">노이즈</span><b id="st-noise">—</b></div>
+
       <!-- 모터는 숫자 넷이 아니라 **기체 그림 위의 넷**이다 (2026-09-09).
            숫자만 보면 "48 과 41 중 어느 쪽이 어느 팔인가" 를 매번 머리로
            옮겨야 한다. 기수를 위로 둔 X 형상에 그대로 얹으면 눈이 바로

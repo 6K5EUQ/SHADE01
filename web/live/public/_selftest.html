@@ -204,6 +204,7 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
   // 하나라도 없으면 render 가 조용히 죽은 것이다.
   // 모터는 칸 넷이 아니라 **기체 그림 하나 + 요약 둘**이다 (2026-09-09).
   const want = ['sc-spd', 'sc-alt', 'sc-batt', 'sc-cur', 'sc-sats', 'sc-eph',
+                'sc-link', 'sc-noise',
                 'sc-frame', 'sc-mspread', 'sc-mavg'];
   const missing = want.filter((id) => !D.getElementById(id));
   ok('계기판 9칸이 전부 있다', missing.length === 0, missing.join(',') || 'ok');
@@ -289,6 +290,25 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
      !D.getElementById('sc-mspread').classList.contains('warn') &&
      !D.getElementById('sc-mspread').classList.contains('bad'),
      D.getElementById('st-mspread').textContent + '%p');
+
+  // ── 링크 세기 ───────────────────────────────────────────────────
+  // 🔴 조종 링크 세기다. ELRS 백팩이 MAVLink 로 실어 보내는 값이라 CRSF
+  //    직결 없이도 안다 (2026-09-12 규명). 비행 중 배터리만큼 급한 값이라
+  //    계기판에 두었고, 색이 안 뜨면 "신호가 준다" 를 놓친다.
+  note('■ 링크 — 신호가 준다는 것을 색으로 말해야 한다');
+  f = await load('dbm=-68'); D = f.contentDocument;
+  ok('정상 링크는 무채색', !D.getElementById('sc-link').classList.contains('warn')
+     && !D.getElementById('sc-link').classList.contains('bad'),
+     D.getElementById('st-link').textContent + 'dBm');
+  f = await load('dbm=-88'); D = f.contentDocument;
+  ok('-88dBm 은 노랑', D.getElementById('sc-link').classList.contains('warn'),
+     D.getElementById('st-link').textContent + 'dBm');
+  f = await load('dbm=-97'); D = f.contentDocument;
+  ok('-97dBm 은 빨강', D.getElementById('sc-link').classList.contains('bad'),
+     D.getElementById('st-link').textContent + 'dBm');
+  f = await load('noise=70'); D = f.contentDocument;
+  ok('노이즈 70 은 빨강', D.getElementById('sc-noise').classList.contains('bad'),
+     D.getElementById('st-noise').textContent);
 
   // ── 모터 편차 경고 ──────────────────────────────────────────────
   // 이 계기의 존재 이유가 "한쪽만 무리하는 것을 잡는다" 이므로, 그 경로가

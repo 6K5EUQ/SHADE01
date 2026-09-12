@@ -1172,9 +1172,23 @@ def handle(msg, st):
         d['rc_count'] = n
 
     elif t == 'RADIO_STATUS':
+        # 🔴 ELRS 백팩이 **조종 링크 품질**을 여기 실어 보낸다 (2026-09-12 규명).
+        #    CRSF 직결이 아니어도 링크 세기를 알 수 있다 — 백팩이 ELRS 링크
+        #    통계를 MAVLink 로 변환해 88Hz 로 흘린다.
+        #
+        #    `remrssi`(기체 쪽 수신)가 그 값이다. 음수 dBm 으로 읽는다:
+        #      73 → -73dBm.  ELRS 실사용은 -40(근접) ~ -105(한계) 범위다.
+        #    거리 상관 +0.83 실측(188m 편) — 고정 더미가 아니라 실측값이다.
+        #
+        #    `rssi`(지상 쪽)는 이 백팩이 안 채운다. 91% 가 254 로 포화라
+        #    변별력이 없으므로 화면에 쓰지 않는다.
         d['radio_rssi'] = msg.rssi
         d['radio_remrssi'] = msg.remrssi
         d['radio_noise'] = msg.noise
+        # 화면이 바로 쓸 dBm. 0 은 "값 없음" 이고, 200 을 넘는 것은 포화·오염
+        # 이라 버린다 (로그 실측에 252·254 가 섞여 있었다).
+        if 0 < msg.remrssi < 200:
+            d['link_dbm'] = -int(msg.remrssi)
 
     elif t == 'HOME_POSITION':
         st.home = [round(msg.latitude / 1e7, 7), round(msg.longitude / 1e7, 7)]
