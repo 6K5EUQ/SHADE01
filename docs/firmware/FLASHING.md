@@ -151,6 +151,21 @@ mission_state:  1(NO_MISSION) → 2(NOT_STARTED) 또는 3(ACTIVE)
 mission_result: valid=1  warning=0
 ```
 
+⚠️ **`SDLOG_MODE=0` 이라 실내 시험은 로그가 안 남는다.** arm 부터 disarm 까지만
+기록하기 때문이다. 나중에 대조하려면 파라미터를 건드리지 말고 셸에서 켜라:
+
+```
+logger on          # 시작 — 파일 경로를 찍어 준다
+...시험...
+logger off
+```
+
+받는 것도 `./shade01 sync` 로는 안 된다 (문턱·야외 판정에 걸린다):
+
+```bash
+tools/qgclog/fcfetch.py get /fs/microsd/log/<날짜>/<이름>.ulg logs/<날짜>_<이름>.ulg
+```
+
 ⚠️ **실내에서 통과했다고 고쳐진 것이 아니다.** 9/11 실패는 야외에서만 났고,
 실내에서는 부하 조건이 재현되지 않는다 (미션 재검증 10회·재업로드 5회 전부 성공).
 
