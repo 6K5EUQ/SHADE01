@@ -38,3 +38,8 @@ web/node_modules/
 
 # extras_push.py 가 되읽기 검증에 쓰는 임시 파일
 *.readback
+
+# 펌웨어 바이너리 — 재현 절차가 정본이다 (docs/firmware/BUILD.md)
+firmware/*.px4
+firmware/*.bin
+firmware/*.elf
