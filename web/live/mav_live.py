@@ -1003,9 +1003,18 @@ def handle(msg, st):
 
     elif t == 'GLOBAL_POSITION_INT':
         lat, lon = msg.lat / 1e7, msg.lon / 1e7
-        d['lat'], d['lon'] = lat, lon
-        # EKF 를 거친 값이라 GPS_RAW_INT 폴백보다 우선한다 (아래 참조).
-        d['lat_src'] = 'global'
+        # 🔴 0/0 을 좌표로 받지 마라 (2026-09-13). EKF 가 수평 위치를 못 잡으면
+        #    (실내에서 늘 그렇다 — ekf.pos_horiz=false) FC 는 이 메시지를 계속
+        #    보내면서 lat/lon 만 **0 으로** 채운다. 그대로 쓰면 기체가 기니만
+        #    앞바다(0°N 0°E)에 찍혀 지도에서 사라진다.
+        #    실측 2026-09-13: GLOBAL 76회 전부 lat=0 lon=0 인데, 같은 시각
+        #    GPS_RAW_INT 는 35.1798105/128.5562417 을 fix3·위성8 로 주고 있었다.
+        #    게다가 여기서 lat_src 를 'global' 로 박아 버리면 아래 GPS_RAW_INT
+        #    폴백이 **영영 막힌다** — 그래서 좌표가 유효할 때만 손댄다.
+        if msg.lat or msg.lon:
+            d['lat'], d['lon'] = lat, lon
+            # EKF 를 거친 값이라 GPS_RAW_INT 폴백보다 우선한다 (아래 참조).
+            d['lat_src'] = 'global'
         d['alt_msl'] = msg.alt / 1000.0
         d['alt'] = msg.relative_alt / 1000.0          # 홈 기준 상대고도
         d['alt_src'] = 'gps'
@@ -1014,7 +1023,9 @@ def handle(msg, st):
         d['climb'] = -msg.vz / 100.0
         d['hdg'] = msg.hdg / 100.0 if msg.hdg != 65535 else None
 
-        _push_track(st, lat, lon, d.get('alt'))
+        # 항적도 마찬가지다 — 0/0 을 넣으면 지도에 적도까지 선이 그어진다.
+        if msg.lat or msg.lon:
+            _push_track(st, lat, lon, d.get('alt'))
 
     elif t == 'ATTITUDE':
         d['roll'] = math.degrees(msg.roll)
