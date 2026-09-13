@@ -153,7 +153,25 @@ ssh rim3@rim3 'systemctl --user start shade-bridge.service'
 
 ## 무엇이 올라가는가
 
-`flight`(속도 ≥3 m/s 또는 고도 ≥10 m)와 `hover`(6초 넘게 뜬 것) **둘만**.
+`flight`(속도 ≥3 m/s 또는 고도 ≥10 m)와 `hover`(6초 넘게 뜬 것),
+그리고 **`misn`·`rtl`** — 자동 모드를 **시도한** 로그다.
+
+🔴 **`misn`·`rtl` 은 크기·고도와 무관하게 남는다** (2026-09-13). 뜨지도 못한
+미션 시도가 `ground` 로 지워지던 것을 막는다. 2026-09-11 에 미션 3회 실패가
+전부 0.73~0.74MB 라 지워졌는데, **그 셋이 dataman 결함의 유일한 증거**였다.
+
+- `misn` — `AUTO_MISSION` 진입, 또는 진입이 **거부된** 흔적(`Switching to Mission
+  is currently not available` 등)이 STATUSTEXT 에 있는 것. 모드가 안 바뀐 3차
+  시도도 이걸로 잡힌다
+- `rtl` — `AUTO_RTL` 로 복귀
+
+⚠️ **야외에서만 인정한다.** 위성 15기 이상 · eph 1.0m 이하를 추가로 요구한다
+(`uploadable.outdoor_enough`). 창가 실내는 fix 3 이 잡혀 `gps_verdict()` 만으로는
+안 걸린다 — 실측 2026-09-12 실내가 fix 3 · 위성 11 · eph 2.41m 였다.
+
+⚠️ **크기 문턱(3단계)은 이것과 무관하다.** 받기 전에 걸리므로 내용을 모른다.
+작은 미션 로그를 가져오려면 **`./shade01 sync --min-size=0.5`** 로 받아라 —
+받은 뒤에는 판정이 지우지 않는다.
 
 `ground`·`abort`·`noarm`·`unknown`·`indoor`·`unreadable` 은 안 올린다.
 안 올려도 **`.ulg` 는 이 PC 와 FC 에 그대로 있다** — `./qgc log list` 로 본다.

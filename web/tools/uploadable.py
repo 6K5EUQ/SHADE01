@@ -16,6 +16,26 @@
 `ground`·`hover`·`noarm`·`unknown` 은 **올린다.** 지상 시험도 진동·전류 점검에
 쓰이고, 나중에 되돌아볼 수 있어야 한다.
 
+## 🔴 자동 모드를 시도한 로그는 크기와 무관하게 남는다 (2026-09-13)
+
+`nav` 에 `AUTO_MISSION` 이나 `AUTO_RTL` 이 있으면 `classify()` 가 **`misn`·`rtl`
+배지를 먼저** 낸다 — 고도·속도 판정보다 앞선다. 그래서 뜨지도 못한 미션 시도가
+`ground` 로 지워지지 않는다.
+
+2026-09-11 에 그 일이 실제로 났다. 미션 3회 실패가 전부 **0.73~0.74MB** 라
+`ground` 판정으로 서버에서 지워졌는데, **그 셋이 dataman 결함의 유일한 증거**였다
+([분석](../../flights/2026-09-11-mission-failure.md)). 시도했다는 사실 자체가
+기록 가치다 — 성공 여부는 상관없다.
+
+⚠️ **야외 조건은 `outdoor_enough()` 가 따로 본다.** `gps_verdict()` 의 「fix 3D 를
+한 번이라도 잡았나」로는 부족하다 — 창가 실내도 fix 3 이 잡힌다 (실측 2026-09-12:
+fix 3 · 위성 11 · eph 2.41m). 자동 모드 배지만 **위성 15기 이상 · eph 1.0m 이하**
+를 추가로 요구한다. 야외 실측은 위성 30~31 · eph 0.14~0.17m 라 여유가 넉넉하다.
+
+⚠️ **크기 문턱은 여기서 못 푼다.** `flightsync` 3단계가 **받기 전에** 크기로 거르는데,
+그 시점에는 파일 내용을 모른다. 작은 미션 로그를 가져오려면
+`./shade01 sync --min-size=0.5` 로 받아야 하고, **그 뒤로는 이 판정이 지우지 않는다.**
+
 ## 🔴 판정은 서버가 실제로 도는 경로를 그대로 태운다
 
 `summarize()` 만 불러 보고 통과시키면 안 된다. 서버는 `extract.py full` 을 돌리고,
@@ -42,6 +62,9 @@ import qgclog                                             # noqa: E402
 
 # 이 배지가 붙으면 올리지 않는다. extract.classify() 가 내는 값이다.
 SKIP_BADGES = {'abort'}
+
+# 자동 모드를 시도한 배지. 야외에서만 인정한다 (outdoor_enough).
+AUTO_BADGES = {'misn', 'rtl'}
 
 # GPS fix_type 은 0~8 이다 (MAVLink GPS_FIX_TYPE). 그 밖의 값은 깨진 바이트다 —
 # 실측: log_182 는 1584샘플이 4(RTK)인데 한 샘플만 215 였다. 유효값만 본다.
@@ -77,6 +100,48 @@ def gps_verdict(ulog):
     return False, 'fix %d' % int(fix.max())
 
 
+# 🔴 `misn`·`rtl` 은 **야외에서만** 살린다 (2026-09-13).
+#
+# `gps_verdict()` 의 「fix 3D 를 한 번이라도 잡았나」로는 부족하다. 실내에서도
+# 창가면 fix 3 이 잡힌다 — 실측 2026-09-12 실내 시험이 fix 3 · 위성 11 이었다.
+# 그것을 야외로 오인하면 지상 시험이 미션 로그로 올라간다.
+#
+# 실측 대비 (2026-09-11 야외 ↔ 2026-09-12 실내):
+#
+#   야외   fix 4 · 위성 30~31 · eph 0.14~0.17
+#   실내   fix 3 · 위성  7~11 · eph 2.41~5.43
+#
+# 위성·eph 어느 쪽으로 갈라도 되지만 **둘 다 본다** — 한쪽만 보면 장비를 바꿨을
+# 때 기준이 무너진다. 경계는 실측 사이 넉넉한 곳에 둔다.
+_OUTDOOR_MIN_SATS = 15          # 야외 30, 실내 11
+_OUTDOOR_MAX_EPH = 1.0          # 야외 0.17, 실내 2.41 (m)
+
+
+def outdoor_enough(ulog):
+    """(야외인가, 사유). 자동 모드 배지를 살릴지 가르는 엄격한 기준이다."""
+    data = {x.name: x for x in ulog.data_list}
+    g = None
+    for name in _GPS_TOPICS:
+        if name in data:
+            g = data[name]
+            break
+    if g is None:
+        return False, 'gps 토픽 없음'
+    sat = np.asarray(g.data.get('satellites_used', []))
+    sat = sat[(sat >= 0) & (sat <= 64)]
+    eph = np.asarray(g.data.get('eph', []), dtype=float)
+    eph = eph[np.isfinite(eph) & (eph > 0)]
+    if sat.size == 0 and eph.size == 0:
+        return False, '위성·eph 둘 다 없다'
+    smax = int(sat.max()) if sat.size else -1
+    emed = float(np.median(eph)) if eph.size else -1.0
+    if 0 <= smax < _OUTDOOR_MIN_SATS:
+        return False, '위성 최대 %d (야외 기준 %d)' % (smax, _OUTDOOR_MIN_SATS)
+    if emed > _OUTDOOR_MAX_EPH:
+        return False, 'eph 중앙 %.2fm (야외 기준 %.1fm)' % (emed, _OUTDOOR_MAX_EPH)
+    return True, '위성 %d · eph %.2fm' % (smax, emed)
+
+
 def verdict(path):
     """(skip|keep, 사유). 판정에 실패하면 올리는 쪽으로 기운다."""
     try:
@@ -103,12 +168,16 @@ def verdict(path):
     if indoor:
         return 'skip', why
 
-    # classify() 는 row 를 받는다 — 판정에 쓰는 네 값만 채워 준다.
+    # classify() 는 row 를 받는다 — 판정에 쓰는 값만 채워 준다.
+    # 🔴 `nav` 를 빼먹지 마라. 없으면 자동 모드 배지(rtl·misn)가 안 나오고
+    #    미션 시도 로그가 `ground` 로 지워진다 (2026-09-11 에 실제로 그랬다).
     row = {
         'armed': rep.get('armed'),
         'duration': rep.get('duration'),
         'alt_max': rep.get('alt_max'),
         'speed_max': rep.get('speed_max'),
+        'nav': rep.get('nav'),
+        'msgs': rep.get('msgs'),
     }
     try:
         badge = extract.classify(row)
@@ -118,6 +187,17 @@ def verdict(path):
         return 'keep', 'classify 실패(%s) — 올린다' % type(exc).__name__
     if badge in SKIP_BADGES:
         return 'skip', badge
+    # 🔴 자동 모드 배지는 야외에서만 인정한다. 실내에서 미션을 걸어 본 것까지
+    #    올리면 지상 시험이 미션 기록으로 섞인다 — `gps_verdict()` 의 fix 3D
+    #    기준으로는 창가 실내를 못 거른다 (실측 2026-09-12: fix 3 · 위성 11).
+    if badge in AUTO_BADGES:
+        try:
+            ok, why2 = outdoor_enough(ulog)
+        except Exception as exc:                          # noqa: BLE001
+            return 'keep', '%s (야외 판정 실패 %s — 올린다)' % (badge, type(exc).__name__)
+        if not ok:
+            return 'skip', '%s 이지만 실내 (%s)' % (badge, why2)
+        return 'keep', '%s (%s)' % (badge, why2)
     return 'keep', badge
 
 

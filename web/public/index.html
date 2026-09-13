@@ -11,6 +11,8 @@
   <input type="search" id="q" placeholder="파일명 검색" style="width:180px">
   <select id="filter">
     <option value="">전체</option>
+    <option value="misn">미션</option>
+    <option value="rtl">RTL</option>
     <option value="flight">실비행</option>
     <option value="hover">호버</option>
     <option value="ground">지상</option>
@@ -70,6 +72,8 @@
 <script>
 const $ = (s) => document.querySelector(s);
 const BADGE = {
+  misn:   ['미션', 'AUTO_MISSION 을 시도했다 — 성공 여부와 무관. 진입이 거부돼 모드가 안 바뀐 것도 포함한다'],
+  rtl:    ['RTL', 'AUTO_RTL 로 복귀했다'],
   flight: ['실비행', '고도 10m 이상이거나 속도 3m/s 이상'],
   hover:  ['호버', '떴지만 저고도·저속 — 제자리 호버이거나 지상 확인'],
   ground: ['지상', '고도 0.5m 미만, 속도 0.5m/s 이하'],
