@@ -503,9 +503,12 @@ def decoded_points(ulog):
 # 🔴 자동 모드를 **시도한** 로그는 크기·고도와 무관하게 남긴다 (2026-09-13).
 #    2026-09-11 미션 3회 실패가 전부 0.73~0.74MB 라 `ground` 로 지워졌는데,
 #    그 셋이 dataman 결함의 유일한 증거였다. 시도가 곧 기록 가치다 —
-#    성공했는지는 상관없다. 야외 판정은 uploadable.py 의 gps_verdict() 가 따로 본다.
-_AUTO_BADGE = (("AUTO_MISSION", "misn"), ("AUTO_RTL", "rtl"))
-
+#    성공했는지는 상관없다.
+#
+# 🔴 **주 배지를 덮지 않는다** — 나란히 붙는 태그다. 「호버 + 미션 + RTL」 처럼
+#    한 비행이 여럿을 동시에 가질 수 있어야 한다. 호버였는지 실비행이었는지는
+#    자동 모드를 걸었는지와 별개의 사실이고, 둘 다 알아야 한다.
+_AUTO_TAGS = (("AUTO_MISSION", "misn"), ("AUTO_RTL", "rtl"))
 
 # 🔴 모드 전이가 **없는** 미션 시도도 있다. FC 가 진입 자체를 거부하면
 #    nav_state 는 STAB 그대로고 STATUSTEXT 만 남는다 — 2026-09-11 3차 시도가
@@ -515,25 +518,24 @@ _MISN_TEXT = ("switching to mission", "no valid mission",
               "waypoint could not be read", "mission check failed")
 
 
-def auto_badge(nav, msgs=None):
-    """자동 모드를 시도했으면 배지 이름. 아니면 None.
+def auto_tags(nav, msgs=None):
+    """시도한 자동 모드 태그 목록. 없으면 빈 리스트.
 
     `analyse()` 의 `nav` 는 [(시각, 모드이름)], `msgs` 는 [(시각, 등급, 본문)] 이다
     — 둘 다 이미 나와 있어 추가 파싱이 필요 없다.
 
-    미션이 RTL 보다 앞선다: 미션을 걸었다 실패해 RTL 로 빠지는 것이 우리 사례라
-    (2026-09-11), 그때 남겨야 할 이름은 `misn` 이다.
+    순서는 `misn` → `rtl` 로 고정한다. 미션을 걸었다 실패해 RTL 로 빠지는 것이
+    우리 사례라 (2026-09-11), 읽는 순서가 그대로 사건 순서가 된다.
     """
     names = {str(n) for _, n in (nav or [])}
-    for want, badge in _AUTO_BADGE:
-        if want in names:
-            return badge
-    # 진입이 거부돼 모드가 안 바뀐 경우 — 본문으로 잡는다.
-    for m in (msgs or []):
-        body = str(m[-1]).lower()
-        if any(k in body for k in _MISN_TEXT):
-            return "misn"
-    return None
+    tags = [tag for want, tag in _AUTO_TAGS if want in names]
+    if "misn" not in tags:
+        # 진입이 거부돼 모드가 안 바뀐 경우 — 본문으로 잡는다.
+        for m in (msgs or []):
+            if any(k in str(m[-1]).lower() for k in _MISN_TEXT):
+                tags.insert(0, "misn")
+                break
+    return tags
 
 
 def classify(row):
@@ -546,11 +548,6 @@ def classify(row):
     dur = row.get("duration") or 0
     alt = row.get("alt_max")
     spd = row.get("speed_max")
-    # 🔴 실비행 판정보다 **먼저** 본다. 자동 모드를 걸었다는 사실이 고도·속도보다
-    #    희소한 정보다 — 미션 시도는 실패해도 남겨야 한다.
-    auto = auto_badge(row.get("nav"), row.get("msgs"))
-    if auto is not None:
-        return auto
     if spd is not None and spd >= 3.0:
         return "flight"
     if alt is not None and alt >= 10.0:
@@ -632,8 +629,8 @@ def main():
         "msgs": rep.get("msgs"),
     }
     row["badge"] = classify(row)
-    row.pop("nav", None)
-    row.pop("msgs", None)
+    # 자동 모드 태그는 주 배지와 **나란히** 붙는다 — 덮지 않는다.
+    row["auto"] = auto_tags(row.pop("nav", None), row.pop("msgs", None))
 
     ulog, _ = qgclog._load(path)
     t0, t1, armed = armed_window(ulog)

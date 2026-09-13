@@ -11,12 +11,16 @@
   <input type="search" id="q" placeholder="파일명 검색" style="width:180px">
   <select id="filter">
     <option value="">전체</option>
-    <option value="misn">미션</option>
-    <option value="rtl">RTL</option>
-    <option value="flight">실비행</option>
-    <option value="hover">호버</option>
-    <option value="ground">지상</option>
-    <option value="abort">즉시 disarm</option>
+    <optgroup label="자동 모드 (겹칠 수 있다)">
+      <option value="misn">미션</option>
+      <option value="rtl">RTL</option>
+    </optgroup>
+    <optgroup label="분류">
+      <option value="flight">실비행</option>
+      <option value="hover">호버</option>
+      <option value="ground">지상</option>
+      <option value="abort">즉시 disarm</option>
+    </optgroup>
   </select>
   <button id="cmpBtn" disabled>비교</button>
   <!-- 실시간. 현장 노트북(rim3)이 밀어 올리는 동안에만 초록 점이 켜진다 —
@@ -71,9 +75,13 @@
 
 <script>
 const $ = (s) => document.querySelector(s);
+// 자동 모드 태그 — 주 배지 옆에 나란히 붙는다. 「호버 + RTL」 처럼 겹칠 수 있다.
+const AUTO = {
+  misn: ['미션', 'AUTO_MISSION 을 시도했다 — 성공 여부와 무관. 진입이 거부돼 모드가 안 바뀐 것도 포함한다'],
+  rtl:  ['RTL', 'AUTO_RTL 로 복귀했다'],
+};
+
 const BADGE = {
-  misn:   ['미션', 'AUTO_MISSION 을 시도했다 — 성공 여부와 무관. 진입이 거부돼 모드가 안 바뀐 것도 포함한다'],
-  rtl:    ['RTL', 'AUTO_RTL 로 복귀했다'],
   flight: ['실비행', '고도 10m 이상이거나 속도 3m/s 이상'],
   hover:  ['호버', '떴지만 저고도·저속 — 제자리 호버이거나 지상 확인'],
   ground: ['지상', '고도 0.5m 미만, 속도 0.5m/s 이하'],
@@ -102,7 +110,10 @@ function render() {
   const q = $('#q').value.trim().toLowerCase();
   const f = $('#filter').value;
   const rows = all
-    .filter((r) => (!q || r.name.toLowerCase().includes(q)) && (!f || r.badge === f))
+    // 필터는 주 배지와 자동 모드 태그 **양쪽**을 본다 — 「미션」 을 고르면
+    // 호버였든 실비행이었든 미션을 시도한 것이 전부 나와야 한다.
+    .filter((r) => (!q || r.name.toLowerCase().includes(q))
+      && (!f || r.badge === f || (r.auto || []).includes(f)))
     .sort((a, b) => {
       const av = a[sortKey], bv = b[sortKey];
       if (av == null && bv == null) return 0;
@@ -124,7 +135,7 @@ function render() {
           ${r.repaired ? '<span class="flag" title="구독 섹션이 유실돼 다른 로그의 정의를 이식해 읽었다. 수치를 정본으로 쓰지 마라">⚠복구</span>' : ''}
           ${r.corrupt ? '<span class="flag" title="중간에 깨진 구간이 있다. 최대값이 실제보다 작을 수 있다">⚠손상</span>' : ''}</td>
       <td class="mono">${fmtTime(r.utc)}</td>
-      <td><span class="badge ${b}" title="${tip}">${label}</span></td>
+      <td><span class="badge ${b}" title="${tip}">${label}</span>${(r.auto || []).map((a) => { const [al, at] = AUTO[a] || [a, '']; return ` <span class="badge ${a}" title="${at}">${al}</span>`; }).join('')}</td>
       <td class="num">${fmtN(r.alt_max, 1, 'm')}</td>
       <td class="num">${fmtN(r.speed_max, 1, 'm/s')}</td>
       <td class="num">${fmtDur(r.duration)}</td>

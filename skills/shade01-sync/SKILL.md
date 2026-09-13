@@ -154,16 +154,22 @@ ssh rim3@rim3 'systemctl --user start shade-bridge.service'
 ## 무엇이 올라가는가
 
 `flight`(속도 ≥3 m/s 또는 고도 ≥10 m)와 `hover`(6초 넘게 뜬 것),
-그리고 **`misn`·`rtl`** — 자동 모드를 **시도한** 로그다.
+그리고 **자동 모드 태그(`misn`·`rtl`)가 붙은 것**.
 
-🔴 **`misn`·`rtl` 은 크기·고도와 무관하게 남는다** (2026-09-13). 뜨지도 못한
-미션 시도가 `ground` 로 지워지던 것을 막는다. 2026-09-11 에 미션 3회 실패가
-전부 0.73~0.74MB 라 지워졌는데, **그 셋이 dataman 결함의 유일한 증거**였다.
+🔴 **태그는 주 배지와 나란히 붙는다** (2026-09-13). 덮지 않는다:
+
+```
+호버 + RTL              호버 중 RTL 로 복귀
+지상 + 미션 + RTL       미션을 걸었으나 못 뜨고 RTL
+실비행 + 미션 + RTL     미션 비행 후 복귀
+```
 
 - `misn` — `AUTO_MISSION` 진입, 또는 진입이 **거부된** 흔적(`Switching to Mission
-  is currently not available` 등)이 STATUSTEXT 에 있는 것. 모드가 안 바뀐 3차
-  시도도 이걸로 잡힌다
+  is currently not available` 등). 모드가 안 바뀐 시도도 잡는다
 - `rtl` — `AUTO_RTL` 로 복귀
+
+**태그가 있으면 배지가 `ground` 여도 올린다.** 2026-09-11 미션 3회 실패가 전부
+0.73~0.74MB 라 지워졌는데, **그 셋이 dataman 결함의 유일한 증거**였다.
 
 ⚠️ **야외에서만 인정한다.** 위성 15기 이상 · eph 1.0m 이하를 추가로 요구한다
 (`uploadable.outdoor_enough`). 창가 실내는 fix 3 이 잡혀 `gps_verdict()` 만으로는
@@ -173,8 +179,9 @@ ssh rim3@rim3 'systemctl --user start shade-bridge.service'
 작은 미션 로그를 가져오려면 **`./shade01 sync --min-size=0.5`** 로 받아라 —
 받은 뒤에는 판정이 지우지 않는다.
 
-`ground`·`abort`·`noarm`·`unknown`·`indoor`·`unreadable` 은 안 올린다.
-안 올려도 **`.ulg` 는 이 PC 와 FC 에 그대로 있다** — `./qgc log list` 로 본다.
+`ground`·`abort`·`noarm`·`unknown`·`indoor`·`unreadable` 은 안 올린다
+(자동 모드 태그가 없을 때). 안 올려도 **`.ulg` 는 이 PC 와 FC 에 그대로 있다** —
+`./qgc log list` 로 본다.
 
 배지는 `web/extract.py` 의 `classify()` 가 정한다. **여기서 기준을 새로 세우지
 마라** — 목록 배지를 만드는 그 함수와 갈리면 "목록엔 abort 인데 올라와 있는"

@@ -16,21 +16,25 @@
 `ground`·`hover`·`noarm`·`unknown` 은 **올린다.** 지상 시험도 진동·전류 점검에
 쓰이고, 나중에 되돌아볼 수 있어야 한다.
 
-## 🔴 자동 모드를 시도한 로그는 크기와 무관하게 남는다 (2026-09-13)
+## 🔴 자동 모드 태그는 주 배지와 **나란히** 붙는다 (2026-09-13)
 
-`nav` 에 `AUTO_MISSION` 이나 `AUTO_RTL` 이 있으면 `classify()` 가 **`misn`·`rtl`
-배지를 먼저** 낸다 — 고도·속도 판정보다 앞선다. 그래서 뜨지도 못한 미션 시도가
-`ground` 로 지워지지 않는다.
+`nav` 에 `AUTO_MISSION`·`AUTO_RTL` 이 있으면 `auto_tags()` 가 `misn`·`rtl` 을 낸다.
+**주 배지를 덮지 않는다** — 「호버 + RTL」, 「지상 + 미션 + RTL」 처럼 겹친다.
+호버였는지 실비행이었는지와 자동 모드를 걸었는지는 별개의 사실이고, 둘 다 알아야
+한다.
 
-2026-09-11 에 그 일이 실제로 났다. 미션 3회 실패가 전부 **0.73~0.74MB** 라
-`ground` 판정으로 서버에서 지워졌는데, **그 셋이 dataman 결함의 유일한 증거**였다
+`misn` 은 모드 전이가 없어도 잡는다. FC 가 진입을 거부하면 `nav_state` 는 STAB
+그대로고 STATUSTEXT 만 남는다 — 2026-09-11 3차 시도가 그랬다.
+
+**태그가 있으면 배지가 `ground` 여도 올린다.** 2026-09-11 미션 3회 실패가 전부
+0.73~0.74MB 라 `ground` 로 지워졌는데, **그 셋이 dataman 결함의 유일한 증거**였다
 ([분석](../../flights/2026-09-11-mission-failure.md)). 시도했다는 사실 자체가
 기록 가치다 — 성공 여부는 상관없다.
 
-⚠️ **야외 조건은 `outdoor_enough()` 가 따로 본다.** `gps_verdict()` 의 「fix 3D 를
-한 번이라도 잡았나」로는 부족하다 — 창가 실내도 fix 3 이 잡힌다 (실측 2026-09-12:
-fix 3 · 위성 11 · eph 2.41m). 자동 모드 배지만 **위성 15기 이상 · eph 1.0m 이하**
-를 추가로 요구한다. 야외 실측은 위성 30~31 · eph 0.14~0.17m 라 여유가 넉넉하다.
+⚠️ **야외에서만 인정한다.** `outdoor_enough()` 가 **위성 15기 이상 · eph 1.0m 이하**
+를 요구한다. `gps_verdict()` 의 「fix 3D 를 한 번이라도 잡았나」로는 부족하다 —
+창가 실내도 fix 3 이 잡힌다 (실측 2026-09-12: fix 3 · 위성 11 · eph 2.41m).
+야외 실측은 위성 30~31 · eph 0.14~0.17m 라 여유가 넉넉하다.
 
 ⚠️ **크기 문턱은 여기서 못 푼다.** `flightsync` 3단계가 **받기 전에** 크기로 거르는데,
 그 시점에는 파일 내용을 모른다. 작은 미션 로그를 가져오려면
@@ -62,9 +66,6 @@ import qgclog                                             # noqa: E402
 
 # 이 배지가 붙으면 올리지 않는다. extract.classify() 가 내는 값이다.
 SKIP_BADGES = {'abort'}
-
-# 자동 모드를 시도한 배지. 야외에서만 인정한다 (outdoor_enough).
-AUTO_BADGES = {'misn', 'rtl'}
 
 # GPS fix_type 은 0~8 이다 (MAVLink GPS_FIX_TYPE). 그 밖의 값은 깨진 바이트다 —
 # 실측: log_182 는 1584샘플이 4(RTK)인데 한 샘플만 215 였다. 유효값만 본다.
@@ -187,19 +188,24 @@ def verdict(path):
         return 'keep', 'classify 실패(%s) — 올린다' % type(exc).__name__
     if badge in SKIP_BADGES:
         return 'skip', badge
-    # 🔴 자동 모드 배지는 야외에서만 인정한다. 실내에서 미션을 걸어 본 것까지
-    #    올리면 지상 시험이 미션 기록으로 섞인다 — `gps_verdict()` 의 fix 3D
-    #    기준으로는 창가 실내를 못 거른다 (실측 2026-09-12: fix 3 · 위성 11).
-    if badge in AUTO_BADGES:
+
+    # 🔴 자동 모드를 **시도한** 로그는 배지가 `ground` 여도 살린다 (2026-09-13).
+    #    2026-09-11 미션 3회 실패가 전부 0.73MB 라 `ground` 로 지워졌는데,
+    #    그 셋이 dataman 결함의 유일한 증거였다.
+    #    단 **야외에서만** — 실내 시험까지 올리면 지상 기록과 섞인다.
+    auto = extract.auto_tags(rep.get('nav'), rep.get('msgs'))
+    if auto:
         try:
             ok, why2 = outdoor_enough(ulog)
         except Exception as exc:                          # noqa: BLE001
-            return 'keep', '%s (야외 판정 실패 %s — 올린다)' % (badge, type(exc).__name__)
-        if not ok:
-            return 'skip', '%s 이지만 실내 (%s)' % (badge, why2)
-        return 'keep', '%s (%s)' % (badge, why2)
+            return 'keep', '%s+%s (야외 판정 실패 %s — 올린다)' % (
+                badge, '+'.join(auto), type(exc).__name__)
+        if ok:
+            return 'keep', '%s+%s (%s)' % (badge, '+'.join(auto), why2)
+        # 실내면 자동 모드를 무시하고 배지만으로 다시 판단한다.
+        if badge in SKIP_BADGES:
+            return 'skip', '%s (실내: %s)' % (badge, why2)
     return 'keep', badge
-
 
 def main():
     if len(sys.argv) < 2:
