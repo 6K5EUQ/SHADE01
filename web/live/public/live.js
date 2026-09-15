@@ -86,37 +86,37 @@ let warnUntil = 0, warnText = '', warnKoText = '', lastMsgKey = '';
 //    앞부분만 맞으면 되도록 **접두 일치**로 찾는다 (뒤에 숫자·단위가 붙는다).
 const WARN_KO = [
   // 실내·USB 탓 — 야외에서는 안 뜬다
-  ['ODOMETRY: estimator_type',        'USB 연결 탓. 야외에선 안 뜬다 — 무시'],
-  ['ignoring CMD with same SYS/COMP', '브리지가 자기 명령을 되받음 — 무시'],
-  ['Event dropped',                   '메시지 유실. 제어와 무관'],
-  ['Dropped',                         '메시지 유실. 제어와 무관'],
+  ['ODOMETRY: estimator_type',        'USB 연결 문제'],
+  ['ignoring CMD with same SYS/COMP', '브리지 루프백'],
+  ['Event dropped',                   '메시지 유실'],
+  ['Dropped',                         '메시지 유실'],
   // GPS·추정
-  ['Preflight: GPS PDOP too high',    'GPS 정밀도 부족 — 실내면 정상'],
-  ['Preflight: not enough GPS',       'GPS 위성 부족 — 실내면 정상'],
-  ['Preflight Fail: heading estimate','기수 방향이 아직 안 섰다 (GPS 대기)'],
-  ['GPS jamming detected',            '🔴 GPS 전파방해. 위치 믿지 마라'],
+  ['Preflight: GPS PDOP too high',    'GPS 정밀도 부족'],
+  ['Preflight: not enough GPS',       'GPS 위성 부족'],
+  ['Preflight Fail: heading estimate','GPS 대기 (기수 방향 불안정)'],
+  ['GPS jamming detected',            '🔴 GPS 전파방해'],
   // 조작 결과
-  ['Kill engaged',                    '킬스위치 눌림 — 모터 정지'],
-  ['Preflight Fail: Kill switch',     '킬스위치가 켜져 있어 arm 거부'],
-  ['Preflight Fail: Flight termination', '킬스위치 후속 상태 — 해제해야 arm'],
-  ['Disarming denied: not landed',    '공중이라 disarm 거부 (안전장치)'],
-  ['Switching to Position',           'GPS 없어 Position 진입 거부'],
-  ['Switching to Mission',            '미션 진입 거부 — 미션·GPS 확인'],
-  ['Preflight Fail: Vehicle is not in', '현재 모드에서는 arm 못 한다'],
+  ['Kill engaged',                    '킬스위치 ON'],
+  ['Preflight Fail: Kill switch',     '킬스위치 ON, Arm 거부'],
+  ['Preflight Fail: Flight termination', '비행종료 상태, Arm 거부'],
+  ['Disarming denied: not landed',    '공중, Disarm 거부'],
+  ['Switching to Position',           'GPS 없음, Position 거부'],
+  ['Switching to Mission',            'Mission 진입 거부'],
+  ['Preflight Fail: Vehicle is not in', '모드 불일치, Arm 거부'],
   // 🔴 비행 중이면 대응
-  ['Failsafe activated',              '🔴 failsafe 발동 — 기체가 복귀 중'],
-  ['Quad-chute triggered',            '🔴 고정익→쿼드 비상전환'],
-  ['Critical battery',                '🔴 배터리 위급 — 즉시 착륙'],
-  ['Low battery',                     '🔴 배터리 부족 — 복귀 시작'],
-  ['Preflight Fail: Strong magnetic', '🔴 자기 간섭 강함 — 나침반 확인'],
+  ['Failsafe activated',              '🔴 Failsafe 발동, 복귀 중'],
+  ['Quad-chute triggered',            '🔴 쿼드 비상전환'],
+  ['Critical battery',                '🔴 배터리 위급, 즉시 착륙'],
+  ['Low battery',                     '🔴 배터리 부족, 복귀'],
+  ['Preflight Fail: Strong magnetic', '🔴 자기 간섭 강함'],
   ['Geofence',                        '🔴 지오펜스 경계'],
-  ['Preflight Fail: High Accelerometer', '🔴 가속도계 편향 — 재보정 필요'],
+  ['Preflight Fail: High Accelerometer', '🔴 가속도계 편향, 재보정 필요'],
   // 우리 기체의 알려진 문제
   // 🔴 모듈명은 대괄호 안이라 위에서 잘린다. 남는 본문은 `timeout after …` 다.
-  ['timeout after',                   '🔴 미션을 못 읽음 (알려진 결함)'],
+  ['timeout after',                   '🔴 미션 읽기 실패 (dataman)'],
   ['mission check failed',            '🔴 미션 무효 판정'],
-  ['Waypoint could not be read',      '🔴 웨이포인트 읽기 실패 → RTL'],
-  ['No valid mission available',      '🔴 유효한 미션이 없다'],
+  ['Waypoint could not be read',      '🔴 웨이포인트 읽기 실패, RTL'],
+  ['No valid mission available',      '🔴 유효 미션 없음'],
 ];
 
 /** 경고 원문 → 한글 한 줄. 모르는 문구면 ''. */
