@@ -199,6 +199,30 @@ elif ratio > 1.0:
 
 ---
 
+## 🔴 `log_level` 은 등급 숫자가 아니라 ASCII 문자다
+
+`logged_messages` 를 직접 훑을 때 물린다 (2026-09-15 실측):
+
+```python
+m.log_level == 51      # '3' = ERROR
+m.log_level == 52      # '4' = WARN
+m.log_level == 54      # '6' = INFO
+```
+
+syslog 등급(0~7)으로 알고 `if m.log_level <= 4` 로 거르면 **전부 걸러져 0건이
+나온다.** 로그 225편에서 경고를 모으려다 그렇게 됐다 — 에러 없이 빈 결과라
+"경고가 없구나" 로 읽기 딱 좋다.
+
+**이미 헬퍼가 있다. 직접 비교하지 마라:**
+
+```python
+import qgclog
+lv = qgclog._log_level(m)        # 0~7 로 정규화해 준다
+```
+
+`analyse()` 의 `rep["msgs"]` 도 `m.log_level_str()` 를 써서 문자열로 낸다 —
+그쪽을 쓰면 애초에 겪지 않는다.
+
 ## 4. 파일이 정말 깨졌을 때
 
 §1 의 1단계에서 예외가 났을 때만 해당한다.
