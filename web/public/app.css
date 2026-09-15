@@ -99,7 +99,10 @@ input[type=text], input[type=password], input[type=search], select {
    남긴다 — 2026-09-11 미션 3회 실패가 0.73MB 라 지워졌던 일이 있다.
    눈에 띄는 색을 준다: 흔치 않고, 볼 이유가 큰 로그다. */
 .badge.misn    { background: #2e1065; color: #c4a7ff; border-color: #4c1d95; }
-.badge.rtl     { background: #0f2b33; color: #56d4dd; border-color: #164e56; }
+/* RTL 은 빨강 — 복귀는 대개 뭔가를 중단하고 돌아온 것이라 눈에 걸려야 한다.
+   `err`(#3d1518) 과는 톤을 벌려 둔다. 나란히 놓였을 때 둘을 헷갈리면
+   읽기 실패한 로그와 RTL 한 비행이 같은 것으로 보인다. */
+.badge.rtl     { background: #4a1216; color: #ff6b6b; border-color: #7a1f26; }
 .badge.flight  { background: #12321c; color: #4ac26b; border-color: #1d572f; }
 .badge.hover   { background: #142c47; color: #6cb6ff; border-color: #1d456f; }
 .badge.ground  { background: #21262d; color: #8b949e; border-color: #30363d; }
