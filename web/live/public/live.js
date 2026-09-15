@@ -1054,23 +1054,6 @@ function render(s) {
   setText($('st-eph'), d.eph != null ? d.eph.toFixed(2) : '—');
   sc('sc-eph', d.eph != null && d.eph > 3 ? 'bad' : d.eph != null && d.eph > 1 ? 'warn' : '');
 
-  // 🔴 조종 링크 세기 (2026-09-12). ELRS 백팩이 MAVLink RADIO_STATUS 로
-  //    실어 보내는 값이라 CRSF 직결 없이도 안다.
-  //
-  //    임계는 실측으로 잡았다. 2026-09-09·11 세션 21편에서 편별 중앙값이
-  //    -51 ~ -81dBm, 순간 최저가 -89dBm 이었고 그 동안 rc_lost 는 0 이었다.
-  //    ELRS 의 실제 한계는 -105dBm 근처다.
-  //      -85 까지  정상        (오늘까지 전부 이 안이었다)
-  //      -85~-95   여유가 준다  노랑
-  //      -95 이하  한계 근접    빨강
-  const dbm = d.link_dbm;
-  setText($('st-link'), dbm != null ? String(dbm) : '—');
-  sc('sc-link', dbm == null ? '' : dbm <= -95 ? 'bad' : dbm <= -85 ? 'warn' : '');
-  // 노이즈는 낮을수록 좋다. 실측 중앙 6~11, 튈 때 200 을 넘었다.
-  const nz = d.radio_noise;
-  setText($('st-noise'), nz != null ? String(nz) : '—');
-  sc('sc-noise', nz == null ? '' : nz > 60 ? 'bad' : nz > 30 ? 'warn' : '');
-
   // 모터 4개를 **기체 형상 위에** 그린다. 절대값보다 **넷이 서로 비슷한가**
   // 가 판정이라, 부하를 원의 크기·밝기로 주고 튄 놈에만 색을 얹는다.
   renderMotors(d.motors || {});
