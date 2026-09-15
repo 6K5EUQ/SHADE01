@@ -117,14 +117,63 @@ const WARN_KO = [
   ['mission check failed',            '🔴 미션 무효 판정'],
   ['Waypoint could not be read',      '🔴 웨이포인트 읽기 실패, RTL'],
   ['No valid mission available',      '🔴 유효 미션 없음'],
+// ── 아직 이 기체에서 안 나왔지만 날 수 있는 것 (PX4 소스 대조, 2026-09-15) ──
+  //    위 항목은 로그 225편에서 실제로 나온 것이고, 아래는 예방적으로 넣는다.
+  // arm 거부
+  ['Arming denied: high throttle',    '스로틀 높음, Arm 거부'],
+  ['Arming denied: throttle above',   '스로틀 중앙 위, Arm 거부'],
+  ['Arming denied: calibrating',      '보정 중, Arm 거부'],
+  ['Arming denied: switch to manual', '수동 모드로 전환 필요'],
+  ['Arming denied: Resolve system',   '시스템 결함 해결 필요'],
+  ['Preflight Fail: Home position',   '홈 위치 필요'],
+  ['Preflight Fail: Global position', '전역 위치 필요'],
+  ['Preflight Fail: horizontal position', '수평 위치 불안정'],
+  ['Preflight Fail: Missing FMU SD',  'SD카드 없음'],
+  ['Preflight Fail: RTL switch',      'RTL 스위치 ON, Arm 거부'],
+  // 센서
+  ['Preflight Fail: High Gyro Bias',  '🔴 자이로 편향, 재보정 필요'],
+  ['Preflight Fail: Gyro',            '🔴 자이로 이상'],
+  ['Preflight Fail: No valid data from', '🔴 센서 데이터 없음'],
+  ['Compass needs calibration',       '🔴 나침반 보정 필요, 즉시 착륙'],
+  ['GNSS heading not reliable',       '🔴 GNSS 기수 불신, 즉시 착륙'],
+  ['EKF2_MAG_TYPE invalid',           '나침반 설정 오류, 기본값 복구'],
+  // 모터·ESC
+  ['Preflight Fail: Motor failure',   '🔴 모터 고장 감지'],
+  ['Preflight Fail: ESC failure',     '🔴 ESC 고장 감지'],
+  ['Preflight Fail: ESC telemetry',   'ESC 텔레메트리 없음'],
+  ['ESC calibration denied',          '안전버튼 먼저 눌러야 함'],
+  // 배터리
+  ['Emergency battery level',         '🔴 배터리 비상, 즉시 착륙'],
+  ['Dangerously low battery',         '🔴 배터리 위험, 60초 후 종료'],
+  ['Battery',                         '🔴 배터리 이상'],
+  // 지오펜스·비행제한
+  ['Geofence: exceeding maximum altitude', '🔴 지오펜스 고도 초과'],
+  ['Geofence: exceeding maximum distance', '🔴 지오펜스 거리 초과'],
+  ['Geofence requires valid home',    '지오펜스에 홈 필요'],
+  ['Geofence invalid',                '지오펜스 설정 오류'],
+  ['Approaching max flight time',     '최대 비행시간 임박, 곧 RTL'],
+  ['Terrain collision risk',          '🔴 지형 충돌 위험, 하강 정지'],
+  // 미션
+  ['Invalid mission state',           '🔴 미션 상태 오류'],
+  ['Could not set mission closest',   '가까운 미션 지점 설정 실패'],
+  ['Already higher than takeoff',     '이미 이륙 고도보다 높음'],
+  ['Connection to mission computer',  '미션 컴퓨터 연결 끊김'],
+  // 기타
+  ['Hardware fault',                  '🔴 하드웨어 결함'],
+]
 ];
+
+// 🔴 **긴 키를 먼저 본다.** `Geofence` 가 `Geofence: exceeding maximum altitude`
+//    보다 앞에 있으면 구체적인 쪽을 가로채 "지오펜스 경계" 로 뭉개진다 —
+//    실제로 4건이 그랬다. 목록 순서에 기대지 않도록 여기서 정렬해 둔다.
+const WARN_KO_SORTED = [...WARN_KO].sort((a, b) => b[0].length - a[0].length);
 
 /** 경고 원문 → 한글 한 줄. 모르는 문구면 ''. */
 function warnKo(t) {
   if (!t) return '';
   // `[모듈] 본문` 꼴이 흔하다. 대괄호를 떼고 본다.
   const body = t.replace(/^\s*\[[^\]]*\]\s*/, '');
-  for (const [k, v] of WARN_KO) if (body.startsWith(k)) return v;
+  for (const [k, v] of WARN_KO_SORTED) if (body.startsWith(k)) return v;
   return '';
 }
 
