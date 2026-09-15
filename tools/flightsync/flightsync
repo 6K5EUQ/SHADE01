@@ -110,7 +110,22 @@ for a in "$@"; do
 done
 
 say()  { printf '%s\n' "$*"; }
-step() { printf '\n== %s ==\n' "$*"; }
+# 🔴 단계마다 걸린 시간을 찍는다 (2026-09-15). 없으면 "sync 가 느리다" 를
+#    추측으로 쫓게 된다 — 실제로 판정이 79% 인 줄 모르고 FC 다운로드부터
+#    의심했다. 이전 단계의 소요를 그 단계 머리에 붙여 둔다.
+_STEP_T0=$(date +%s)
+step() {
+  local now=$(date +%s) el=""
+  [ -n "${_STEP_NAME:-}" ] && el=$(printf '  (%s %d초)' "$_STEP_NAME" $((now-_STEP_T0)))
+  printf '\n== %s ==%s\n' "$*" "$el"
+  _STEP_NAME="$*"; _STEP_T0=$now
+}
+# 마지막 단계의 소요는 종료 때 찍는다 — 안 그러면 제일 느린 단계를 못 본다.
+step_done() {
+  [ -n "${_STEP_NAME:-}" ] || return 0
+  printf '   (%s %d초)\n' "$_STEP_NAME" $(( $(date +%s) - _STEP_T0 ))
+  _STEP_NAME=""
+}
 fail() { printf '✗ %s\n' "$*" >&2; }
 
 pick_python() {
@@ -249,6 +264,40 @@ mapfile -t DIRS < <(printf '%s\n' "$root" | awk \
   '/DIR /{ for(i=1;i<=NF;i++) if ($i ~ /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/) print $i }')
 say "  FC 폴더 ${#DIRS[@]}개"
 
+# 🔴 **최근 폴더만 본다** (2026-09-15). 폴더 하나를 읽는 데 SSH 접속과 MAVLink
+#    핸드셰이크가 새로 필요해 **약 8.7초**가 든다. 14개를 전부 훑으면 122초 —
+#    실측으로 sync 총 130초의 94% 였다. FC 다운로드가 아니라 **목록 조회**가
+#    병목이었다.
+#
+#    이미 처리한 날짜의 폴더는 새 비행이 생길 수 없다. 랩서버가 가진 가장 최근
+#    로그의 날짜부터(그날은 포함 — 같은 날 더 날았을 수 있다) 본다.
+#    `--all` 이면 전부 훑는다.
+SINCE_DAY=""
+if [ "$ALL" != 1 ]; then
+  SINCE_DAY=$("${SSHL[@]}" "$SERVER" "
+    cd '$SERVER_LOGS' 2>/dev/null || exit 0
+    ls *.ulg 2>/dev/null | sed -En 's/.*log_[0-9]+_([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})-.*/\1 \2 \3/p' \
+      | while read -r y m d; do printf '%04d-%02d-%02d\n' \"\$y\" \"\$m\" \"\$d\"; done \
+      | sort | tail -1" 2>/dev/null)
+  # 🔴 FC 폴더는 **UTC** 이고 서버 파일명은 **KST** 다. 9시간 차이로 KST 자정
+  #    직후 비행은 전날 UTC 폴더에 들어간다 — 하루를 빼서 그 폴더도 본다.
+  if [ -n "$SINCE_DAY" ]; then
+    SINCE_DAY=$(date -d "$SINCE_DAY -1 day" +%F 2>/dev/null || echo "$SINCE_DAY")
+  fi
+fi
+if [ -n "$SINCE_DAY" ]; then
+  keepdirs=(); skipped=0
+  for d in "${DIRS[@]}"; do
+    if [[ "$d" > "$SINCE_DAY" || "$d" == "$SINCE_DAY" ]]; then keepdirs+=("$d")
+    else skipped=$((skipped+1)); fi
+  done
+  # 전부 걸러졌으면 기준을 믿지 않는다 — 최근 폴더가 없을 리 없다.
+  if [ ${#keepdirs[@]} -gt 0 ]; then
+    DIRS=("${keepdirs[@]}")
+    say "  최근 폴더 ${#DIRS[@]}개만 본다 ($SINCE_DAY 이후 · 건너뜀 ${skipped}개 — 전부 보려면 --all)"
+  fi
+fi
+
 # 폴더마다 파일 목록. `이름<TAB>MB<TAB>UTC폴더`.
 #
 # 🔴 **조회 실패를 "로그 없음"으로 바꾸지 마라.** 비행이 있었는데 없다고
@@ -298,6 +347,12 @@ NEEDNUM=$(cut -f1 "$SCRATCH/server.txt" 2>/dev/null | grep -v '^log_[0-9]' | gre
 
 # 🔴 "마지막 로그 이후" 가 아니라 **"서버에 없는 것"** 이다. 시각 cutoff 는
 #    중간의 구멍을 못 본다 (업로드 실패·손으로 지움). 집합 차이는 잡는다.
+#
+#    ⚠️ 단 **훑는 폴더 자체를 최근으로 줄였다** (2026-09-15, 위 SINCE_DAY).
+#    집합 차이 논리는 그대로지만 비교 대상이 최근 폴더로 좁아지므로, **오래된
+#    폴더에 생긴 구멍은 기본 sync 가 못 본다.** 그것을 메우려면 `--all` 이다.
+#    폴더당 8.7초라 14개를 매번 훑으면 122초가 들고, 그 대부분이 몇 달 전
+#    날짜라 새 비행이 생길 수 없는 폴더였다.
 MISSING=$(printf '%s\n' "$LIST" | "$PY" "$HERE/since.py" pick \
           "$SCRATCH/server.txt" "$SCRATCH/pruned.txt")
 nmiss=$(printf '%s' "$MISSING" | grep -c . || true)
@@ -657,4 +712,5 @@ for _ in $(seq 1 15); do
 done
 
 say ""
+step_done
 say "✅ 끝 — $PUBLIC_URL"
