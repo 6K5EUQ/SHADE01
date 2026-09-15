@@ -4,7 +4,7 @@
 #   ./shade01 sync                FC 에 없는 것을 받아 올리고, 야외가 아니면 지운다
 #   ./shade01 sync --dry          무엇을 할지 보여주기만
 #   ./shade01 sync --verify[=N]   N회씩 받아 바이트 다수결로 복원 (기본 5)
-#   ./shade01 sync --all          삭제 기록까지 무시하고 FC 전체를 다시 본다
+#   ./shade01 sync --all          삭제·판정 기록을 무시하고 FC·랩서버 전체를 다시 본다
 #   ./shade01 sync --keep-ground  지상 시험도 남긴다
 #   ./shade01 sync --min-size=MB  크기 문턱 (기본 1.0)
 #   ./shade01 sync --no-tlog      실시간 기록(.tlog) 업로드를 건너뛴다
@@ -46,6 +46,22 @@ SERVER_UNIT="${SERVER_UNIT:-lab-shade01}"
 # 판정에서 지운 로그를 적어 두는 곳. **이게 없으면 무한 반복이 된다** —
 # 다음 sync 가 "서버에 없네" 하고 다시 받고, 판정이 다시 지운다.
 PRUNED_FILE="${PRUNED_FILE:-/home/ku/shade01-data/pruned.txt}"
+
+# 🔴 판정이 끝난 로그 목록 (2026-09-15). 6단계는 **여기 없는 것만** 판정한다.
+#
+# 왜 필요한가 — 실측: 74편을 전부 파싱하는 데 **23초**가 걸렸고, 그것이 받을
+# 것이 하나도 없는 sync 총 29초의 **79%** 였다. 파일이 안 바뀌었으면 판정
+# 결과도 같으므로 다시 읽을 이유가 없다.
+#
+# `--all` 을 주면 이 기록을 무시하고 전부 다시 본다 — 판정 기준을 바꾼 뒤에
+# 쓴다 (`classify()`·`outdoor_enough()` 를 고쳤을 때).
+JUDGED_FILE="${JUDGED_FILE:-/home/ku/shade01-data/judged.txt}"
+
+# 🔴 판정을 건너뛰고 **무조건 남기는** 파일. 참조용으로 외부에서 가져온 로그가
+#    여기 든다 — FC 에서 온 것이 아니라 sync 가 다시 받아올 수 없어서, 한 번
+#    지우면 복구가 안 된다 (2026-09-15 에 REF 로그 한 편을 그렇게 잃었다).
+#    이름 그대로 한 줄씩 적는다. 없으면 빈 파일이어도 된다.
+KEEP_FILE="${KEEP_FILE:-/home/ku/shade01-data/always-keep.txt}"
 
 # 이 크기 미만은 **받지도 않는다.** 재연결이 파일당 7.7초라 총시간의 72% 를
 # 먹는 것이 실측이다 (2026-09-05: 49개 562초 중 377초). FC 는 한 연결에 파일
@@ -269,7 +285,7 @@ say "  FC 로그 ${nfc}개"
   > "$SCRATCH/server.txt" 2>/dev/null || : > "$SCRATCH/server.txt"
 if [ "$ALL" = 1 ]; then
   : > "$SCRATCH/pruned.txt"
-  say "  --all — 삭제 기록을 무시한다"
+  say "  --all — 삭제·판정 기록을 무시하고 전부 다시 본다"
 else
   "${SSH[@]}" "$SERVER" "cat '$PRUNED_FILE' 2>/dev/null | cut -f1" \
     > "$SCRATCH/pruned.txt" 2>/dev/null || : > "$SCRATCH/pruned.txt"
@@ -466,8 +482,33 @@ step "6/7 랩서버에서 야외 판정"
 verdicts=$("${SSHL[@]}" "$SERVER" "
   cd '$SERVER_LOGS' 2>/dev/null || { echo '__EMPTY__'; exit 0; }
   ls *.ulg >/dev/null 2>&1 || { echo '__EMPTY__'; exit 0; }
-  $SERVER_VENV $SERVER_REPO/web/tools/uploadable.py *.ulg 2>/dev/null
+
+  # 🔴 판정은 **증분**이다 (2026-09-15). 이미 판정해 남긴 것은 다시 읽지
+  #    않는다 — 파일이 그대로면 결과도 그대로다. 74편 전체 파싱이 23초,
+  #    sync 총 29초의 79% 였다.
+  #    --all 이면 목록을 비워 전부 다시 본다.
+  if [ '$ALL' = 1 ]; then
+    : > /tmp/shade_judged_skip.txt
+  else
+    cut -f1 '$JUDGED_FILE' 2>/dev/null | sort -u > /tmp/shade_judged_skip.txt
+  fi
+  # 무조건 남길 것도 판정 대상에서 뺀다 — 파싱조차 하지 않는다.
+  cut -f1 '$KEEP_FILE' 2>/dev/null | sed 's/[[:space:]]*\$//' | grep . \
+    >> /tmp/shade_judged_skip.txt 2>/dev/null || true
+  sort -u /tmp/shade_judged_skip.txt -o /tmp/shade_judged_skip.txt
+
+  ls *.ulg | sort > /tmp/shade_all.txt
+  comm -23 /tmp/shade_all.txt /tmp/shade_judged_skip.txt > /tmp/shade_todo.txt
+  n=\$(grep -c . /tmp/shade_todo.txt || true)
+  echo \"__TODO__\$n\"
+  [ \"\$n\" -gt 0 ] || exit 0
+  tr '\n' '\0' < /tmp/shade_todo.txt \
+    | xargs -0 $SERVER_VENV $SERVER_REPO/web/tools/uploadable.py 2>/dev/null
 " 2>&1)
+
+ntodo=$(grep -oP '__TODO__\K\d+' <<< "$verdicts" | head -1)
+[ -n "$ntodo" ] || ntodo="?"
+verdicts=$(grep -v '__TODO__' <<< "$verdicts")
 
 if grep -q '__EMPTY__' <<< "$verdicts"; then
   say "  랩서버에 로그가 없다"
@@ -475,7 +516,7 @@ elif ! grep -qE '^(keep|skip)' <<< "$verdicts"; then
   fail "판정을 못 돌렸다 — 랩서버의 python·uploadable.py 를 확인하라"
   printf '%s\n' "$verdicts" | tail -3 | sed 's/^/     /'
 else
-  : > "$SCRATCH/del.txt"; keep=0
+  : > "$SCRATCH/del.txt"; : > "$SCRATCH/ok.txt"; keep=0
   while IFS=$'\t' read -r v why pth; do
     [ -n "$v" ] || continue
     b=$(basename "$pth")
@@ -492,6 +533,9 @@ else
     done
     if [ "$v" = "keep" ] && [ "$okbadge" = 1 ]; then
       keep=$((keep+1))
+      # 🔴 통과한 것만 적는다 — 다음 sync 가 이 목록을 보고 건너뛴다.
+      #    삭제된 것은 pruned.txt 가 따로 막으므로 여기 넣지 않는다.
+      printf '%s\t%s\n' "$b" "$why" >> "$SCRATCH/ok.txt"
     else
       printf '   − %-34s %s\n' "$b" "$why"
       printf '%s\t%s\n' "$b" "$why" >> "$SCRATCH/del.txt"
@@ -507,7 +551,13 @@ else
     ndel=$(grep -c . "$SCRATCH/del.txt" || true)
   fi
   [ -n "$ndel" ] || ndel=0
-  say "  야외 비행 ${keep}개 유지 / ${ndel}개 삭제"
+  # 🔴 이 숫자는 **이번에 판정한 것**이다. 건너뛴 것은 세지 않는다 —
+  #    서버 총 보유량과 다른 것이 정상이고, 마지막 줄의 `logs:` 가 총량이다.
+  if [ "$ntodo" = 0 ]; then
+    say "  판정할 새 로그가 없다 (이미 판정된 것은 건너뛴다 — 전부 다시 보려면 --all)"
+  else
+    say "  이번 판정 ${ntodo}개 → 유지 ${keep}개 / 삭제 ${ndel}개"
+  fi
 
   if [ "$ndel" -gt 0 ]; then
     scp -q -o BatchMode=yes "$SCRATCH/del.txt" "$SERVER:/tmp/shade_del.txt" \
@@ -526,6 +576,27 @@ else
       done < /tmp/shade_del.txt
       echo \"  지움 \$n개 — 기록: $PRUNED_FILE\"
       rm -f /tmp/shade_del.txt" || fail "삭제 실패"
+  fi
+
+  # 🔴 통과 목록을 서버에 남긴다 — 다음 sync 가 이것을 보고 건너뛴다.
+  #    `--all` 로 전부 다시 판정했으면 목록을 새로 쓰고, 증분이었으면 덧붙인다.
+  #    이번에 지워진 것이 목록에 남지 않도록 실제 파일이 있는 것만 살린다.
+  nok=$(grep -c . "$SCRATCH/ok.txt" 2>/dev/null || true)
+  [ -n "$nok" ] || nok=0
+  if [ "$nok" -gt 0 ]; then
+    scp -q -o BatchMode=yes "$SCRATCH/ok.txt" "$SERVER:/tmp/shade_ok.txt" \
+      || fail "판정 기록 전송 실패 — 다음 sync 가 다시 전부 판정한다"
+    "${SSHL[@]}" "$SERVER" "
+      cd '$SERVER_LOGS' || exit 0
+      if [ '$ALL' = 1 ]; then : > '$JUDGED_FILE'; fi
+      while IFS=\$'\t' read -r f why; do
+        [ -f \"\$f\" ] || continue        # 지워진 것은 안 남긴다
+        printf '%s\t%s\n' \"\$f\" \"\$why\" >> '$JUDGED_FILE'
+      done < /tmp/shade_ok.txt
+      # 같은 파일이 두 번 들어가지 않게 마지막 것만 남긴다.
+      awk -F'\t' '!seen[\$1]++' '$JUDGED_FILE' > /tmp/shade_j.new \
+        && mv /tmp/shade_j.new '$JUDGED_FILE'
+      rm -f /tmp/shade_ok.txt" || fail "판정 기록 실패"
   fi
 fi
 
