@@ -1491,7 +1491,13 @@ async function pbShowPicker() {
     return b;
   };
 
-  const mkrow = (badges, name, right) => {
+  // 비행 분류 — 목록 페이지와 같은 이름·색을 쓴다. 두 화면에서 같은 비행이
+  // 다르게 보이면 같은 것인 줄 모른다.
+  const TAGLABEL = { flight: '실비행', hover: '호버', ground: '지상',
+                     abort: '즉시 disarm', noarm: 'arm 없음',
+                     misn: '미션', rtl: 'RTL' };
+
+  const mkrow = (badges, name, right, tags) => {
     const row = document.createElement('div');
     row.className = 'row';
     const kb = document.createElement('span');
@@ -1502,6 +1508,19 @@ async function pbShowPicker() {
     nm.className = 'nm';
     nm.textContent = name;
     row.appendChild(nm);
+    // 🔴 제목 **오른쪽**에 붙는다 (사용자 지시 2026-09-15). 왼쪽 배지는 파일의
+    //    성격(어느 링크·원본인가), 이쪽은 비행의 성격이다.
+    if (tags && tags.length) {
+      const tb = document.createElement('span');
+      tb.className = 'tags';
+      for (const t of tags) {
+        const el = document.createElement('span');
+        el.className = 'tag t-' + t;
+        el.textContent = TAGLABEL[t] || t;
+        tb.appendChild(el);
+      }
+      row.appendChild(tb);
+    }
     if (right) {
       const r = document.createElement('span');
       r.className = 'wh';
@@ -1558,7 +1577,13 @@ async function pbShowPicker() {
       if (e.recovered || e.repaired) bs.push(badge('REC2', '복구', '_repair() 가 살려낸 사본'));
       if (known && !e.local) bs.push(badge('REM', '원격', 'labserver 에 있다 — 재생하면 받아 온다'));
       // 웹 카탈로그에는 disp(정리한 표시 이름)가 없다. 이름을 그대로 쓴다.
-      const row = mkrow(bs, e.disp || e.name, (e.size / 1e6).toFixed(1) + 'MB');
+      // 🔴 로컬 카탈로그(mav_live.py)는 이 필드를 안 준다 — 파일명만 훑기
+      //    때문이다. 없으면 배지 없이 그대로 간다. 모르는 것을 지어내지 않는다.
+      const tags = [];
+      if (e.badge && e.badge !== 'unknown' && e.badge !== 'err') tags.push(e.badge);
+      for (const a of (e.auto || [])) tags.push(a);
+      const row = mkrow(bs, e.disp || e.name,
+                        (e.size / 1e6).toFixed(1) + 'MB', tags);
       row.onclick = () => pbStart(e.name);
     }
   }

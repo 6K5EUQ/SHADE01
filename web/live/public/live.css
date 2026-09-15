@@ -596,6 +596,28 @@ body.playback { padding-bottom: 38px; }
 #pbList .k-REM  { color: var(--muted); border-color: var(--border-2); cursor: default; }
 #pbList .msg.warn { color: var(--warn); }
 
+/* ── 분류 배지 — 제목 **오른쪽**에 (2026-09-15) ────────────────────
+   목록 페이지(shade01.bewe.co.kr)와 같은 것을 여기서도 본다. 어느 비행이
+   미션이었는지 RTL 이었는지 모르고 고르면, 틀어 놓고서야 알게 된다.
+
+   🔴 왼쪽 `.kind` 와 다른 자리를 쓴다. 왼쪽은 **파일의 성격**(어느 링크로
+   받았나·원본인가)이고 이쪽은 **비행의 성격**이다. 섞어 놓으면 둘 다 흐려진다.
+
+   색은 목록 페이지(app.css)와 맞춘다 — 두 화면에서 같은 비행이 다른 색이면
+   같은 것인 줄 모른다. */
+#pbList .tags { display: flex; gap: 4px; flex: 0 0 auto; margin-left: 8px; }
+#pbList .tag {
+  font-size: 10px; line-height: 1.6; padding: 0 6px; border-radius: 999px;
+  border: 1px solid transparent; white-space: nowrap;
+}
+#pbList .t-flight { background: #12321c; color: #4ac26b; border-color: #1d572f; }
+#pbList .t-hover  { background: #142c47; color: #6cb6ff; border-color: #1d456f; }
+#pbList .t-ground { background: #21262d; color: #8b949e; border-color: #30363d; }
+#pbList .t-abort  { background: #3a2a12; color: #e3b341; border-color: #5c421c; }
+#pbList .t-noarm  { background: #2d2118; color: #db8b52; border-color: #4a3524; }
+#pbList .t-misn   { background: #2e1065; color: #c4a7ff; border-color: #4c1d95; }
+#pbList .t-rtl    { background: #4a1216; color: #ff6b6b; border-color: #7a1f26; }
+
 
 /* ── 웹(shade01.bewe.co.kr/live)에서만 ─────────────────────────────
    같은 화면을 웹에서도 쓴다. 로컬 전용 조작은 JS 가 숨기고, 여기서는
