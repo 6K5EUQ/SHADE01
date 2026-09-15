@@ -160,7 +160,6 @@ const WARN_KO = [
   ['Connection to mission computer',  '미션 컴퓨터 연결 끊김'],
   // 기타
   ['Hardware fault',                  '🔴 하드웨어 결함'],
-]
 ];
 
 // 🔴 **긴 키를 먼저 본다.** `Geofence` 가 `Geofence: exceeding maximum altitude`
