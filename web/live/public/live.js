@@ -79,7 +79,54 @@ const CHART_EVERY = Math.max(1, Math.round(1000 / POLL_MS / CHART_HZ));
 const trk = { hz: HZ, n: 0, dur: 0, modes: [], events: [] };
 let lastMode = null;
 let lastSeq = -1, lastSeqPoll = 0, pollN = 0;
-let warnUntil = 0, warnText = '', lastMsgKey = '';
+let warnUntil = 0, warnText = '', warnKoText = '', lastMsgKey = '';
+
+// 🔴 FC 경고의 한글 요약 (2026-09-15). 실측 목록이다 — 로그 225편에서 실제로
+//    나온 것만 넣었다. 지어내지 않는다: 여기 없으면 아래 줄을 비운다.
+//    앞부분만 맞으면 되도록 **접두 일치**로 찾는다 (뒤에 숫자·단위가 붙는다).
+const WARN_KO = [
+  // 실내·USB 탓 — 야외에서는 안 뜬다
+  ['ODOMETRY: estimator_type',        'USB 연결 탓. 야외에선 안 뜬다 — 무시'],
+  ['ignoring CMD with same SYS/COMP', '브리지가 자기 명령을 되받음 — 무시'],
+  ['Event dropped',                   '메시지 유실. 제어와 무관'],
+  ['Dropped',                         '메시지 유실. 제어와 무관'],
+  // GPS·추정
+  ['Preflight: GPS PDOP too high',    'GPS 정밀도 부족 — 실내면 정상'],
+  ['Preflight: not enough GPS',       'GPS 위성 부족 — 실내면 정상'],
+  ['Preflight Fail: heading estimate','기수 방향이 아직 안 섰다 (GPS 대기)'],
+  ['GPS jamming detected',            '🔴 GPS 전파방해. 위치 믿지 마라'],
+  // 조작 결과
+  ['Kill engaged',                    '킬스위치 눌림 — 모터 정지'],
+  ['Preflight Fail: Kill switch',     '킬스위치가 켜져 있어 arm 거부'],
+  ['Preflight Fail: Flight termination', '킬스위치 후속 상태 — 해제해야 arm'],
+  ['Disarming denied: not landed',    '공중이라 disarm 거부 (안전장치)'],
+  ['Switching to Position',           'GPS 없어 Position 진입 거부'],
+  ['Switching to Mission',            '미션 진입 거부 — 미션·GPS 확인'],
+  ['Preflight Fail: Vehicle is not in', '현재 모드에서는 arm 못 한다'],
+  // 🔴 비행 중이면 대응
+  ['Failsafe activated',              '🔴 failsafe 발동 — 기체가 복귀 중'],
+  ['Quad-chute triggered',            '🔴 고정익→쿼드 비상전환'],
+  ['Critical battery',                '🔴 배터리 위급 — 즉시 착륙'],
+  ['Low battery',                     '🔴 배터리 부족 — 복귀 시작'],
+  ['Preflight Fail: Strong magnetic', '🔴 자기 간섭 강함 — 나침반 확인'],
+  ['Geofence',                        '🔴 지오펜스 경계'],
+  ['Preflight Fail: High Accelerometer', '🔴 가속도계 편향 — 재보정 필요'],
+  // 우리 기체의 알려진 문제
+  // 🔴 모듈명은 대괄호 안이라 위에서 잘린다. 남는 본문은 `timeout after …` 다.
+  ['timeout after',                   '🔴 미션을 못 읽음 (알려진 결함)'],
+  ['mission check failed',            '🔴 미션 무효 판정'],
+  ['Waypoint could not be read',      '🔴 웨이포인트 읽기 실패 → RTL'],
+  ['No valid mission available',      '🔴 유효한 미션이 없다'],
+];
+
+/** 경고 원문 → 한글 한 줄. 모르는 문구면 ''. */
+function warnKo(t) {
+  if (!t) return '';
+  // `[모듈] 본문` 꼴이 흔하다. 대괄호를 떼고 본다.
+  const body = t.replace(/^\s*\[[^\]]*\]\s*/, '');
+  for (const [k, v] of WARN_KO) if (body.startsWith(k)) return v;
+  return '';
+}
 
 // ── SVG 헬퍼 ────────────────────────────────────────────────────────
 // SVG 요소에 innerHTML 로 자식을 넣으면 네임스페이스가 어긋나고, 빌드 코드
@@ -208,6 +255,11 @@ function buildHUD() {
   h.warnBg = el('rect', { x: -200, y: 92, width: 400, height: 26, rx: 4,
                           fill: '#0d1117', opacity: .92, class: 'off' }, h.center);
   h.warn = el('text', { x: 0, y: 110, 'text-anchor': 'middle', class: 'warnTxt', fill: 'var(--bad)' }, h.center);
+  // 🔴 원문 아래 한글 한 줄 (2026-09-15). FC 가 내는 영어를 그대로만 띄우면
+  //    현장에서 무슨 뜻인지 생각하는 동안 시간이 간다. 원문은 그대로 두고
+  //    (검색·문서 대조에 그게 필요하다) 아래에 요약만 붙인다.
+  h.warnKo = el('text', { x: 0, y: 126, 'text-anchor': 'middle', class: 'warnKo',
+                          fill: 'var(--bad)' }, h.center);
 
   // ③ 좌측 테이프 — 대지속도 (🔴 대기속도가 아니다)
   h.spdBg = el('rect', { fill: 'rgba(22,27,34,.62)' }, svg);
@@ -890,15 +942,24 @@ function render(s) {
     for (let i = msgs.length - 1; i >= 0; i--) if (keyOf(msgs[i]) === lastMsgKey) { start = i + 1; break; }
     const SEV = { EMERG: 1, ALERT: 1, CRIT: 1, ERROR: 1, WARN: 1 };
     for (let i = msgs.length - 1; i >= start; i--) {
-      if (SEV[msgs[i].sev]) { warnText = msgs[i].text.slice(0, 48); warnUntil = pollN + 15000 / POLL_MS; break; }
+      if (SEV[msgs[i].sev]) {
+        warnText = msgs[i].text.slice(0, 48);
+        warnKoText = warnKo(msgs[i].text);
+        warnUntil = pollN + 15000 / POLL_MS;
+        break;
+      }
     }
     lastMsgKey = newKey;
   }
   const crit = d.system_status === 6 ? 'FC 상태 CRITICAL'
     : d.system_status === 7 ? 'FC 상태 EMERGENCY' : '';
   const warnStr = crit || (pollN < warnUntil ? warnText : '');
+  const koStr = crit ? '' : (pollN < warnUntil ? warnKoText : '');
   setText(h.warn, warnStr);
+  setText(h.warnKo, koStr);
   show(h.warnBg, !!warnStr);          // 글자 없을 때 빈 판이 떠 있으면 안 된다
+  // 한글 줄이 있으면 판을 그만큼 키운다 — 글자가 판 밖으로 나가면 사다리에 묻힌다.
+  h.warnBg.setAttribute('height', koStr ? 44 : 26);
   // 점멸은 우선순위 상위 하나에만 — 동시에 여럿 깜빡이면 아무것도 안 튄다.
   // KILL 이 사슬의 맨 위다. 모터가 끊긴 것보다 급한 상태는 없다.
   h.kill.classList.toggle('blink', killed);

@@ -141,6 +141,9 @@ main {
 #hud.small .killTxt { font-size: 22px; stroke-width: 5px; }
 #hud .vtolTxt { font-size: 20px; font-weight: 700; }
 #hud .warnTxt { font-size: 15px; }
+/* 원문 아래 한글 요약. 원문보다 작게 — 읽는 순서가 「영어 → 한글」이 아니라
+   「한글로 뜻 잡고 → 필요하면 원문」이 되도록 색은 같게 두고 크기만 줄인다. */
+#hud .warnKo { font-size: 12px; }
 #hud.small .armTxt  { font-size: 28px; stroke-width: 6px; }
 #hud.small .modeTxt { font-size: 19px; stroke-width: 5px; }
 /* 점멸은 CSS 가 한다 — JS 가 프레임마다 색을 안 건드린다.
