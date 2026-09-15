@@ -58,7 +58,11 @@ PRUNED_FILE="${PRUNED_FILE:-/home/ku/shade01-data/pruned.txt}"
 MIN_MB="${SYNC_MIN_MB:-1.0}"
 
 # 랩서버에 남길 배지. 사용자가 보려는 것은 실제로 뜬 야외 비행이다.
-KEEP_BADGES="${SYNC_BADGES:-flight hover}"
+# 🔴 `misn`·`rtl` 도 남긴다 (2026-09-15) — 자동 모드를 **시도한** 로그다.
+#    uploadable.py 가 `ground+misn` 처럼 주 배지와 붙여 내므로, 아래 6단계는
+#    `+` 로 쪼개 **조각 중 하나라도** 여기 있으면 남긴다. 그래야 뜨지도 못한
+#    미션 시도가 살아남는다 (2026-09-11 미션 3회 실패가 그런 로그였다).
+KEEP_BADGES="${SYNC_BADGES:-flight hover misn rtl}"
 
 # 0 이면 한 번만 받는다. N>=3 이면 N 번 받아 **바이트 다수결**로 복원한다.
 #
@@ -80,7 +84,7 @@ for a in "$@"; do
     --dry) DRY=1 ;;
     --all) ALL=1 ;;
     --no-tlog) TLOG=0 ;;
-    --keep-ground) KEEP_BADGES="flight hover ground" ;;
+    --keep-ground) KEEP_BADGES="flight hover misn rtl ground" ;;
     --min-size=*) MIN_MB="${a#*=}" ;;
     --verify) VOTE_N=5 ;;
     --verify=*) VOTE_N="${a#*=}" ;;
@@ -475,7 +479,18 @@ else
   while IFS=$'\t' read -r v why pth; do
     [ -n "$v" ] || continue
     b=$(basename "$pth")
-    if [ "$v" = "keep" ] && grep -qw -- "$why" <<< "$KEEP_BADGES"; then
+    # 🔴 `why` 는 배지 하나가 아니다 (2026-09-15). uploadable.py 가
+    #    `hover+rtl (위성 30 · eph 0.17m)` 처럼 **태그와 근거를 붙여** 낸다.
+    #    그걸 통째로 `grep -w` 에 넣으면 어느 배지와도 안 맞아 **살려야 할
+    #    로그가 전부 삭제 목록으로 갔다** — 실측으로 RTL·미션 8편을 지웠다.
+    #    괄호 앞까지 자르고 `+` 로 쪼개, **조각 중 하나라도** 남길 배지면 남긴다.
+    heads=${why%% (*}                       # "hover+rtl (…)" → "hover+rtl"
+    okbadge=0
+    IFS='+' read -ra parts <<< "$heads"
+    for pb in "${parts[@]}"; do
+      grep -qw -- "$pb" <<< "$KEEP_BADGES" && { okbadge=1; break; }
+    done
+    if [ "$v" = "keep" ] && [ "$okbadge" = 1 ]; then
       keep=$((keep+1))
     else
       printf '   − %-34s %s\n' "$b" "$why"
