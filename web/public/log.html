@@ -83,8 +83,13 @@
 
      1080p(사용 가능 984px) 기준 **10단까지는 스크롤이 없다** — 984/10 = 98px.
      11단부터 90px 바닥에 닿아 넘친다. 1440p 면 14단까지 들어간다. */
+  /* 🔴 `touch-action` 은 **pan-y** 다 (2026-09-15). `none` 이면 브라우저가
+     세로 스크롤을 못 하게 되어, 폰에서 차트만 보이는 구간을 만나면 **페이지가
+     통째로 멈춘다** — 축 근처를 건드려도 아래로 못 내려간다.
+     차트의 드래그는 시간축(가로) 이동뿐이라 세로는 브라우저에 넘겨도 된다.
+     `pan-y` 면 위아래 스와이프는 스크롤, 좌우 스와이프는 우리 핸들러가 받는다. */
   .chart svg { display: block; width: 100%; cursor: crosshair;
-               touch-action: none; flex: 1 1 0; min-height: 90px; }
+               touch-action: pan-y; flex: 1 1 0; min-height: 90px; }
   /* 호버 툴팁 — 커서가 놓인 차트의 계열값만 그 자리에서 읽는다.
      상단 readout 은 고도·속도 같은 고정 목록이라 진동·EKF 처럼
      그 단에서만 보는 값은 거기 없다. 그래서 단마다 따로 띄운다. */
@@ -722,6 +727,10 @@ function bindChartInput(el) {
   // 호버로 값을 읽는다. 실제 분석은 재생보다 이걸로 하는 일이 많다 —
   // 재생 중에는 방해하지 않는다.
   el.addEventListener('pointermove', (e) => {
+    // 🔴 손가락은 호버가 없다 (2026-09-15). 폰에서 스크롤하려 스와이프하는
+    //    동안 툴팁이 따라붙고 커서가 끌려다녀 화면이 어지러웠다. 터치는
+    //    탭(=seek)만 받고, 값 읽기는 마우스·펜에서만 한다.
+    if (e.pointerType === 'touch') return;
     if (drag) { hideTip(el); return; }
     const t = timeAtEvent(el, e.clientX);
     if (t < 0 || t > TRK.dur) { hideTip(el); return; }
