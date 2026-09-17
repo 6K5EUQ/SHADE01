@@ -1170,6 +1170,102 @@ function acIcon(hdg) {
   });
 }
 
+// ── ADS-B: 주변 유인기 ───────────────────────────────────────────────
+// 🔴 **웹(shade01.bewe.co.kr) 전용이다.** 로컬 트래커(:4400)는 인터넷이 없는
+//    현장에서 쓰는 화면이라 외부 API 를 부르지 않는다. `/api/adsb` 가 404 면
+//    조용히 꺼진다 — 콘솔을 더럽히거나 재시도를 반복하지 않는다.
+//
+// ⚠️ 데이터 반경은 서버가 30nm 로 잡는다. 10km 로 좁히면 실측 0기다
+//    (창원은 순항 트래픽 위주). 홈 10km 원은 아래에서 따로 그린다.
+const ADSB_MS = 15000;
+let adsbLayer = null, adsbMarks = new Map(), adsbTimer = null, adsbOff = false;
+let homeRing = null;
+
+function adsbIcon(trk, ground) {
+  const c = ground ? '#8b949e' : '#ffd866';
+  return L.divIcon({
+    className: '', iconSize: [18, 18], iconAnchor: [9, 9],
+    html: `<svg width="18" height="18" viewBox="0 0 18 18"
+             style="transform:rotate(${(trk || 0).toFixed(0)}deg)">
+             <polygon points="9,1 13,14 9,11 5,14" fill="${c}"
+                      stroke="#0d1117" stroke-width="1.1"/></svg>`,
+  });
+}
+
+/** 호버 한 줄. 편명이 없으면 hex 로 대신한다 (군용기·미등록기가 그렇다). */
+function adsbTip(a) {
+  const name = a.call || a.hex || '?';
+  const alt = a.ground ? '지상'
+            : (a.alt == null ? '고도 ?' : `${a.alt.toLocaleString()} ft`);
+  const bits = [`<b>${name}</b>`, alt];
+  if (a.type) bits.push(a.type);
+  if (a.gs != null) bits.push(`${Math.round(a.gs)} kt`);
+  if (a.dst != null) bits.push(`${a.dst.toFixed(1)} NM`);
+  return bits.join(' · ');
+}
+
+async function adsbTick() {
+  if (adsbOff || !lmap) return;
+  let d;
+  try {
+    const r = await fetch('/api/adsb', { cache: 'no-store' });
+    // 로컬 트래커에는 이 라우트가 없다. 한 번 404 면 영구히 끈다.
+    if (r.status === 404) { adsbOff = true; return; }
+    if (!r.ok) return;                       // 일시 오류는 다음 주기에 다시 본다
+    d = await r.json();
+  } catch { return; }                        // 오프라인이면 조용히 넘긴다
+  if (!d || !Array.isArray(d.ac)) return;
+
+  if (!adsbLayer) adsbLayer = L.layerGroup().addTo(lmap);
+  const seen = new Set();
+  for (const a of d.ac) {
+    if (!Number.isFinite(a.lat) || !Number.isFinite(a.lon)) continue;
+    seen.add(a.hex);
+    let m = adsbMarks.get(a.hex);
+    if (!m) {
+      m = L.marker([a.lat, a.lon], { icon: adsbIcon(a.trk, a.ground) })
+            .bindTooltip(adsbTip(a), { direction: 'top', offset: [0, -10] });
+      m.addTo(adsbLayer);
+      adsbMarks.set(a.hex, m);
+    } else {
+      m.setLatLng([a.lat, a.lon]);
+      m.setIcon(adsbIcon(a.trk, a.ground));
+      m.setTooltipContent(adsbTip(a));
+    }
+  }
+  // 사라진 기체는 지운다 — 안 지우면 유령이 화면에 쌓인다.
+  for (const [hex, m] of adsbMarks) {
+    if (!seen.has(hex)) { adsbLayer.removeLayer(m); adsbMarks.delete(hex); }
+  }
+}
+
+/** 홈 10km 원. ADS-B 반경(30nm)과 무관한 **표시용 기준선**이다. */
+function drawHomeRing(home) {
+  if (!lmap || !Array.isArray(home) || home.length !== 2) return;
+  if (!homeRing) {
+    homeRing = L.circle(home, {
+      radius: 10000, color: '#3fb950', weight: 1, opacity: .45,
+      fill: false, dashArray: '6 6', interactive: false,
+    }).addTo(lmap);
+  } else homeRing.setLatLng(home);
+}
+
+function adsbStart() {
+  if (adsbTimer || adsbOff) return;
+  adsbTick();
+  adsbTimer = setInterval(adsbTick, ADSB_MS);
+}
+
+// 🔴 **기체 상태와 무관하게 돈다.** 홈 마커 안에서 켜면 비행 중이 아닐 때
+//    (홈 좌표가 없을 때) 영영 안 켜진다 — 실측으로 걸렸다. 주변 항공기는
+//    우리가 날든 말든 봐야 하는 정보다.
+// 🔴 initMap 안에서는 못 부른다. 위 `let adsbTimer` 가 그 시점엔 TDZ 라
+//    ReferenceError 로 지도 전체가 죽는다 (실측 확인).
+if (typeof window !== 'undefined') {
+  const kick = () => { if (mapReady) adsbStart(); else setTimeout(kick, 500); };
+  kick();
+}
+
 /** 시간 창 안의 점만 골라 궤적을 다시 그린다. winSec=0 이면 가진 것 전부. */
 function drawTrack() {
   if (!trkLine) return;
@@ -1242,6 +1338,7 @@ function renderMap(s) {
             + 'color:#3fb950;font:700 10px/13px ui-monospace;text-align:center">H</div>',
       }) }).addTo(lmap);
     } else homeMarker.setLatLng(s.home);
+    drawHomeRing(s.home);
   }
 
   // 🔴 좌표를 처음 받으면 그 자리로 **중심을 잡고 50m 급으로 확대**한다.

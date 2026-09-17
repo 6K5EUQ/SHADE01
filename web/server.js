@@ -242,6 +242,78 @@ function send(req, res, status, body, type, extra = {}) {
 const sendJson = (req, res, status, obj) =>
   send(req, res, status, JSON.stringify(obj), TYPES['.json'], { 'Cache-Control': 'no-store' });
 
+// ── ADS-B: 주변 유인기 ───────────────────────────────────────────────
+// 🔴 **프록시가 필요한 이유는 CORS 다.** adsb.lol·adsb.fi·OpenSky 셋 다
+//    `Access-Control-Allow-Origin` 을 안 준다 (2026-09-17 실측). 브라우저가
+//    직접 부르면 막히므로 여기서 대신 받아 넘긴다.
+//
+// ⚠️ **반경을 10km 로 좁히지 마라.** 창원 상공은 순항 트래픽 위주라
+//    5.4nm(10km) 안은 실측 3회 전부 **0기**였다. 30nm 면 4~5기가 꾸준히 잡힌다
+//    (김해공항이 동쪽 25km). 좁히면 "고장났다" 고 오판하게 된다.
+//    홈 10km 원은 프론트가 따로 그린다 — 데이터 반경과 별개다.
+const ADSB_LAT = parseFloat(process.env.ADSB_LAT || '35.1811');
+const ADSB_LON = parseFloat(process.env.ADSB_LON || '128.5538');
+const ADSB_NM = parseInt(process.env.ADSB_NM || '30', 10);
+const ADSB_TTL = 15000;                       // upstream 을 15초에 한 번만 친다
+let adsbCache = { at: 0, rows: [], src: null, error: null };
+let adsbInflight = null;
+
+/** adsb.lol → 실패 시 adsb.fi. 응답 키가 `ac`/`aircraft` 로 갈려 둘 다 본다. */
+async function adsbFetchOnce() {
+  const urls = [
+    ['adsb.lol', `https://api.adsb.lol/v2/lat/${ADSB_LAT}/lon/${ADSB_LON}/dist/${ADSB_NM}`],
+    ['adsb.fi', `https://opendata.adsb.fi/api/v2/lat/${ADSB_LAT}/lon/${ADSB_LON}/dist/${ADSB_NM}`],
+  ];
+  let lastErr = null;
+  for (const [src, u] of urls) {
+    try {
+      const ctl = AbortSignal.timeout(8000);
+      const r = await fetch(u, { signal: ctl, headers: { 'Accept': 'application/json' } });
+      if (!r.ok) { lastErr = `${src} HTTP ${r.status}`; continue; }
+      const j = await r.json();
+      const raw = Array.isArray(j.ac) ? j.ac : (Array.isArray(j.aircraft) ? j.aircraft : []);
+      // 프론트가 쓰는 것만 남긴다 — 응답 하나가 3KB 를 넘고 대부분이 안 쓰는 필드다.
+      const rows = raw
+        .filter(a => Number.isFinite(a.lat) && Number.isFinite(a.lon))
+        .map(a => ({
+          hex: a.hex,
+          // `flight` 는 뒤에 공백이 붙어 온다 ("ESR963  ").
+          call: String(a.flight || '').trim() || null,
+          reg: a.r || null,
+          type: a.t || null,
+          lat: a.lat, lon: a.lon,
+          // 지상기는 alt_baro 가 문자열 "ground" 로 온다.
+          alt: typeof a.alt_baro === 'number' ? a.alt_baro : null,
+          ground: a.alt_baro === 'ground',
+          gs: typeof a.gs === 'number' ? a.gs : null,
+          trk: typeof a.track === 'number' ? a.track : null,
+          vs: typeof a.baro_rate === 'number' ? a.baro_rate : null,
+          dst: typeof a.dst === 'number' ? a.dst : null,
+        }));
+      return { rows, src };
+    } catch (e) { lastErr = `${src}: ${e.message}`; }
+  }
+  throw new Error(lastErr || 'adsb 실패');
+}
+
+/** 동시에 여러 브라우저가 물어도 upstream 요청은 15초당 하나다. */
+async function adsbGet() {
+  if (Date.now() - adsbCache.at < ADSB_TTL) return adsbCache;
+  if (adsbInflight) return adsbInflight;
+  adsbInflight = (async () => {
+    try {
+      const { rows, src } = await adsbFetchOnce();
+      adsbCache = { at: Date.now(), rows, src, error: null };
+    } catch (e) {
+      // 🔴 실패해도 **마지막 좋은 값을 버리지 않는다.** 한 번 끊겼다고 화면에서
+      //    항공기가 사라지면 "주변이 비었다" 로 잘못 읽힌다. stale 로 표시만 한다.
+      adsbCache = { ...adsbCache, at: Date.now(), error: e.message };
+    } finally { adsbInflight = null; }
+    return adsbCache;
+  })();
+  return adsbInflight;
+}
+
 /** 캐시 파일은 내용 해시로 주소가 정해지므로 영구 캐시해도 안전하다. */
 async function sendCached(req, res, file) {
   let gz;
@@ -648,6 +720,16 @@ async function route(req, res) {
       catch (e) { return sendJson(req, res, 422, { error: e.message }); }
     }
     return sendCached(req, res, cachePath(id, kind));
+  }
+
+  // 주변 유인기 (ADS-B). 브라우저는 CORS 때문에 직접 못 부른다 — 위 adsbGet 참조.
+  if (p === '/api/adsb' && req.method === 'GET') {
+    const c = await adsbGet();
+    return sendJson(req, res, 200, {
+      center: [ADSB_LAT, ADSB_LON], nm: ADSB_NM,
+      age: Math.round((Date.now() - c.at) / 1000),
+      src: c.src, error: c.error, ac: c.rows,
+    });
   }
 
   if (p === '/api/upload' && req.method === 'POST') return handleUpload(req, res);
