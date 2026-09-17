@@ -1237,6 +1237,91 @@ async function adsbTick() {
   for (const [hex, m] of adsbMarks) {
     if (!seen.has(hex)) { adsbLayer.removeLayer(m); adsbMarks.delete(hex); }
   }
+  checkTraffic(d.ac, homeMarker ? [homeMarker.getLatLng().lat, homeMarker.getLatLng().lng] : null);
+}
+
+// ── 침범 경고 ────────────────────────────────────────────────────────
+// 🔴 **두 가지를 본다.**
+//   1) 유인기가 홈 반경 1km 안에 들어왔다 — 충돌 위험. 즉시 내려야 한다.
+//   2) 우리 기체가 금지·제한·관제권 안으로 들어갔다 — 법 위반.
+//
+// ⚠️ 이 경고는 **참고**다. 공역 폴리곤은 정적 파일이라 NOTAM·임시 제한을
+//    모른다 (tools/fetch_airspace.py 를 다시 돌려야 갱신된다). 경고가 없다고
+//    안전한 것이 아니다 — 비행 전 드론원스톱 확인은 그대로 필요하다.
+const HOME_RING_M = 1000;
+let alertBox = null;
+// key -> 화면에 띄울 문구. 비어 있으면 경고가 없다.
+const alertMsg = new Map();
+
+/** 두 좌표 사이 거리(m). 1km 판정이라 평면 근사로 충분하다. */
+function distM(a, b) {
+  const R = 6371008.8, r = Math.PI / 180;
+  const dla = (b[0] - a[0]) * r, dlo = (b[1] - a[1]) * r;
+  const m = Math.cos((a[0] + b[0]) / 2 * r);
+  return R * Math.hypot(dla, dlo * m);
+}
+
+/** 점이 폴리곤 안인가 (ray casting). GeoJSON 은 [lon,lat] 순서다. */
+function inRing(lon, lat, ring) {
+  let ins = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+    if ((yi > lat) !== (yj > lat)
+        && lon < (xj - xi) * (lat - yi) / ((yj - yi) || 1e-12) + xi) ins = !ins;
+  }
+  return ins;
+}
+function inGeom(lon, lat, g) {
+  if (!g) return false;
+  if (g.type === 'Polygon') return inRing(lon, lat, g.coordinates[0]);
+  if (g.type === 'MultiPolygon') return g.coordinates.some(p => inRing(lon, lat, p[0]));
+  return false;
+}
+
+function ensureAlertBox() {
+  if (alertBox) return alertBox;
+  alertBox = document.createElement('div');
+  alertBox.id = 'zoneAlert';
+  alertBox.hidden = true;
+  document.body.appendChild(alertBox);
+  return alertBox;
+}
+
+/** 🔴 문구가 실제로 바뀔 때만 DOM 을 건드린다. 매 틱 다시 그리면
+ *  CSS 깜빡임 애니메이션이 처음부터 다시 시작해 글자를 못 읽는다. */
+function setAlert(key, text) {
+  const cur = alertMsg.get(key) || '';
+  const next = text || '';
+  if (cur === next) return;
+  if (next) alertMsg.set(key, next); else alertMsg.delete(key);
+  const box = ensureAlertBox();
+  if (!alertMsg.size) { box.hidden = true; return; }
+  box.innerHTML = [...alertMsg.values()]
+    .map(t => `<div class="zaLine">${t}</div>`).join('');
+  box.hidden = false;
+}
+
+/** 유인기가 홈 1km 안에 들어왔나. adsbTick 이 부른다. */
+function checkTraffic(rows, home) {
+  if (!Array.isArray(home) || home.length !== 2) return setAlert('traffic', '');
+  const near = (rows || []).filter(a =>
+    Number.isFinite(a.lat) && Number.isFinite(a.lon)
+    && distM(home, [a.lat, a.lon]) <= HOME_RING_M);
+  if (!near.length) return setAlert('traffic', '');
+  const who = near.map(a => a.call || a.hex).join(', ');
+  setAlert('traffic', `항공기 접근 · ${who}`);
+}
+
+/** 우리 기체가 규제 공역 안인가. renderMap 이 부른다. */
+let zoneGeo = null;
+function checkZone(pos) {
+  if (!zoneGeo || !Array.isArray(pos)) return setAlert('zone', '');
+  const hit = zoneGeo.features.find(f =>
+    ZONE_SHOW.has(f.properties && f.properties.zone_type)
+    && inGeom(pos[1], pos[0], f.geometry));
+  if (!hit) return setAlert('zone', '');
+  const p = hit.properties;
+  setAlert('zone', `공역 침범 · ${p.zone_type} ${p.name || ''}`.trim());
 }
 
 // ── 공역: 비행금지·제한 구역 ──────────────────────────────────────────
@@ -1270,6 +1355,7 @@ async function loadAirspace() {
   } catch { return; }
   if (!gj || !Array.isArray(gj.features)) return;
 
+  zoneGeo = gj;                            // 침범 판정이 같은 데이터를 쓴다
   zoneLayer = L.geoJSON(gj, {
     filter: (f) => ZONE_SHOW.has(f.properties && f.properties.zone_type),
     style: (f) => {
@@ -1294,12 +1380,12 @@ async function loadAirspace() {
   zoneLayer.bringToBack();
 }
 
-/** 홈 10km 원. ADS-B 반경(30nm)과 무관한 **표시용 기준선**이다. */
+/** 홈 1km 원. ADS-B 데이터 반경(30nm)과 무관한 **경고 기준선**이다. */
 function drawHomeRing(home) {
   if (!lmap || !Array.isArray(home) || home.length !== 2) return;
   if (!homeRing) {
     homeRing = L.circle(home, {
-      radius: 10000, color: '#3fb950', weight: 1, opacity: .45,
+      radius: HOME_RING_M, color: '#3fb950', weight: 1, opacity: .45,
       fill: false, dashArray: '6 6', interactive: false,
     }).addTo(lmap);
   } else homeRing.setLatLng(home);
@@ -1379,7 +1465,8 @@ function renderMap(s) {
 
   const empty = $('mapEmpty');
   if (empty) empty.hidden = !!pos;
-  if (!pos) return;
+  // 좌표를 잃으면 공역 경고도 내린다 — 어디 있는지 모르면서 침범을 주장할 수 없다.
+  if (!pos) { setAlert('zone', ''); return; }
 
   const hdg = (typeof d.hdg === 'number') ? d.hdg : (d.yaw || 0);
   if (!acMarker) acMarker = L.marker(pos, { icon: acIcon(hdg) }).addTo(lmap);
@@ -1397,6 +1484,7 @@ function renderMap(s) {
     } else homeMarker.setLatLng(s.home);
     drawHomeRing(s.home);
   }
+  checkZone(pos);
 
   // 🔴 좌표를 처음 받으면 그 자리로 **중심을 잡고 50m 급으로 확대**한다.
   //    실내·실외를 가리지 않는다 — fix 가 잡히기만 하면 거기가 중심이다.

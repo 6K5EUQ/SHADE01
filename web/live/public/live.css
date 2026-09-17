@@ -629,3 +629,32 @@ body.playback { padding-bottom: 38px; }
   white-space: nowrap;
 }
 .weblink:hover { color: var(--text); }
+
+/* ── 침범 경고 ──────────────────────────────────────────────────────
+   🔴 화면 **한가운데**를 가로지른다. 구석의 작은 배지로는 조종 중에 안 보인다.
+   유인기가 1km 안에 들어왔거나 규제 공역에 들어갔을 때만 뜬다.
+   ⚠️ pointer-events:none — 경고가 조종 화면의 클릭을 막으면 안 된다. */
+#zoneAlert {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; flex-direction: column; gap: 10px;
+  align-items: center; justify-content: center;
+  pointer-events: none;
+  background: rgba(120, 0, 0, .18);
+  animation: zaPulse 1s ease-in-out infinite;
+}
+#zoneAlert .zaLine {
+  font: 900 clamp(22px, 4.6vw, 54px)/1.15 ui-monospace, monospace;
+  letter-spacing: 1px; text-align: center;
+  color: #fff; background: rgba(190, 0, 0, .92);
+  border: 3px solid #fff; border-radius: 10px;
+  padding: 14px 34px; max-width: 92vw;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, .6);
+}
+@keyframes zaPulse {
+  0%, 100% { background: rgba(120, 0, 0, .10); }
+  50%      { background: rgba(190, 0, 0, .30); }
+}
+/* 움직임에 민감한 사람에게는 깜빡임을 끈다 — 문구는 그대로 보인다. */
+@media (prefers-reduced-motion: reduce) {
+  #zoneAlert { animation: none; background: rgba(150, 0, 0, .22); }
+}
