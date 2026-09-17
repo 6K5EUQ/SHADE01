@@ -149,6 +149,16 @@ def main():
     allowed.update(("127.0.0.1", bind_addr))
     allowed.discard("0.0.0.0")
 
+    # 🔴 **웹·트래커 포트는 상행을 절대 안 준다** (2026-09-17).
+    #    허용 목록은 IP 기준이라, 트래커가 같은 호스트에서 돌면 (127.0.0.1,
+    #    rim3) 그 IP 가 이미 허용에 들어 있다. 그러면 웹 쪽에서 실수로든
+    #    고의로든 보낸 바이트가 FC 에 그대로 꽂힌다 — 조종 중에 그런 일이
+    #    생기면 안 된다.
+    #
+    #    그래서 **포트로 막는다.** 14551 은 읽기 전용 트래커 자리다
+    #    (pc_bridge.sh 의 TARGETS 주석 참조). 조종은 14550 으로만 한다.
+    READONLY_PORTS = {14551}
+
     log("mav_bridge: serial=%s baud=%d udp=%s:%d (%s)"
         % (SERIAL_PORT, BAUD, bind_addr, UDP_PORT, why))
     if fixed:
@@ -269,6 +279,15 @@ def main():
                     if addr[0] not in refused:
                         refused.add(addr[0])
                         log("mav_bridge: 거절 %s - 허용 목록에 없다 (FC 로 안 보냄)" % (addr[0],))
+                    continue
+                # 🔴 트래커 포트에서 온 것은 IP 가 허용이어도 FC 로 안 보낸다.
+                #    ALLOW_ANY 여도 이 검사는 건너뛰지 않는다 — 단방향이
+                #    설정으로 풀려서는 안 되는 성질의 것이다.
+                if addr[1] in READONLY_PORTS:
+                    if addr not in refused:
+                        refused.add(addr)
+                        log("mav_bridge: 거절 %s:%d - 읽기 전용 포트다 (웹·트래커는 상행 없음)"
+                            % (addr[0], addr[1]))
                     continue
                 if addr not in peers:
                     log("GCS connected: %s" % (addr,))
