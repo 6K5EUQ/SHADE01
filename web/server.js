@@ -47,6 +47,7 @@ const TYPES = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.geojson': 'application/geo+json; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
@@ -449,6 +450,10 @@ const LIVE_FILES = new Map([
   ['/live/index.html', 'index.html'],
   ['/live.css', 'live.css'],
   ['/live.js', 'live.js'],
+  // 공역 폴리곤(비행금지·제한·관제권). VWorld 에서 받아 **정적 파일로 굳혀** 둔다 —
+  // api.vworld.kr 이 CORS 를 안 주고, 공역은 분기에 한 번 바뀔까 말까다.
+  // 갱신은 tools/fetch_airspace.py 를 다시 돌린다.
+  ['/data/kr_airspace.geojson', 'data/kr_airspace.geojson'],
 ]);
 
 /** 🔴 CDN 이 ETag 를 떼어 간다 — 그래서 URL 자체에 지문을 박는다.

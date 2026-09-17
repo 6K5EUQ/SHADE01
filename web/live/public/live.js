@@ -1239,6 +1239,61 @@ async function adsbTick() {
   }
 }
 
+// ── 공역: 비행금지·제한 구역 ──────────────────────────────────────────
+// 출처는 VWorld(국토교통부 공간정보 오픈플랫폼) — 드론원스톱이 쓰는 바로 그
+// 레이어다 (lt_c_aisprhc / lt_c_aisresc / lt_c_aisctrc …).
+//
+// 🔴 **정적 파일인 이유**: api.vworld.kr 이 CORS 헤더를 안 준다. 게다가 공역은
+//    분기에 한 번 바뀔까 말까라 실시간으로 받을 이유가 없다. 갱신은
+//    `tools/fetch_airspace.py` 를 다시 돌린다.
+//
+// 🔴 **금지·제한만 그린다**: 전국 255개를 전부 올리면 화면이 색으로 덮인다.
+//    조종자가 "여기 날려도 되나" 를 묻는 데 필요한 것만 남긴다 —
+//    금지/임시금지/제한/관제권. UA·드론존은 오히려 **날아도 되는** 곳이라 뺀다.
+const ZONE_SHOW = new Set(['비행금지구역', '임시금지구역', '비행제한구역', '관제권']);
+// 요청대로 **빨강 계열**로 통일하되 등급이 구분되게 명도만 나눈다.
+const ZONE_COLOR = {
+  '비행금지구역': '#ff2d2d',
+  '임시금지구역': '#ff2d2d',
+  '비행제한구역': '#ff6b3d',
+  '관제권':       '#ff9aa2',
+};
+let zoneLayer = null;
+
+async function loadAirspace() {
+  if (zoneLayer || !lmap) return;
+  let gj;
+  try {
+    const r = await fetch('/data/kr_airspace.geojson', { cache: 'force-cache' });
+    if (!r.ok) return;                    // 로컬(:4400)엔 없다 — 조용히 넘긴다
+    gj = await r.json();
+  } catch { return; }
+  if (!gj || !Array.isArray(gj.features)) return;
+
+  zoneLayer = L.geoJSON(gj, {
+    filter: (f) => ZONE_SHOW.has(f.properties && f.properties.zone_type),
+    style: (f) => {
+      const t = f.properties.zone_type;
+      const c = ZONE_COLOR[t] || '#ff2d2d';
+      return {
+        color: c, weight: t === '관제권' ? 1 : 1.6, opacity: .85,
+        // 금지는 진하게, 관제권은 옅게 — 색만으로 등급이 읽혀야 한다.
+        fillColor: c, fillOpacity: t === '관제권' ? .06 : .13,
+      };
+    },
+    onEachFeature: (f, l) => {
+      const p = f.properties || {};
+      const alt = (p.lower || p.upper)
+        ? `<br>${p.lower || '?'} ~ ${p.upper || '?'}` : '';
+      l.bindTooltip(`<b>${p.zone_type || '공역'}</b><br>${p.name || ''}${alt}`,
+                    { direction: 'top', sticky: true });
+    },
+  }).addTo(lmap);
+  // 🔴 기체·궤적 아래로 내린다. 위에 있으면 반투명 면이 궤적을 덮고
+  //    마우스 이벤트까지 가로챈다.
+  zoneLayer.bringToBack();
+}
+
 /** 홈 10km 원. ADS-B 반경(30nm)과 무관한 **표시용 기준선**이다. */
 function drawHomeRing(home) {
   if (!lmap || !Array.isArray(home) || home.length !== 2) return;
@@ -1262,7 +1317,9 @@ function adsbStart() {
 // 🔴 initMap 안에서는 못 부른다. 위 `let adsbTimer` 가 그 시점엔 TDZ 라
 //    ReferenceError 로 지도 전체가 죽는다 (실측 확인).
 if (typeof window !== 'undefined') {
-  const kick = () => { if (mapReady) adsbStart(); else setTimeout(kick, 500); };
+  const kick = () => {
+    if (mapReady) { adsbStart(); loadAirspace(); } else setTimeout(kick, 500);
+  };
   kick();
 }
 
