@@ -458,7 +458,17 @@ a.btn { display: inline-block; text-decoration: none; }
      (실측: hudPane 447px 안에 hudBox 560px). 행을 키우면 자식은 따라온다. */
   #hudPane { grid-template-rows: minmax(360px, 56vh) auto; }
   /* 좁으면 지도와 차트를 위아래로 쌓는다 — 지도는 고정 높이, 나머지가 차트. */
-  #chartPane { height: 92vh; grid-template-rows: minmax(220px, 34vh) 1fr 26px; }
+  /* 🔴 마지막 행을 26px 로 못박지 않는다 (2026-09-17). 하단 바가 폰 폭에서
+     두 줄로 접히는데 행이 26px 이면 둘째 줄이 잘려, 맨 끝의 **재생 버튼이
+     안 보인다** (조종자 지적). `auto` 로 두면 접힌 만큼 행이 자란다. */
+  #chartPane { height: 92vh; grid-template-rows: minmax(220px, 34vh) 1fr auto; }
+
+  /* 🔴 하단 바를 접는다. `display:flex` 만 있고 wrap 이 없어 폰 폭에서
+     한 줄에 밀어 넣다가 끝 요소(재생)가 밖으로 나갔다.
+     체크박스 6 + select 1 + button 2 는 390px 에 한 줄로 못 들어간다. */
+  .msgs .hd { flex-wrap: wrap; row-gap: 4px; padding: 3px 8px; }
+  /* 빈 공간을 밀어내던 스페이서는 접힌 줄에서 한 줄을 통째로 먹는다. */
+  .msgs .hd .grow { flex: 1 1 0; min-width: 0; }
 }
 
 /* ── 재생 바 ────────────────────────────────────────────────────────
