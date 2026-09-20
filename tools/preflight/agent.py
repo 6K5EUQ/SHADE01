@@ -85,14 +85,17 @@ class State:
     running = False
 
 
+NO_PYTHON = {'ok': False, 'verdict': 'NO-GO',
+             'error': 'pymavlink 이 있는 파이썬을 못 찾았다',
+             'notes': ['이 PC 에 venv 를 만들어라 — '
+                       '.venv/bin/pip install -r web/requirements.txt'],
+             'groups': [], 'standing': [], 't': 'done'}
+
+
 def run_preflight(secs):
     py = python_bin()
     if py is None:
-        return 503, {'ok': False, 'verdict': 'NO-GO', 'error':
-                     'pymavlink 이 있는 파이썬을 못 찾았다',
-                     'notes': ['이 PC 에 venv 를 만들어라 — '
-                               '.venv/bin/pip install -r web/requirements.txt'],
-                     'groups': [], 'standing': []}
+        return 503, dict(NO_PYTHON)
     # 🔴 인자는 여기서만 만든다. 요청이 준 것은 `secs` 뿐이고 숫자로 강제한다.
     cmd = [py, PREFLIGHT, '--json', '--no-color', '-t', '%.1f' % secs]
     try:
@@ -111,6 +114,49 @@ def run_preflight(secs):
                      'error': 'preflight 출력이 JSON 이 아니다',
                      'notes': [(p.stderr or p.stdout)[:400]],
                      'groups': [], 'standing': []}
+
+
+def stream_preflight(handler, secs):
+    """점검을 돌리면서 나오는 NDJSON 을 **그대로** 흘려보낸다.
+
+    🔴 여기서 줄을 해석하지 않는다. 판정도, 순서 정리도 하지 않는다 —
+       preflight.py 가 낸 것을 그 순서 그대로 넘긴다. 중간에 끼어들면
+       "화면에서만 다르게 보이는" 층이 하나 더 생긴다."""
+    py = python_bin()
+    if py is None:
+        handler._json(503, dict(NO_PYTHON))
+        return
+
+    cmd = [py, PREFLIGHT, '--stream', '--no-color', '-t', '%.1f' % secs]
+    handler.send_response(200)
+    handler.send_header('Content-Type', 'application/x-ndjson; charset=utf-8')
+    handler.send_header('Cache-Control', 'no-store')
+    # 길이를 모르므로 끊어 보낸다. HTTP/1.1 이라 chunked 가 된다.
+    handler.send_header('Transfer-Encoding', 'chunked')
+    handler.end_headers()
+
+    def chunk(b):
+        handler.wfile.write(b'%X\r\n' % len(b) + b + b'\r\n')
+        handler.wfile.flush()
+
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        for raw in p.stdout:
+            chunk(raw)
+    except (BrokenPipeError, ConnectionResetError):
+        # 브라우저가 창을 닫았다. 점검을 계속 돌릴 이유가 없다.
+        p.kill()
+        return
+    finally:
+        try:
+            p.wait(timeout=TIMEOUT)
+        except subprocess.TimeoutExpired:
+            p.kill()
+    try:
+        handler.wfile.write(b'0\r\n\r\n')
+        handler.wfile.flush()
+    except (BrokenPipeError, ConnectionResetError):
+        pass
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -135,7 +181,7 @@ class Handler(BaseHTTPRequestHandler):
                                     'serial': [d for d in ('/dev/ttyACM0', '/dev/ttyACM1')
                                                if os.path.exists(d)],
                                     'running': State.running})
-        if path != '/preflight':
+        if path not in ('/preflight', '/preflight/stream'):
             return self._json(404, {'error': '없는 경로'})
 
         if KEY and self.headers.get('X-Preflight-Key') != KEY:
@@ -164,6 +210,8 @@ class Handler(BaseHTTPRequestHandler):
 
         State.running = True
         try:
+            if path == '/preflight/stream':
+                return stream_preflight(self, secs)
             code, obj = run_preflight(secs)
         finally:
             State.running = False

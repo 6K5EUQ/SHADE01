@@ -270,11 +270,15 @@ def tailscale_ip():
 
 
 # ── 수집 ────────────────────────────────────────────────────────────────────
-def gather(m, secs, verbose):
+def gather(m, secs, verbose, on_progress=None):
     """파라미터·미션·텔레메트리를 **한 소켓에서 동시에** 걷는다.
 
     파라미터 응답을 기다리는 시간이 어차피 필요하므로, 그 동안 들어오는
-    텔레메트리를 같이 주워 담는다. 따로 하면 시간이 두 배가 된다."""
+    텔레메트리를 같이 주워 담는다. 따로 하면 시간이 두 배가 된다.
+
+    `on_progress(progress, params, mission, tel)` 을 주면 걷는 **중간에**
+    묶음별 진행률을 흘린다. 🔴 묶음이 끝나는 순서는 정해져 있지 않다 —
+    자기 데이터가 먼저 온 것이 먼저 끝난다. 화면도 그 순서로 채워진다."""
     from pymavlink import mavutil
 
     tgt, tcomp = m.target_system, m.target_component
@@ -285,8 +289,29 @@ def gather(m, secs, verbose):
         m.mav.param_request_read_send(tgt, tcomp, n.encode('ascii'), -1)
     m.mav.mission_request_list_send(tgt, tcomp, 0)
 
-    t_end = time.time() + secs
+    t0 = time.time()
+    t_end = t0 + secs
     last_retry = time.time()
+    last_emit = 0.0
+
+    def emit(force=False):
+        """진행률을 흘린다. 값이 그대로면 보내지 않는다 — 같은 화면을
+        다시 그리게 하는 것은 대역만 쓴다."""
+        nonlocal last_emit
+        if on_progress is None:
+            return
+        now = time.time()
+        if not force and now - last_emit < 0.15:
+            return
+        last_emit = now
+        prog = {}
+        for g in GROUP_NEEDS:
+            v = group_progress(g, params, mission, tel, now - t0, secs)
+            if v is not None:
+                prog[g] = v
+        on_progress(prog, params, mission, tel)
+
+    emit(force=True)
     while time.time() < t_end:
         msg = m.recv_match(blocking=True, timeout=0.3)
         if msg is None:
@@ -314,6 +339,8 @@ def gather(m, secs, verbose):
                     if i not in mission['items']:
                         m.mav.mission_request_int_send(tgt, tcomp, i, 0)
 
+        emit()
+
         done = (len(params) == len(ALL_PARAMS)
                 and mission['count'] is not None
                 and len(mission['items']) == mission['count']
@@ -321,6 +348,7 @@ def gather(m, secs, verbose):
         if done and time.time() > t_end - (secs - 3.0):
             break
 
+    emit(force=True)
     return params, mission, tel, msgs, dropped
 
 
@@ -780,6 +808,104 @@ def paint(on):
             C[k] = ''
 
 
+# ── 묶음별로 무엇이 와야 판정이 서는가 ─────────────────────────────────────
+#
+# 🔴 점검은 **병렬이다.** 파라미터 40개 요청과 미션 요청을 한 번에 던지고,
+#    그 응답을 기다리는 동안 같은 소켓에서 텔레메트리를 줍는다. 그래서 묶음이
+#    끝나는 순서는 정해져 있지 않다 — 자기 데이터가 먼저 도착한 묶음이 먼저
+#    끝난다. 화면도 그 순서대로 채워진다.
+#
+# 진행률은 여기 적힌 것 중 **몇 개가 도착했나**다. 남은 시간이나 회전 수 같은
+# 것을 세지 않는다 — 그건 실제 진행이 아니라 시계를 보여 주는 것이다.
+#
+# `params` 는 파라미터 이름, `tel` 은 텔레메트리 키, `mission` 은 미션이 다
+# 받아졌는지. 없는 값이 하나라도 남아 있으면 그 묶음은 아직 안 끝난 것이다.
+GROUP_NEEDS = {
+    '쿼드 전용 잠금': {
+        'params': ['RC_MAP_TRANS_SW', 'VT_ELEV_MC_LOCK', 'VT_ARSP_TRANS'] + FLTMODE_PARAMS,
+        'tel': ['vtol_state'],
+    },
+    'failsafe': {
+        'params': ['NAV_RCL_ACT', 'NAV_DLL_ACT', 'RTL_RETURN_ALT', 'RTL_DESCEND_ALT',
+                   'RC_MAP_KILL_SW'],
+    },
+    '지오펜스': {
+        'params': ['GF_ACTION', 'GF_MAX_HOR_DIST', 'GF_MAX_VER_DIST'],
+    },
+    '미션': {'mission': True},
+    '항법·미션': {
+        'params': ['NAV_ACC_RAD', 'MIS_TAKEOFF_ALT', 'NAV_FORCE_VT', 'COM_ARM_WO_GPS'],
+    },
+    'GPS·추정': {
+        # 홈은 arm 전에는 안 온다 — 기다리면 영영 안 끝난다. 여기 넣지 않는다.
+        'tel': ['fix', 'sats', 'ekf_vel', 'ekf_pos'],
+    },
+    '전원': {
+        'params': ['BAT1_N_CELLS', 'MPC_THR_HOVER'],
+        # 배터리를 빼 놓으면 volt 가 None 이다. 키가 **있기만** 하면 된다 —
+        # 값이 None 인 것도 판정거리다 ("전압 없음").
+        'tel': ['sensors_present'],
+    },
+    '센서': {
+        'params': ['SENS_DPRES_OFF'],
+        'tel': ['sensors_health', 'airspeed'],
+    },
+    '기체 상태': {
+        'tel': ['armed', 'roll', 'vibe'],
+    },
+    '링크': {
+        'params': ['MAV_0_RATE', 'MAV_0_FORWARD', 'COM_RC_IN_MODE'],
+        'tel': ['rc'],
+    },
+    # FC 가 스스로 말할 때까지는 알 수 없다. 수집이 끝나야 끝난 것이다.
+    'FC 자신의 말': {'until_end': True},
+}
+
+# 화면에 낼 점검 문장. 🔴 판정이 아니라 **무엇을 보고 있는지**를 적는다.
+GROUP_LABEL = {
+    '쿼드 전용 잠금': '쿼드 전용 잠금을 점검합니다',
+    'failsafe':      'failsafe 동작을 점검합니다',
+    '지오펜스':        '지오펜스 설정을 점검합니다',
+    '미션':           '미션 이착륙 명령을 점검합니다',
+    '항법·미션':       '항법 파라미터를 점검합니다',
+    'GPS·추정':       'GPS 와 추정기를 점검합니다',
+    '전원':           '전원과 배터리를 점검합니다',
+    '센서':           'FC 센서를 점검합니다',
+    '기체 상태':       '기체 상태를 점검합니다',
+    '링크':           '링크와 조종기를 점검합니다',
+    'FC 자신의 말':    'FC 경고를 수집합니다',
+    '파라미터':        '파라미터 수신을 확인합니다',
+}
+
+
+def group_progress(name, params, mission, tel, elapsed, secs):
+    """묶음 하나가 얼마나 왔나. 0.0~1.0.
+
+    🔴 진짜로 도착한 것만 센다. 시계를 백분율로 바꿔 보여 주면 화면은
+       그럴듯한데 실제로는 아무것도 안 온 상태일 수 있다."""
+    need = GROUP_NEEDS.get(name)
+    if not need:
+        return None
+    if need.get('until_end'):
+        # 언제 올지 모르는 것. 수집 시간이 지나야 끝난 것으로 본다.
+        return min(1.0, elapsed / secs) if secs > 0 else 1.0
+
+    have = total = 0
+    for n in need.get('params', ()):
+        total += 1
+        if n in params:
+            have += 1
+    for k in need.get('tel', ()):
+        total += 1
+        if k in tel:
+            have += 1
+    if need.get('mission'):
+        total += 1
+        if mission['count'] is not None and len(mission['items']) == mission['count']:
+            have += 1
+    return (have / total) if total else 1.0
+
+
 # 묶음을 화면에 낼 순서. 여기 없는 이름은 뒤에 붙는다.
 # 🔴 순서는 **현장 점검 순서**다 — 먼저 막을 것(쿼드 잠금·failsafe)을 위로 둔다.
 GROUP_ORDER = ['쿼드 전용 잠금', 'failsafe', '지오펜스', '미션', '항법·미션',
@@ -789,6 +915,90 @@ GROUP_ORDER = ['쿼드 전용 잠금', 'failsafe', '지오펜스', '미션', '�
 # 묶음 하나의 판정 = 그 안에서 가장 나쁜 등급. 등급이 셋뿐이라 규칙도 하나다.
 # 🔴 이 계산은 여기에만 있다. 화면(JS)에서 다시 하면 두 벌이 따로 늙는다.
 GROUP_VERDICT = {'blk': 'NO-GO', 'warn': '확인', 'ok': 'GO', 'info': '참고'}
+
+
+def judge(params, mission, tel, msgs, dropped=()):
+    """지금까지 걷은 것으로 판정을 한 벌 만든다.
+
+    🔴 판정 로직은 `check_*` 하나뿐이다. 중간에 부르든 끝에 부르든 같은
+       함수를 돌린다 — 화면용으로 따로 재는 코드를 만들면 그 순간부터
+       "화면은 GO 인데 터미널은 NO-GO" 인 날이 온다."""
+    r = Report()
+    check_params(r, params)
+    check_mission(r, mission)
+    check_live(r, tel, msgs)
+    if dropped:
+        r.group = '링크'
+        uniq = sorted(set(d.split(':')[0] for d in dropped))
+        r.add('warn', '해석 못한 메시지', '%d건 (%s)' % (len(dropped), ', '.join(uniq)),
+              dropped[0])
+    return r
+
+
+def group_of(r, name, elapsed=0.0):
+    """판정 한 벌에서 묶음 하나만 떼어 낸다. 없으면 None."""
+    blob = as_json(r, {'how': None, 'notes': []}, elapsed)
+    for g in blob['groups']:
+        if g['name'] == name:
+            return g
+    return None
+
+
+def stream(m, secs, meta, out):
+    """걷는 동안 묶음이 끝나는 대로 한 줄씩 흘린다 (NDJSON).
+
+    🔴 **완료 순서는 정해져 있지 않다.** 자기 데이터가 먼저 온 묶음이 먼저
+       나간다. 화면은 도착한 순서대로 채우면 된다 — 번호를 미리 매겨 두고
+       그 자리를 기다리면 병렬로 걷는 의미가 없다.
+
+    줄의 종류:
+      {"t":"start", groups:[{name,label}...]}   무엇을 볼 것인지
+      {"t":"prog",  progress:{name: 0.0~1.0}}   지금까지 몇 개가 왔나
+      {"t":"group", group:{...}}                한 묶음이 끝났다 (판정 포함)
+      {"t":"done",  ...as_json...}              전부 끝났다
+    """
+    t0 = time.time()
+    sent = set()
+
+    def line(obj):
+        json.dump(obj, out, ensure_ascii=False)
+        out.write('\n')
+        out.flush()
+
+    line({'t': 'start',
+          'at': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+          'how': meta.get('how'),
+          'secs': secs,
+          'groups': [{'name': g, 'label': GROUP_LABEL.get(g, g)}
+                     for g in GROUP_ORDER if g in GROUP_NEEDS]})
+
+    def on_progress(prog, params, mission, tel):
+        line({'t': 'prog', 'progress': {k: round(v, 3) for k, v in prog.items()},
+              'elapsed': round(time.time() - t0, 2)})
+        # 다 온 묶음은 그 자리에서 판정해 내보낸다. 기다릴 이유가 없다.
+        ready = [g for g, v in prog.items() if v >= 1.0 and g not in sent]
+        if not ready:
+            return
+        r = judge(params, mission, tel, [])
+        for g in ready:
+            blob = group_of(r, g, time.time() - t0)
+            if blob is None:
+                continue
+            sent.add(g)
+            line({'t': 'group', 'group': blob,
+                  'elapsed': round(time.time() - t0, 2)})
+
+    params, mission, tel, msgs, dropped = gather(m, secs, False, on_progress)
+
+    # 마지막 한 벌. 중간에 보낸 묶음도 여기 다시 들어간다 — 화면은 이것으로
+    # 자기 상태를 맞춘다. 중간 판정은 그때까지 온 것만 보고 낸 것이라,
+    # 늦게 도착한 값이 판정을 바꿨을 수 있다.
+    r = judge(params, mission, tel, msgs, dropped)
+    blob = as_json(r, meta, time.time() - t0)
+    blob['t'] = 'done'
+    line(blob)
+    v = r.verdict()
+    return 0 if v == 'GO' else (1 if v == 'NO-GO' else 2)
 
 
 def as_json(r, meta, elapsed):
@@ -909,15 +1119,19 @@ def main():
     ap.add_argument('--json', action='store_true',
                     help='판정을 JSON 으로 낸다 (웹 화면·에이전트용). '
                          '판정 로직은 터미널과 같은 것을 쓴다')
+    ap.add_argument('--stream', action='store_true',
+                    help='걷는 동안 묶음이 끝나는 대로 NDJSON 으로 흘린다. '
+                         '완료 순서는 정해져 있지 않다 — 먼저 온 것이 먼저 나간다')
     a = ap.parse_args()
-    paint(not a.no_color and not a.json and sys.stdout.isatty())
+    machine = a.json or a.stream
+    paint(not a.no_color and not machine and sys.stdout.isatty())
 
     t0 = time.time()
-    # --json 일 때는 verbose 로 모은다. 화면이 정상 항목까지 다 그리기 때문이다.
-    verbose = a.verbose or a.json
+    # 기계용일 때는 verbose 로 모은다. 화면이 정상 항목까지 다 그리기 때문이다.
+    verbose = a.verbose or machine
     m, how, hb_s, notes = connect(a.conn, verbose)
     if m is None:
-        if a.json:
+        if machine:
             # 🔴 붙지 못한 것을 "이상 없음" 으로 내지 않는다. 판정 자리에
             #    붙지 못했다는 사실을 그대로 넣는다 — 화면이 GO 를 그리면 안 된다.
             json.dump({
@@ -933,6 +1147,8 @@ def main():
                           '브리지가 떠 있나 (pgrep -af mav_bridge)'],
                 'groups': [], 'standing': [],
                 'counts': {'blk': 1, 'warn': 0, 'ok': 0, 'info': 0},
+                # 스트림을 읽는 쪽이 종류로 갈라 보므로 이것도 이름을 붙인다.
+                't': 'done',
             }, sys.stdout, ensure_ascii=False)
             sys.stdout.write('\n')
             return 1
@@ -947,20 +1163,15 @@ def main():
         print('  · 브리지가 떠 있나               (pgrep -af mav_bridge)')
         return 1
 
-    params, mission, tel, msgs, dropped = gather(m, a.secs, verbose and not a.json)
-
-    r = Report()
-    check_params(r, params)
-    check_mission(r, mission)
-    check_live(r, tel, msgs)
-    if dropped:
-        # 조용히 버리면 "왜 그 항목이 안 나왔지" 를 아무도 못 쫓는다.
-        r.group = '링크'
-        uniq = sorted(set(d.split(':')[0] for d in dropped))
-        r.add('warn', '해석 못한 메시지', '%d건 (%s)' % (len(dropped), ', '.join(uniq)),
-              dropped[0])
-
     meta = {'how': how, 'notes': notes if verbose else []}
+    if a.stream:
+        return stream(m, a.secs, meta, sys.stdout)
+
+    params, mission, tel, msgs, dropped = gather(m, a.secs, verbose and not machine)
+    # 🔴 조용히 버리면 "왜 그 항목이 안 나왔지" 를 아무도 못 쫓는다 — judge 가
+    #    dropped 를 '해석 못한 메시지' 로 올린다.
+    r = judge(params, mission, tel, msgs, dropped)
+
     if a.json:
         json.dump(as_json(r, meta, time.time() - t0), sys.stdout, ensure_ascii=False)
         sys.stdout.write('\n')

@@ -738,6 +738,91 @@ function preflightPasswordOk(given) {
 
 let preflightBusy = false;
 
+/** 점검을 돌리면서 나오는 NDJSON 을 브라우저로 그대로 흘린다.
+ *
+ * 🔴 줄을 해석하지 않는다 — 판정도 순서도 preflight.py 가 정한 그대로
+ *    넘긴다. 여기서 손대면 "웹에서만 다르게 보이는" 층이 하나 더 생긴다.
+ *    붙이는 것은 어느 에이전트가 답했는지 한 줄뿐이고, 그건 스트림이
+ *    시작될 때 our-own `agent` 줄로 따로 보낸다. */
+function streamFromAgent(addr, secs, res) {
+  return new Promise((resolve) => {
+    const [host, port] = addr.split(':');
+    const r = http.request(
+      { host, port: Number(port) || 4402, path: `/preflight/stream?t=${secs}`,
+        method: 'GET', timeout: PREFLIGHT_TIMEOUT,
+        headers: { 'X-Preflight-Key': PREFLIGHT_KEY, 'Accept-Encoding': 'identity' } },
+      (up) => {
+        if (up.statusCode !== 200) {
+          // 에이전트가 판정 대신 오류를 냈다. 본문을 모아 한 줄로 넘긴다.
+          let buf = '';
+          up.setEncoding('utf8');
+          up.on('data', (d) => { buf += d; });
+          up.on('end', () => resolve({ ok: false, status: up.statusCode, body: buf }));
+          return;
+        }
+        // 🔴 여기부터는 응답이 시작됐다. 다른 후보로 넘어갈 수 없다.
+        res.writeHead(200, {
+          'Content-Type': 'application/x-ndjson; charset=utf-8',
+          'Cache-Control': 'no-store',
+          'X-Robots-Tag': 'noindex, nofollow',
+          // 프록시가 줄 단위로 흘리도록. 모아 뒀다 한 번에 주면 진행이 안 보인다.
+          'X-Accel-Buffering': 'no',
+        });
+        res.write(JSON.stringify({ t: 'agent', agent_addr: addr }) + '\n');
+        up.pipe(res);
+        up.on('end', () => resolve({ ok: true, started: true }));
+        up.on('error', () => { try { res.end(); } catch { /* 이미 닫혔다 */ } resolve({ ok: true, started: true }); });
+      });
+    r.on('error', (e) => resolve({ ok: false, status: 0, error: e.code || e.message }));
+    r.on('timeout', () => { r.destroy(); resolve({ ok: false, status: 0, error: '응답 없음' }); });
+    // 브라우저가 창을 닫으면 에이전트 쪽도 끊는다.
+    res.on('close', () => r.destroy());
+    r.end();
+  });
+}
+
+async function handlePreflightStream(req, res, url) {
+  if (!PREFLIGHT_KEY || !PREFLIGHT_PASSWORD) {
+    return sendJson(req, res, 503, {
+      ok: false, verdict: 'NO-GO', error: '점검이 막혀 있다 (서버 설정 미비)',
+      groups: [], standing: [],
+    });
+  }
+  if (!preflightPasswordOk(req.headers['x-preflight-password'])) {
+    return sendJson(req, res, 401, { ok: false, error: '암호가 틀렸다' });
+  }
+  if (preflightBusy) {
+    return sendJson(req, res, 409, {
+      ok: false, verdict: 'NO-GO', error: '이미 점검이 돌고 있다',
+      groups: [], standing: [],
+    });
+  }
+
+  let secs = parseFloat(url.searchParams.get('t') || '6');
+  if (!Number.isFinite(secs)) secs = 6;
+  secs = Math.max(2, Math.min(20, secs));
+
+  preflightBusy = true;
+  const tried = [];
+  try {
+    for (const addr of PREFLIGHT_AGENTS) {
+      const got = await streamFromAgent(addr, secs, res);
+      if (got.started) return;                       // 흘려보냈다. 끝.
+      tried.push({ addr, error: got.error || `HTTP ${got.status}` });
+    }
+  } finally {
+    preflightBusy = false;
+  }
+  return sendJson(req, res, 503, {
+    ok: false, verdict: 'NO-GO',
+    error: '점검 에이전트에 닿지 못했다',
+    notes: tried.map((t) => `${t.addr}: ${t.error}`),
+    hints: ['FC 가 꽂힌 PC 에서 에이전트가 도나 (systemctl --user status shade-preflight)',
+            '그 PC 가 Tailscale 에 올라와 있나 (tailscale status)'],
+    groups: [], standing: [],
+  });
+}
+
 async function handlePreflight(req, res, url) {
   if (!PREFLIGHT_KEY || !PREFLIGHT_PASSWORD) {
     return sendJson(req, res, 503, {
@@ -848,6 +933,9 @@ async function route(req, res) {
   if (p === '/api/upload' && req.method === 'POST') return handleUpload(req, res);
 
   // 비행 전 점검 — 버튼 하나가 FC 를 읽고 GO/NO-GO 를 낸다.
+  // 🔴 스트림 쪽은 묶음이 **끝나는 대로** 한 줄씩 나간다. 완료 순서는
+  //    정해져 있지 않다 — 자기 데이터가 먼저 온 묶음이 먼저 나간다.
+  if (p === '/api/preflight/stream' && req.method === 'POST') return handlePreflightStream(req, res, url);
   if (p === '/api/preflight' && req.method === 'POST') return handlePreflight(req, res, url);
 
   // 라이브 — rim3 가 밀어 올리고(POST), 브라우저가 폴링한다(GET).
