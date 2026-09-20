@@ -62,15 +62,63 @@ function buildList(groups) {
   rows.clear();
   groups.forEach((g, i) => {
     const li = el('li', 'pf-row waiting');
+
+    // 줄 전체가 버튼이다 — 눌러야 하는 곳을 따로 찾게 하지 않는다.
+    // 🔴 <button> 을 쓴다: 키보드 Tab·Enter 가 저절로 되고, 스크린리더가
+    //    "눌러서 펼침" 을 읽어 준다. div 에 onclick 을 걸면 둘 다 잃는다.
+    const head = el('button', 'pf-rhead');
+    head.type = 'button';
+    head.setAttribute('aria-expanded', 'false');
     // 번호는 **자리 번호**다. 점검은 병렬이라 실행 순서가 아니다.
-    li.appendChild(el('span', 'pf-rnum', String(i + 1).padStart(2, '0')));
-    li.appendChild(el('span', 'pf-rlabel', g.label));
+    head.appendChild(el('span', 'pf-rnum', String(i + 1).padStart(2, '0')));
+    head.appendChild(el('span', 'pf-rlabel', g.label));
     // 진행률과 판정이 같은 자리에 온다 — 끝나면 퍼센트가 판정으로 바뀐다.
     const right = el('span', 'pf-rright', '대기');
-    li.appendChild(right);
+    head.appendChild(right);
+    li.appendChild(head);
+
+    // 근거. 그 줄 바로 아래에서 열린다 — 판정과 이유가 떨어져 있으면
+    // 무엇 때문에 NO GO 인지를 목록 밖에서 찾아야 한다.
+    const body = el('div', 'pf-rbody');
+    body.hidden = true;
+    li.appendChild(body);
+
+    head.addEventListener('click', () => toggleRow(g.name));
     ol.appendChild(li);
-    rows.set(g.name, { li, right, done: false });
+    rows.set(g.name, { li, head, right, body, done: false, group: null });
   });
+}
+
+/** 줄 하나를 펼치거나 접는다. 아직 안 끝난 줄은 보여 줄 것이 없다. */
+function toggleRow(name, want) {
+  const row = rows.get(name);
+  if (!row || !row.group) return;
+  const open = want == null ? row.body.hidden : want;
+  if (open && !row.body.dataset.filled) {
+    fillRowBody(row.body, row.group);
+    row.body.dataset.filled = '1';
+  }
+  row.body.hidden = !open;
+  row.head.setAttribute('aria-expanded', String(open));
+  row.li.classList.toggle('open', open);
+}
+
+/** 그 묶음이 무엇을 읽었는지. 판정과 같은 자리에 둔다. */
+function fillRowBody(body, g) {
+  body.textContent = '';
+  for (const it of g.items) {
+    const lv = LEVEL[it.level] || LEVEL.info;
+    const item = el('div', 'pf-item ' + lv.cls);
+    item.appendChild(el('span', 'pf-mark', lv.mark));
+    item.appendChild(el('span', 'pf-iname', it.name));
+    item.appendChild(el('span', 'pf-idetail', it.detail));
+    // 왜 막혔는지가 다음 행동을 정한다. 접지 않는다 (터미널도 안 접는다).
+    if (it.why) item.appendChild(withEmphasis(el('div', 'pf-why'), it.why));
+    body.appendChild(item);
+  }
+  if (!g.items.length) {
+    body.appendChild(el('div', 'pf-empty', '읽은 것이 없다'));
+  }
 }
 
 function setProgress(prog) {
@@ -96,47 +144,17 @@ function setGroupDone(g) {
   const row = rows.get(g.name);
   if (!row) return;
   row.done = true;
+  row.group = g;
+  // 이미 펼쳐 둔 줄이면 내용도 갱신한다 — 마지막 한 벌이 판정을 바꿨을 수 있다.
+  if (row.body.dataset.filled) fillRowBody(row.body, g);
   const lv = LEVEL[g.level] || LEVEL.info;
-  row.li.className = 'pf-row done ' + lv.cls;
+  const open = row.li.classList.contains('open');
+  row.li.className = 'pf-row done ' + lv.cls + (open ? ' open' : '');
   row.li.style.setProperty('--pct', '100%');
   row.right.textContent = g.verdict;
 }
 
-// ── 상세·종합 ────────────────────────────────────────────────────────
-function renderGroups(groups) {
-  const wrap = $('groups');
-  wrap.textContent = '';
-  groups.forEach((g) => {
-    const lv = LEVEL[g.level] || LEVEL.info;
-    const sec = el('section', 'pf-group ' + lv.cls);
-
-    const head = el('header', 'pf-ghead');
-    head.appendChild(el('span', 'pf-gname', g.name));
-    if (g.counts) {
-      const n = g.items.length;
-      head.appendChild(el('span', 'pf-gcount', n + '항목'));
-    }
-    head.appendChild(el('span', 'pf-gdots'));
-    head.appendChild(el('span', 'pf-gverdict', g.verdict));
-    sec.appendChild(head);
-
-    const list = el('div', 'pf-items');
-    for (const it of g.items) {
-      const ilv = LEVEL[it.level] || LEVEL.info;
-      const row = el('div', 'pf-item ' + ilv.cls);
-      row.appendChild(el('span', 'pf-mark', ilv.mark));
-      row.appendChild(el('span', 'pf-iname', it.name));
-      row.appendChild(el('span', 'pf-idetail', it.detail));
-      // 왜 막혔는지가 다음 행동을 정한다. 접지 않는다 (터미널도 안 접는다).
-      if (it.why) row.appendChild(withEmphasis(el('div', 'pf-why'), it.why));
-      list.appendChild(row);
-    }
-    sec.appendChild(list);
-    wrap.appendChild(sec);
-  });
-  $('detailWrap').hidden = false;
-}
-
+// ── 종합 ───────────────────────────────────────────────────────────
 /** 종합. 🔴 두 가지로만 답한다 — GOOD TO GO 아니면 NO GO.
  *  preflight.py 는 「확인 후 판단」 을 따로 내지만, 이 화면에서는 GO 가 아닌
  *  것을 전부 NO GO 로 묶는다 (2026-09-20 사용자 지정). 무엇 때문인지는
@@ -200,8 +218,8 @@ let busy = false;
 function reset() {
   $('total').hidden = true;
   $('fail').hidden = true;
-  $('detailWrap').hidden = true;
-  $('groups').textContent = '';
+  $('again').hidden = true;
+  $('expand').hidden = true;
   $('list').textContent = '';
   rows.clear();
 }
@@ -230,7 +248,9 @@ function onLine(d) {
       for (const g of d.groups || []) setGroupDone(g);
       if (d.error) renderFail(d);
       else renderTotal(d);
-      if (d.groups && d.groups.length) renderGroups(d.groups);
+      // 점검이 끝났다. 이제 다시 돌리거나 근거를 펼칠 수 있다.
+      $('again').hidden = false;
+      $('expand').hidden = !(d.groups && d.groups.length);
       setNote('', '');
       break;
     default:
@@ -296,6 +316,7 @@ async function run() {
     }
   } catch (e) {
     setNote('서버에 닿지 못했다: ' + e.message, 'bad');
+    $('again').hidden = false;
   } finally {
     busy = false;
     $('go').disabled = false;
@@ -303,6 +324,15 @@ async function run() {
 }
 
 $('go').addEventListener('click', () => run());
+$('again').addEventListener('click', () => run());
+
+// 근거를 한꺼번에 펼치고 접는다. NO GO 가 여럿일 때 줄마다 누르게 하지 않는다.
+$('expand').addEventListener('click', () => {
+  const anyClosed = [...rows.values()].some((r) => r.group && r.body.hidden);
+  for (const [name, r] of rows) if (r.group) toggleRow(name, anyClosed);
+  $('expand').textContent = anyClosed ? '근거 모두 접기' : '근거 모두 보기';
+});
+
 $('cancel').addEventListener('click', closeModal);
 $('pwForm').addEventListener('submit', (e) => {
   e.preventDefault();

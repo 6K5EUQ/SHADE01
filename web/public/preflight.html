@@ -31,6 +31,7 @@
 <main class="pf">
   <section class="pf-hero" id="hero">
     <button class="primary pf-big" id="go">기체 점검</button>
+    <p class="pf-hint">FC 를 읽기만 한다 · 약 10초</p>
   </section>
 
   <div class="pf-run" id="run" hidden>
@@ -54,16 +55,14 @@
           <span class="pf-tlabel">종합결과</span>
           <strong class="pf-tverdict" id="tverdict">—</strong>
           <div class="pf-tcounts" id="tcounts"></div>
+          <div class="pf-tactions">
+            <button id="again" hidden>다시 점검</button>
+            <button id="expand" hidden>근거 모두 보기</button>
+          </div>
         </section>
         <section id="fail" class="pf-fail" hidden></section>
       </aside>
     </div>
-
-    <!-- 현장에서 먼저 보는 것은 판정이다. 근거는 접어 둔다. -->
-    <details class="pf-detail" id="detailWrap" hidden>
-      <summary>항목별 상세</summary>
-      <div id="groups"></div>
-    </details>
   </div>
 </main>
 
