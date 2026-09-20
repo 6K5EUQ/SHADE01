@@ -25,26 +25,25 @@
 </header>
 
 <main class="pf">
-  <section class="pf-run">
-    <div class="pf-runrow">
-      <button class="primary" id="go">기체 점검</button>
-      <input type="password" id="pw" placeholder="암호" autocomplete="current-password">
-      <label class="pf-secs">수집
-        <select id="secs">
-          <option value="4">4초</option>
-          <option value="6" selected>6초</option>
-          <option value="10">10초</option>
-        </select>
-      </label>
-      <span class="grow"></span>
-      <span class="pf-note" id="note"></span>
-    </div>
-    <p class="pf-read">
-      🔴 <b>읽기 전용이다.</b> FC 에 보내는 것은 하트비트와 읽기 요청
-      (<code>PARAM_REQUEST_READ</code> · <code>MISSION_REQUEST_LIST</code>)뿐이다.
-      파라미터를 쓰지 않으므로 <code>FC_CHANGELOG.md</code> 에 적을 일이 없다.
-    </p>
+  <!-- 아무것도 안 한 상태의 화면은 버튼 하나다. 현장에서 한 손으로 누른다. -->
+  <section class="pf-hero" id="hero">
+    <button class="primary pf-big" id="go">기체 점검</button>
+    <div class="pf-note" id="note"></div>
   </section>
+
+  <!-- 결과가 있을 때만 켜지는 줄. 다시 점검·수집 시간이 여기로 옮겨 온다. -->
+  <div class="pf-bar" id="bar" hidden>
+    <button class="primary" id="again">다시 점검</button>
+    <label class="pf-secs">수집
+      <select id="secs">
+        <option value="4">4초</option>
+        <option value="6" selected>6초</option>
+        <option value="10">10초</option>
+      </select>
+    </label>
+    <span class="grow"></span>
+    <span class="pf-note" id="note2"></span>
+  </div>
 
   <section id="verdict" class="pf-verdict" hidden>
     <div class="pf-vbig"><span id="vtext">—</span></div>
@@ -59,20 +58,19 @@
     <h2>기억할 것 <span class="pf-dim">(판정과 무관 — 매번 같다)</span></h2>
     <dl id="standingList"></dl>
   </section>
-
-  <section class="pf-hand">
-    <h2>계기가 못 보는 것 — 사람이 해야 한다</h2>
-    <p class="pf-dim">
-      이 기체는 3m 낙하 이력이 있고 최대 90.2A(XT90 정격의 2배)를 뽑는다.
-      전선 안쪽은 계기가 못 본다.
-    </p>
-    <ul>
-      <li><b>육안</b> — 프레임·모터 마운트·프롭 균열</li>
-      <li><b>손</b> — 착륙 후 커넥터 발열</li>
-      <li><b>arm 뒤</b> — QGC 지도에서 H 아이콘이 기체 위인지. RTL 이 그리로 간다</li>
-      <li><b>조종기</b> — SB(3단) + SC/SF 래치로 5슬롯. <b>CH6 RC 캘리브레이션 금지</b></li>
-    </ul>
-  </section>
 </main>
+
+<!-- 암호 창. 버튼을 누르면 뜬다. -->
+<div class="pf-modal" id="modal" hidden>
+  <form class="pf-modalbox" id="pwForm">
+    <label for="pw">암호</label>
+    <input type="password" id="pw" inputmode="numeric" autocomplete="current-password">
+    <div class="pf-modalerr" id="pwErr" hidden></div>
+    <div class="pf-modalrow">
+      <button type="button" id="cancel">취소</button>
+      <button type="submit" class="primary">점검</button>
+    </div>
+  </form>
+</div>
 
 <script src="/preflight.js"></script>
