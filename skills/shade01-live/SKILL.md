@@ -324,5 +324,5 @@ QGC 와 이 페이지 중 한쪽에만 주어 서로 프레임을 훔친다. 지
 ## 더 읽을 곳
 
 - [`web/live/README.md`](../../web/live/README.md) — 설계·함정·자체검사 전문
-- [`README.md`](../../README.md#링크-구성--3-경로) — 링크 3경로
+- [`README.md`](../../OPERATIONS.md#링크-구성-3-경로) — 링크 3경로
 - 로그 분석은 `shade01-log` 스킬

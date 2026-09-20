@@ -29,7 +29,8 @@ ARM·모드변경·미션업로드가 실기에 들어간다 — 그래서 기�
 
 | 파일 | 내용 |
 |---|---|
-| [`README.md`](README.md) | 기체 식별·링크 구성·현재 상태·다음 비행 전 |
+| [`README.md`](README.md) | 소개 — 무엇을 하는 저장소인가 (화면 위주) |
+| [`OPERATIONS.md`](OPERATIONS.md) | **운용 상세** — 기체 식별·링크 구성·현재 상태·다음 비행 전 |
 | [`FC_CHANGELOG.md`](FC_CHANGELOG.md) | **FC 변경 이력 — 작업 전 필독** |
 | [`FLIGHT-SYNC.md`](FLIGHT-SYNC.md) | **비행 직후 한 줄** — `./qgc sync` 로 FC → 웹 |
 | [`PARSING.md`](PARSING.md) | 🔴 **로그 파싱 정본 — 읽기 작업 전 필독** |
