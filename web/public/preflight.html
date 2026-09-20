@@ -44,18 +44,20 @@
       </dl>
     </div>
 
-    <ol class="pf-list" id="list"></ol>
+    <!-- 3 : 1 — 왼쪽에 점검 목록, 오른쪽에 종합. 좁은 화면에서는 세로로
+         쌓이고 종합이 위로 간다 (현장에서 먼저 보는 것이 종합이다). -->
+    <div class="pf-split">
+      <ol class="pf-list" id="list"></ol>
 
-    <section class="pf-total" id="total" hidden>
-      <div class="pf-trow">
-        <span class="pf-tlabel">종합결과</span>
-        <span class="pf-tdots"></span>
-        <span class="pf-tverdict" id="tverdict">—</span>
-      </div>
-      <div class="pf-tcounts" id="tcounts"></div>
-    </section>
-
-    <section id="fail" class="pf-fail" hidden></section>
+      <aside class="pf-side">
+        <section class="pf-total" id="total" hidden>
+          <span class="pf-tlabel">종합결과</span>
+          <strong class="pf-tverdict" id="tverdict">—</strong>
+          <div class="pf-tcounts" id="tcounts"></div>
+        </section>
+        <section id="fail" class="pf-fail" hidden></section>
+      </aside>
+    </div>
 
     <!-- 현장에서 먼저 보는 것은 판정이다. 근거는 접어 둔다. -->
     <details class="pf-detail" id="detailWrap" hidden>
