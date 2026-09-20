@@ -22,6 +22,19 @@ const el = (tag, cls, text) => {
   return n;
 };
 
+/** preflight.py 의 설명문은 터미널에서 읽히려고 쓰였고 `**강조**` 가 섞여 있다.
+ *  화면에서는 별표가 그대로 보이므로 <b> 로 바꾼다.
+ *  🔴 textContent 로 넣은 뒤 그 조각만 감싼다 — 서버 문자열을 innerHTML 에
+ *     넣지 않는다. FC 가 보낸 STATUSTEXT 도 이 길로 오기 때문이다. */
+function withEmphasis(node, text) {
+  const parts = String(text).split(/\*\*(.+?)\*\*/g);
+  parts.forEach((part, i) => {
+    if (!part) return;
+    node.appendChild(i % 2 ? el('b', null, part) : document.createTextNode(part));
+  });
+  return node;
+}
+
 function setNote(text, cls) {
   const n = $('note');
   n.textContent = text || '';
@@ -43,6 +56,7 @@ function renderFail(d) {
   box.hidden = false;
   box.appendChild(el('div', 'pf-failtitle', d.error || '점검하지 못했다'));
   for (const n of d.notes || []) box.appendChild(el('div', 'pf-failnote', '· ' + n));
+
   if (d.hints && d.hints.length) {
     box.appendChild(el('div', 'pf-failhead', '확인할 것'));
     for (const h of d.hints) box.appendChild(el('div', 'pf-failnote', '· ' + h));
@@ -91,7 +105,7 @@ function renderGroups(groups) {
       row.appendChild(el('span', 'pf-idetail', it.detail));
       if (it.why) {
         // 왜 막혔는지가 다음 행동을 정한다. 접지 않는다 (터미널도 안 접는다).
-        row.appendChild(el('div', 'pf-why', it.why));
+        row.appendChild(withEmphasis(el('div', 'pf-why'), it.why));
       }
       list.appendChild(row);
     }
@@ -106,7 +120,7 @@ function renderStanding(rows) {
   const dl = $('standingList');
   for (const r of rows) {
     dl.appendChild(el('dt', null, r.name));
-    dl.appendChild(el('dd', null, r.text));
+    dl.appendChild(withEmphasis(el('dd'), r.text));
   }
 }
 

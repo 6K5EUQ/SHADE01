@@ -9,7 +9,13 @@ description: 비행 전 마지막 점검. "./shade01 test" 로 FC 에 한 번 �
 ./shade01 test          # 판정만 (기본)
 ./shade01 test -v       # 정상·참고 항목까지 전부
 ./shade01 test -t 10    # 텔레메트리를 10초 모은다 (기본 6초)
+./shade01 test --json   # 같은 판정을 JSON 으로 (웹 화면·에이전트가 쓴다)
 ```
+
+**같은 점검이 웹에도 있다** — <https://shade01.bewe.co.kr/preflight> (암호 필요).
+버튼 하나로 FC 가 꽂힌 PC 의 에이전트를 통해 읽는다. **판정은 양쪽이 같은
+코드**(`preflight.py`)를 쓴다 — 화면이 값을 다시 해석하지 않는다.
+구조·배포는 [`tools/preflight/README.md`](../../tools/preflight/README.md).
 
 **실측 3~6초.** 종료코드로도 답한다 — `0` GO / `1` NO-GO / `2` 확인 후 판단.
 

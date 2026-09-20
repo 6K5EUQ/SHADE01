@@ -37,6 +37,7 @@ ARM·모드변경·미션업로드가 실기에 들어간다 — 그래서 기�
 | [`PROCEDURE.md`](PROCEDURE.md) | 로그 수집 → 분석 → 기록 절차 (손으로 할 때) |
 | [`docs/firmware/`](docs/firmware/BUILD.md) | **펌웨어 빌드·플래시** — `.px4` 는 git 에 없다, 절차가 정본 |
 | [`skills/shade01-test/`](skills/shade01-test/SKILL.md) | **비행 전 점검** — `./shade01 test` (읽기 전용, 3~6초) |
+| [`tools/preflight/`](tools/preflight/README.md) | 점검의 **정본**(임계값·판정) 과 웹 화면(`/preflight`) 배포 |
 | [`docs/emergency/`](docs/emergency/README.md) | **현장 체크리스트** (이륙 전·직후·비상) — FC 값을 바꿨으면 여기 표도 같이 고쳐라 |
 | [`missions/`](missions/README.md) | **미션 `.plan` 정본** — 번호로 관리. 올리는 법·금지 명령 |
 | [`config/SETTINGS.md`](config/SETTINGS.md) | 9/2 스냅샷의 **구조** 정리본 — 값은 낡았다, 인용 금지 |

@@ -11,8 +11,28 @@
 비교      https://shade01.bewe.co.kr/compare?a=<id>&b=<id>
 실시간    https://shade01.bewe.co.kr/live              지금 뜬 기체 (아래)
 소개      https://shade01.bewe.co.kr/intro             체계 소개 — 기체·페이로드·LOB→FIX (anime.js, 2026-09-10)
+점검      https://shade01.bewe.co.kr/preflight         비행 전 점검 — FC 를 읽어 GO/NO-GO (암호, 2026-09-20)
 상태      https://shade01.bewe.co.kr/api/health
 ```
+
+## 비행 전 점검 `/preflight` (2026-09-20)
+
+**버튼 하나로 FC 를 읽어 항목별 GO / NO-GO 를 낸다.** 현장에서 「지금 날려도
+되나」 를 묻는 화면이다. 판정은 `tools/preflight/preflight.py` 가 내고 이
+화면은 그리기만 한다 — 절차·근거·배포는 [`tools/preflight/README.md`](../tools/preflight/README.md).
+
+🔴 **이 서버는 FC 와 직접 말하지 않는다.** FC 가 꽂힌 PC(rim3)의 에이전트를
+HTTP 로 부르고 JSON 을 넘겨받는다. 랩서버를 브리지 허용 목록에 넣으면 공개
+웹이 도는 기계가 FC 조종 포트에 상행 권한을 얻으므로, 그 길을 안 만든다.
+
+`.env` 에 둘을 넣어야 켜진다 (없으면 화면은 뜨고 점검만 막힌다):
+
+```
+PREFLIGHT_KEY=<에이전트와 같은 값>
+PREFLIGHT_AGENTS=100.117.47.105:4402,100.99.120.110:4402
+```
+
+접속 암호는 업로드와 같은 `UPLOAD_PASSWORD` 다.
 
 ## 소개 페이지 `/intro` (2026-09-10)
 
