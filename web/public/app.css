@@ -234,6 +234,9 @@ body:has(> main.pf) > header { flex: none; }
      몰리고 아래가 빈다. 줄을 펼쳐 넘치면 **이 칸만** 스크롤한다. */
   height: 100%; overflow-y: auto; overflow-x: hidden;
   min-width: 0;
+  /* 🔴 마지막 줄의 진행 막대는 bottom:-1px 에 그려진다. 여백이 없으면
+     화면 끝에 걸려 잘린다. */
+  padding-bottom: 6px;
 }
 
 /* 오른쪽 칸. 종합이 **세로 한가운데**에 선다 — 시선이 떨어지는 자리가
