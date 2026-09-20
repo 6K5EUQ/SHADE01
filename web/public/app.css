@@ -144,23 +144,46 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
       않는다** — 모든 판정에 글자(GO / 확인 / NO-GO)가 같이 붙는다. */
 .pf { padding: 0 20px 60px; max-width: 980px; margin: 0 auto; }
 
-.pf-run { margin: 20px 0 8px; }
-.pf-runrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.pf-runrow .grow { flex: 1; }
-.pf-runrow #go { font-size: 15px; padding: 10px 22px; }
-.pf-runrow #pw { width: 130px; }
+/* 🔴 `display:flex` 가 `hidden` 속성을 이긴다. 그래서 숨긴 것이 그대로
+   보였다 (암호 창이 처음부터 떠 있고 결과 줄이 먼저 나왔다). 이 절의
+   요소는 전부 display 를 바꾸므로 여기서 한 번 못박는다. */
+.pf [hidden], .pf-modal[hidden] { display: none !important; }
+
+/* 첫 화면 — 버튼 하나. 현장에서 한 손으로 누른다. */
+.pf-hero {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; min-height: 58vh;
+}
+.pf-big {
+  font-size: 20px; font-weight: 600;
+  padding: 22px 56px; border-radius: 10px;
+}
+
+/* 결과가 뜬 뒤의 줄 */
+.pf-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 20px 0 0; }
+.pf-bar .grow { flex: 1; }
 .pf-secs { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
 
-.pf-note { font-size: 13px; }
+.pf-note { font-size: 13px; min-height: 1em; }
 .pf-note.dim { color: var(--dim); }
 .pf-note.bad { color: var(--bad); }
 
-.pf-read {
-  color: var(--dim); font-size: 12px; line-height: 1.7;
-  margin: 12px 0 0; padding: 10px 14px;
-  border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
+/* 암호 창 */
+.pf-modal {
+  position: fixed; inset: 0; z-index: 900;
+  background: rgba(1, 4, 9, .72);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
 }
-.pf-read code { font-family: var(--mono); font-size: 11px; color: var(--text); }
+.pf-modalbox {
+  background: var(--panel); border: 1px solid var(--border-2);
+  border-radius: 10px; padding: 22px; width: 280px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.pf-modalbox label { font-size: 13px; color: var(--dim); }
+.pf-modalbox input { width: 100%; font-size: 16px; letter-spacing: 2px; }
+.pf-modalerr { color: var(--bad); font-size: 12px; }
+.pf-modalrow { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
 
 /* 종합 판정. 화면에서 제일 큰 글자다 — 현장에서 멀리서도 읽혀야 한다. */
 .pf-verdict {
@@ -233,14 +256,12 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
   line-height: 1.6; margin-top: 2px;
 }
 
-.pf-standing, .pf-hand { margin-top: 28px; }
-.pf-standing h2, .pf-hand h2 { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
+.pf-standing { margin-top: 28px; }
+.pf-standing h2 { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
 .pf-dim { color: var(--muted); font-weight: 400; font-size: 12px; }
 .pf-standing dl { margin: 0; display: grid; grid-template-columns: 76px 1fr; gap: 6px 12px; }
 .pf-standing dt { color: var(--dim); font-size: 12px; font-weight: 600; }
 .pf-standing dd { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
-.pf-hand ul { margin: 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 1.9; }
-.pf-hand b { color: var(--dim); }
 
 /* 좁은 화면 — 현장에서는 휴대폰으로 본다. 항목 이름과 값이 겹쳐 눌리면
    읽을 수 없으므로 한 줄로 편다. */
@@ -249,4 +270,5 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
   .pf-item { grid-template-columns: 20px minmax(0, 1fr); }
   .pf-idetail, .pf-why { grid-column: 2; }
   .pf-vbig { font-size: 26px; }
+  .pf-big { width: 100%; padding: 24px 0; }
 }
