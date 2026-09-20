@@ -98,10 +98,15 @@ EXPECT = {
 #    임계값을 정하려면 FC_CHANGELOG.md 에 근거부터 남겨라 (CLAUDE.md).
 CBRK_OPEN = {
     # PX4 의 "회로차단기" 는 매직 넘버를 넣으면 그 검사를 통째로 끈다.
-    'CBRK_FLIGHTTERM': (121212, 'Flight Termination 차단 — 치명 실패에도 종단이 안 걸린다'),
-    'CBRK_IO_SAFETY':  (22027, 'IO 안전 스위치 우회'),
-    'CBRK_USB_CHK':    (197848, 'USB 연결 중 arm 허용'),
-    'CBRK_AIRSPD_CHK': (162128, '대기속도 검사 차단'),
+    # 설명은 **그것이 꺼지면 무슨 일이 생기는지**를 적는다.
+    'CBRK_FLIGHTTERM': (121212, '기체가 스스로 비행을 중단하는 최후 안전장치다. '
+                                '꺼져 있으면 치명적 고장이 나도 스스로 멈추지 않는다.'),
+    'CBRK_IO_SAFETY':  (22027, '기체의 안전 스위치를 건너뛴다. '
+                               '스위치를 안 눌러도 모터가 돌 수 있다.'),
+    'CBRK_USB_CHK':    (197848, 'USB 가 꽂힌 채로도 시동(arm)을 허용한다. '
+                                '정비 중 모터가 도는 사고로 이어질 수 있다.'),
+    'CBRK_AIRSPD_CHK': (162128, '대기속도계 이상 검사를 건너뛴다. '
+                                '피토관이 막혀도 경고가 안 뜬다.'),
 }
 
 # 스위치는 "매핑되어 있기만" 하면 된다. 채널 번호는 조종기 구성에 따라 바뀐다.
@@ -649,11 +654,12 @@ def check_params(r, p):
         if name not in p:
             continue
         if int(p[name]) == magic:
-            r.add('warn', name, '열림 (%d)' % magic,
-                  '%s. 왜 열어 뒀는지가 리포에 없다 — 의도한 것이면 '
-                  'FC_CHANGELOG.md 에 근거를 남겨라' % what)
+            r.add('warn', name, '꺼짐',
+                  '%s 이 기체에서 왜 껐는지가 기록에 없다 — 일부러 껐다면 '
+                  'FC_CHANGELOG.md 에 이유를 적어 두어라. 그래야 다음 사람이 '
+                  '이 줄을 보고 놀라지 않는다' % what)
         else:
-            r.add('ok', name, '닫힘 (%s)' % fmtv(p[name]), what + ' 검사가 켜져 있다')
+            r.add('ok', name, '켜짐', what)
 
     for name, note in INFORM.items():
         r.group = G.get(name, '파라미터')
@@ -663,7 +669,9 @@ def check_params(r, p):
     r.group = '파라미터'
     if missing:
         r.add('warn', '파라미터 수신', '%d개 못 받음' % len(missing),
-              ', '.join(missing[:8]) + ('…' if len(missing) > 8 else ''))
+              '설정값 일부를 못 읽었다 — 그만큼은 판정하지 못했다는 뜻이다. '
+              '링크가 느릴 때 생긴다. 못 받은 것: '
+              + ', '.join(missing[:8]) + ('…' if len(missing) > 8 else ''))
 
 
 def fmtv(v):
@@ -676,7 +684,8 @@ def check_mission(r, mission):
     r.group = '미션'
     n = mission['count']
     if n is None:
-        r.add('warn', '미션', '못 받았다', 'FC 가 MISSION_COUNT 를 안 줬다')
+        r.add('warn', '미션', '못 받았다',
+              '기체에 들어 있는 미션을 못 읽었다. 미션이 있는지 없는지를 모르는 상태다')
         return
     if n == 0:
         r.add('info', '미션', '없음 (0항목)', '수동 비행이면 정상이다')
@@ -704,7 +713,9 @@ def check_mission(r, mission):
     if alts:
         lo, hi = min(alts), max(alts)
         if hi > 30:
-            r.add('warn', '미션 고도', '%.0f~%.0f m' % (lo, hi), '이 기체 실측 최고 19.9m')
+            r.add('warn', '미션 고도', '%.0f~%.0f m' % (lo, hi),
+                  '이 기체가 실제로 올라가 본 최고 고도는 19.9m 다. '
+                  '그보다 높은 미션은 겪어 보지 않은 영역이다')
         else:
             r.add('ok', '미션 고도', '%.0f~%.0f m' % (lo, hi))
 
@@ -738,9 +749,13 @@ def check_live(r, tel, msgs):
     #    것과 무장이 안 된 것은 전혀 다르고, 전자를 후자로 답하면 도구가
     #    모르는 것을 안전하다고 말하는 셈이다 (실측으로 잡은 버그).
     if 'armed' not in tel:
-        r.add('blk', 'ARM 상태', '확인 불가', '하트비트를 못 읽었다 — 무장 여부를 모른 채로 날리지 마라')
+        r.add('blk', 'ARM 상태', '확인 불가',
+              '기체가 응답을 안 해 시동이 걸렸는지 아닌지를 모른다. '
+              '모르는 채로 만지지 마라 — 연결부터 다시 확인하라')
     elif tel['armed']:
-        r.add('blk', 'ARM 상태', '🔴 ARMED', '점검 중 모터가 돌 수 있다. DISARM 하고 다시 하라')
+        r.add('blk', 'ARM 상태', '🔴 시동 걸림',
+              '지금 모터에 전원이 들어가 있다. 점검 중 프로펠러가 돌 수 있다. '
+              '조종기로 시동을 끄고(disarm) 다시 점검하라')
     else:
         r.add('ok', 'ARM 상태', 'DISARMED')
 
@@ -750,14 +765,21 @@ def check_live(r, tel, msgs):
     if fix is None:
         r.add('warn', 'GPS', '데이터 없음', 'GPS_RAW_INT 가 안 온다')
     else:
-        d = 'fix %d · %s기%s' % (fix, sats if sats is not None else '?',
-                                 ' · eph %.2fm' % eph if eph else '')
+        FIXN = {0: '없음', 1: '신호만', 2: '2D', 3: '3D', 4: 'DGPS', 5: 'RTK(부동)', 6: 'RTK(고정)'}
+        d = '%s · 위성 %s기%s' % (FIXN.get(fix, fix), sats if sats is not None else '?',
+                                 ' · 오차 %.2fm' % eph if eph else '')
         if fix < 3:
-            r.add('blk', 'GPS', d, '3D fix 가 없으면 Position·Mission·RTL 이 안 선다')
+            r.add('blk', 'GPS', d,
+                  '위치를 못 잡았다. 실내라면 정상이다 — 야외로 나가면 잡힌다. '
+                  '이 상태로는 Position·Mission·RTL(자동 복귀)이 전부 안 된다')
         elif sats is not None and sats < 10:
-            r.add('warn', 'GPS', d, '위성이 적다 (야외 실측은 21~32기)')
+            r.add('warn', 'GPS', d,
+                  '잡힌 위성이 적다. 야외에서는 보통 21~32기가 잡힌다. '
+                  '건물이나 나무에 가려 있으면 위치가 흔들린다')
         elif eph and eph > 1.0:
-            r.add('warn', 'GPS', d, 'eph 가 크다 (실측 0.15~0.23m)')
+            r.add('warn', 'GPS', d,
+                  '위치 오차가 크다. 이 기체의 야외 실측은 0.15~0.23m 다. '
+                  '하늘이 트인 곳으로 옮겨 다시 보라')
         else:
             r.add('ok', 'GPS', d)
 
@@ -765,14 +787,18 @@ def check_live(r, tel, msgs):
     r.group = '전원'
     v = tel.get('volt')
     if v is None:
-        r.add('warn', '배터리', '전압 없음', '')
+        r.add('warn', '배터리', '전압 없음',
+              '배터리가 안 꽂혀 있거나 전원 모듈이 값을 못 읽는다. '
+              '실내 점검 중이면 정상이다')
     else:
         cell = v / 6.0
         d = '%.2f V · %.2f V/셀' % (v, cell)
         if v < 21.0:
-            r.add('blk', '배터리', d, '6S 21.0V 미만 — 날리면 안 된다')
+            r.add('blk', '배터리', d,
+                  '전압이 너무 낮다 (6S 기준 21.0V 미만). 이대로 띄우면 비행 중 '
+                  '전압이 무너져 추락한다. 충전된 배터리로 바꿔라')
         elif v < 22.2:
-            r.add('warn', '배터리', d, '충전 권장 (만충 25.2V)')
+            r.add('warn', '배터리', d, '만충은 25.2V 다. 짧은 비행만 가능하다')
         else:
             r.add('ok', '배터리', d)
 
@@ -782,7 +808,9 @@ def check_live(r, tel, msgs):
     if roll is not None:
         d = 'roll %+.1f° pitch %+.1f°' % (roll, pitch)
         if abs(roll) > 10 or abs(pitch) > 10:
-            r.add('warn', '지상 자세', d, '기체가 기울어 있거나 IMU 가 틀어졌다')
+            r.add('warn', '지상 자세', d,
+                  '기체가 10° 넘게 기울어 있다. 바닥이 기울었거나, 평평한데도 '
+                  '이렇게 나오면 자세 센서 보정이 틀어진 것이다')
         else:
             r.add('ok', '지상 자세', d)
 
@@ -795,11 +823,16 @@ def check_live(r, tel, msgs):
         if mx == 0.0:
             # 지상 정지에서도 완전한 0 은 잘 안 나온다. 값이 아니라 아직
             # 안 채워진 것으로 보는 편이 안전하다.
-            r.add('warn', '진동', d, '전부 0 — 아직 값이 안 온 것일 수 있다. 모터를 돌려 다시 보라')
+            r.add('warn', '진동', d,
+                  '값이 전부 0 이다. 측정이 아직 안 된 것일 수 있다 — '
+                  '모터를 한 번 돌린 뒤 다시 점검하라')
         elif mx > 30:
-            r.add('blk', '진동', d, '위험 수준')
+            r.add('blk', '진동', d,
+                  '진동이 위험 수준이다. 프로펠러 균열·모터 베어링·헐거운 나사를 '
+                  '확인하라. 이 상태로는 센서가 자세를 잘못 읽는다')
         elif mx > 10:
-            r.add('warn', '진동', d, '경고선 10 초과')
+            r.add('warn', '진동', d,
+                  '진동이 경고선(10)을 넘었다. 프로펠러와 모터 마운트를 살펴보라')
         else:
             r.add('ok', '진동', d)
 
@@ -811,21 +844,28 @@ def check_live(r, tel, msgs):
     ratios = {k[4:]: tel[k] for k in ('ekf_vel', 'ekf_pos', 'ekf_vrt', 'ekf_mag')
               if tel.get(k) is not None}
     if ratios:
-        d = ' '.join('%s %s' % (k, 'nan' if isnan(v) else '%.2f' % v)
-                     for k, v in ratios.items())
-        nans = [k for k, v in ratios.items() if isnan(v)]
+        KO = {'vel': '속도', 'pos': '수평위치', 'vrt': '수직위치', 'mag': '방위'}
+        d = ' · '.join('%s %s' % (KO.get(k, k), '미정' if isnan(v) else '%.2f' % v)
+                       for k, v in ratios.items())
+        nans = [KO.get(k, k) for k, v in ratios.items() if isnan(v)]
         good = [v for v in ratios.values() if not isnan(v)]
         worst = max(good) if good else None
+        # 🔴 설명은 **다음에 무엇을 하면 되는지**를 말한다. 용어(혁신비·NaN)만
+        #    적어 두면 읽는 사람이 그것을 먼저 찾아봐야 한다.
         if nans:
-            r.add('warn', 'EKF 혁신비', d,
-                  '%s 가 NaN — 추정기가 아직 안 섰다. GPS·자세가 잡히면 사라진다. '
-                  '이 상태로는 Position·Mission 이 안 선다' % ', '.join(nans))
+            r.add('warn', '위치 추정', d,
+                  '기체가 아직 자기 위치를 확정하지 못했다. 실내이거나 GPS 를 '
+                  '막 켠 직후에 정상으로 나오는 상태다. 야외에서 위성이 잡히면 '
+                  '저절로 풀린다. 지금은 Position·Mission 모드로 못 넘어간다')
         elif worst > 1.0:
-            r.add('blk', 'EKF 혁신비', d, '센서 불일치 — 뜨면 위치가 튄다')
+            r.add('blk', '위치 추정', d,
+                  '센서들이 서로 다른 위치를 가리킨다. 이대로 띄우면 기체가 '
+                  '엉뚱한 곳으로 튄다. 나침반 보정을 다시 하고 GPS 가 잡힐 때까지 기다려라')
         elif worst > 0.5:
-            r.add('warn', 'EKF 혁신비', d, '여유가 적다')
+            r.add('warn', '위치 추정', d,
+                  '센서끼리 조금 어긋나 있다. 날 수는 있으나 위치가 흔들릴 수 있다')
         else:
-            r.add('ok', 'EKF 혁신비', d)
+            r.add('ok', '위치 추정', d)
 
     # 센서 건강 비트
     r.group = '센서'
@@ -833,7 +873,8 @@ def check_live(r, tel, msgs):
     if pres is not None and health is not None:
         bad = [nm for bit, nm in SENSOR_BITS if (pres & bit) and not (health & bit)]
         if bad:
-            r.add('blk', '센서 상태', '이상: ' + ', '.join(bad), 'SYS_STATUS 건강 비트')
+            r.add('blk', '센서 상태', '이상: ' + ', '.join(bad),
+                  'FC 가 이 센서들을 고장으로 보고했다. 배선과 커넥터를 확인하라')
         else:
             r.add('ok', '센서 상태', '보고된 센서 전부 정상')
 
@@ -843,9 +884,12 @@ def check_live(r, tel, msgs):
     if vs is not None:
         name = {0: '미정', 1: '천이 중(FW로)', 2: '천이 중(MC로)', 3: 'MC', 4: 'FW'}.get(vs, vs)
         if vs == 4:
-            r.add('blk', 'VTOL 상태', name, '🔴 고정익 상태다 — 이 기체는 쿼드 전용이다')
+            r.add('blk', 'VTOL 상태', name,
+                  '기체가 고정익 모드로 서 있다. 지금 이 기체는 쿼드(멀티콥터) 전용이라 '
+                  '이 상태로 띄우면 안 된다')
         elif vs in (1, 2):
-            r.add('warn', 'VTOL 상태', name, '천이 중이다')
+            r.add('warn', 'VTOL 상태', name,
+                  '쿼드와 고정익 사이를 넘어가는 중이다. 멈출 때까지 기다려라')
         else:
             r.add('ok', 'VTOL 상태', name)
 
@@ -855,7 +899,9 @@ def check_live(r, tel, msgs):
     if rc:
         r.add('ok', 'RC 입력', 'CH1~8 %s' % ' '.join(str(x) for x in rc[:8]))
     else:
-        r.add('warn', 'RC 입력', '없다', '조종기가 꺼져 있거나 수신기가 안 붙었다')
+        r.add('warn', 'RC 입력', '없다',
+              '조종기 신호가 안 들어온다. 조종기가 꺼져 있거나, 수신기가 기체에 '
+              '안 붙었거나, 바인딩이 풀린 것이다. 조종기를 켜고 다시 점검하라')
 
     # 에어스피드 — 정지 상태에서 ±2 m/s 안이어야 한다 (2026-09-11 기준 갱신).
     #
@@ -964,8 +1010,7 @@ def check_live(r, tel, msgs):
             # 모터가 도는 것과 서보가 어긋난 것은 다르다 — 모터만 진행 불가다.
             motors = [b for b in bad if '모터' in b]
             r.add('blk' if motors else 'warn', '액추에이터 출력', d,
-                  '🔴 DISARM 인데 어긋난 출력이 있다: ' + ' · '.join(bad) +
-                  '. 배치표는 config/SETTINGS.md')
+                  '시동이 꺼져 있는데 출력이 정지값이 아니다: ' + ' · '.join(bad))
         else:
             r.add('ok', '액추에이터 출력', d)
 
@@ -974,7 +1019,9 @@ def check_live(r, tel, msgs):
     if v is not None:
         d = '%.2f m/s' % v
         if v > 0.5:
-            r.add('warn', '추정 속도', d, '지상에 있는데 추정기가 움직인다고 본다 — EKF 드리프트')
+            r.add('warn', '추정 속도', d,
+                  '기체는 가만히 있는데 스스로 움직이고 있다고 판단한다. '
+                  '위치 추정이 흐르는 중이다 — GPS 가 잡히면 대개 가라앉는다')
         else:
             r.add('ok', '추정 속도', d)
 
@@ -986,12 +1033,14 @@ def check_live(r, tel, msgs):
         d = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(fu))
         if skew > 60:
             r.add('warn', 'FC 시계', '%s (%.0f초 차)' % (d, skew),
-                  '지상 시계와 어긋났다 — 로그 시각으로 다른 기록과 맞춰 볼 수 없다')
+                  '기체 시계가 이 PC 와 어긋나 있다. 비행 로그에 찍히는 시각이 '
+                  '맞지 않아 나중에 다른 기록과 맞춰 보기 어려워진다')
         else:
             r.add('ok', 'FC 시계', d)
     elif tel.get('fc_boot_s') is not None:
         r.add('warn', 'FC 시계', '시각 없음 (부팅 후 %.0f초)' % tel['fc_boot_s'],
-              'GPS 를 못 잡아 UTC 가 안 섰다. 로그에 실제 시각이 안 남는다')
+              '기체가 아직 실제 날짜·시각을 모른다. GPS 로 시각을 받아오기 때문에 '
+              '실내에서는 정상이다. 로그에는 부팅 후 경과시간만 남는다')
 
     # 홈 위치
     r.group = 'GPS·추정'
@@ -1003,11 +1052,12 @@ def check_live(r, tel, msgs):
         d = math.hypot(dlat, dlon)
         if d > 20:
             r.add('warn', '홈 위치', '기체에서 %.0f m' % d,
-                  'RTL 이 그리로 간다. arm 후 QGC 에서 H 아이콘이 기체 위인지 확인하라')
+                  '복귀 지점이 기체와 멀리 떨어져 있다. 자동 복귀(RTL)를 걸면 '
+                  '여기로 날아간다. 지도에서 H 표시가 기체 위에 있는지 확인하라')
         else:
             r.add('ok', '홈 위치', '기체에서 %.0f m' % d)
     else:
-        r.add('info', '홈 위치', '아직 없다', 'arm 하면 잡힌다')
+        r.add('info', '홈 위치', '아직 없다', '시동을 걸면 그 자리가 복귀 지점이 된다')
 
     # FC 가 스스로 뱉은 경고 — 임계값 판정보다 맥락이 짙다
     r.group = 'FC 자신의 말'

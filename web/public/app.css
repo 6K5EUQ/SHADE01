@@ -145,6 +145,8 @@ body:has(> main.pf) {
   height: 100vh; margin: 0;
   display: flex; flex-direction: column; overflow: hidden;
 }
+/* 헤더는 줄지 않는다 — flex 안에서 눌리면 제목이 잘린다. */
+body:has(> main.pf) > header { flex: none; }
 
 /* ── 비행 전 점검 (/preflight) ──────────────────────────────────────
    계기판처럼 읽히게 짠다 — 줄마다 번호·점검 문장·상태가 같은 자리에 오고,
@@ -194,21 +196,11 @@ body:has(> main.pf) {
 }
 
 /* ── 임무 머리 ───────────────────────────────────────────────────── */
-/* 호출부호는 왼쪽 끝, 시각은 오른쪽 끝. 같은 줄에 선다. */
-.pf-brief {
-  display: flex; align-items: baseline; gap: 20px;
-  padding: 24px 4px 14px; margin: 0;
-}
-.pf-note { margin-left: auto; }
+/* 시각과 진행 문구는 사이트 헤더 안에 산다 — 아래에 같은 줄을 한 번 더
+   두면 목록에 쓸 높이를 그만큼 잡아먹는다. */
 .pf-at {
-  font-family: var(--pf-mono); font-size: 13px; color: var(--dim);
+  font-family: var(--pf-mono); font-size: 12px; color: var(--pf-label);
   font-variant-numeric: tabular-nums;
-}
-/* 진행 문구가 없을 때도 시각이 오른쪽 끝에 붙어 있어야 한다. */
-.pf-note:empty + .pf-at { margin-left: auto; }
-.pf-callsign {
-  font-family: var(--pf-mono); font-size: 22px; font-weight: 700;
-  letter-spacing: .1em;
 }
 
 .pf-note { font-size: 12px; min-height: 1em; font-family: var(--pf-mono); }
@@ -231,7 +223,7 @@ body:has(> main.pf) {
 .pf-split {
   display: grid; grid-template-columns: 3fr 1fr;
   gap: 40px; align-items: stretch;
-  flex: 1 1 auto; min-height: 0;
+  flex: 1 1 auto; min-height: 0; min-width: 0;
 }
 /* 왼쪽 — 줄이 이 높이를 **나눠 갖는다**. 줄 수가 달라져도 목록은 늘 화면에
    꼭 맞는다. 펼치면 여기서 넘치고, 그때만 스크롤이 생긴다. */
@@ -240,7 +232,8 @@ body:has(> main.pf) {
   min-height: 0;
   /* 격자 칸 전체 높이를 쓴다 — 안 주면 내용 높이에서 멈춰 목록이 위로
      몰리고 아래가 빈다. 줄을 펼쳐 넘치면 **이 칸만** 스크롤한다. */
-  height: 100%; overflow-y: auto;
+  height: 100%; overflow-y: auto; overflow-x: hidden;
+  min-width: 0;
 }
 
 /* 오른쪽 칸. 종합이 **세로 한가운데**에 선다 — 시선이 떨어지는 자리가
@@ -292,10 +285,13 @@ body:has(> main.pf) {
 }
 
 /* 펼친 근거. 판정 바로 아래에 둔다 — 이유를 목록 밖에서 찾게 하지 않는다. */
-/* 세로선이 번호 칸(30px) 끝에 선다 — 근거가 그 줄에 속한다는 표시다. */
+/* 세로선이 번호 칸(30px) 끝에 선다 — 근거가 그 줄에 속한다는 표시다.
+   🔴 box-sizing 과 min-width:0 이 둘 다 있어야 한다. 들여쓰기가 격자 폭에
+      더해져 부모를 넘으면 페이지에 가로 스크롤이 생긴다 (실제로 그랬다). */
 .pf-rbody {
   padding: 2px 4px 14px 20px;
   border-left: 2px solid var(--pf-rail); margin-left: 34px;
+  min-width: 0; overflow-wrap: anywhere;
 }
 .pf-row.open { background: var(--panel); }
 .pf-row.done.blk.open,
@@ -388,6 +384,7 @@ body:has(> main.pf) {
   grid-template-columns: 18px minmax(0, 190px) minmax(0, 1fr);
   gap: 3px 10px; align-items: baseline;
   padding: 4px 0;
+  min-width: 0;
 }
 .pf-mark { text-align: center; font-size: 11px; }
 .pf-item.ok   .pf-mark { color: var(--pf-go); }
@@ -435,7 +432,6 @@ body:has(> main.pf) {
   .pf-total { align-items: flex-start; }
   .pf-tactions { max-width: none; }
   .pf-big { width: 100%; padding: 18px 0; }
-  .pf-brief { gap: 12px; padding-top: 20px; }
   .pf-split { grid-template-columns: 1fr; gap: 20px; height: auto; }
   .pf-side { border-left: 0; padding-left: 0; justify-content: flex-start;
              position: static; height: auto; }

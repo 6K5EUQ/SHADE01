@@ -23,7 +23,9 @@
 <header>
   <h1><a href="/">SHADE01 비행로그</a></h1>
   <span class="sub">비행 전 점검</span>
+  <time class="pf-at" id="bAt"></time>
   <span class="grow"></span>
+  <span class="pf-note" id="note"></span>
   <a class="btn" href="/intro">소개</a>
   <a class="btn" href="/live">실시간</a>
 </header>
@@ -35,12 +37,6 @@
 
   <div class="pf-run" id="run" hidden>
     <!-- 임무 머리. 무엇을·어디서·언제 점검했는지 — 사진 한 장으로도 근거가 된다. -->
-    <div class="pf-brief">
-      <span class="pf-callsign">SHADE01</span>
-      <span class="pf-note" id="note"></span>
-      <time class="pf-at" id="bAt"></time>
-    </div>
-
     <!-- 3 : 1 — 왼쪽에 점검 목록, 오른쪽에 종합. 좁은 화면에서는 세로로
          쌓이고 종합이 위로 간다 (현장에서 먼저 보는 것이 종합이다). -->
     <div class="pf-split">
