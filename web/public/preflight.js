@@ -166,24 +166,6 @@ function renderTotal(d) {
   sec.className = 'pf-total ' + (go ? 'ok' : 'blk');
   $('tverdict').textContent = go ? 'GOOD TO GO' : 'NO GO';
 
-  // 무엇이 몇 개인지. 🔴 이 수가 종합보다 많은 것을 말한다 — NO GO 하나가
-  //    진행 불가 때문인지 확인 필요 때문인지가 다음 행동을 정한다.
-  const c = d.counts || {};
-  const box = $('tcounts');
-  box.textContent = '';
-  const add = (cls, n, label) => {
-    if (!n) return;
-    const t = el('span', 'pf-count ' + cls);
-    t.appendChild(el('b', null, String(n)));
-    t.appendChild(document.createTextNode(' ' + label));
-    box.appendChild(t);
-  };
-  // 🔴 NO GO 안에서 무엇이 막는 것이고 무엇이 볼 것인지는 갈라 둔다 —
-  //    그 차이가 다음 행동을 정한다. 이름은 줄 판정과 같은 말을 쓴다.
-  add('blk', c.blk, 'NO GO · 진행 불가');
-  add('warn', c.warn, 'NO GO · 확인 필요');
-  add('ok', c.ok, 'GO');
-  add('info', c.info, '참고');
 }
 
 /** 붙지 못했거나 서버가 막힌 경우. 🔴 이때 GOOD TO GO 를 그리지 않는다. */
@@ -219,7 +201,6 @@ function reset() {
   $('total').hidden = true;
   $('fail').hidden = true;
   $('again').hidden = true;
-  $('expand').hidden = true;
   $('list').textContent = '';
   rows.clear();
 }
@@ -250,7 +231,6 @@ function onLine(d) {
       else renderTotal(d);
       // 점검이 끝났다. 이제 다시 돌리거나 근거를 펼칠 수 있다.
       $('again').hidden = false;
-      $('expand').hidden = !(d.groups && d.groups.length);
       setNote('', '');
       break;
     default:
@@ -325,13 +305,6 @@ async function run() {
 
 $('go').addEventListener('click', () => run());
 $('again').addEventListener('click', () => run());
-
-// 근거를 한꺼번에 펼치고 접는다. NO GO 가 여럿일 때 줄마다 누르게 하지 않는다.
-$('expand').addEventListener('click', () => {
-  const anyClosed = [...rows.values()].some((r) => r.group && r.body.hidden);
-  for (const [name, r] of rows) if (r.group) toggleRow(name, anyClosed);
-  $('expand').textContent = anyClosed ? '근거 모두 접기' : '근거 모두 보기';
-});
 
 $('cancel').addEventListener('click', closeModal);
 $('pwForm').addEventListener('submit', (e) => {

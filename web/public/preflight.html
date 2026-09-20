@@ -37,11 +37,8 @@
     <!-- 임무 머리. 무엇을·어디서·언제 점검했는지 — 사진 한 장으로도 근거가 된다. -->
     <div class="pf-brief">
       <span class="pf-callsign">SHADE01</span>
-      <span class="grow"></span>
       <span class="pf-note" id="note"></span>
-      <dl class="pf-bmeta">
-        <div><dt>시각</dt><dd id="bAt">—</dd></div>
-      </dl>
+      <time class="pf-at" id="bAt"></time>
     </div>
 
     <!-- 3 : 1 — 왼쪽에 점검 목록, 오른쪽에 종합. 좁은 화면에서는 세로로
@@ -53,10 +50,8 @@
         <section class="pf-total" id="total" hidden>
           <span class="pf-tlabel">종합결과</span>
           <strong class="pf-tverdict" id="tverdict">—</strong>
-          <div class="pf-tcounts" id="tcounts"></div>
           <div class="pf-tactions">
             <button id="again" hidden>다시 점검</button>
-            <button id="expand" hidden>근거 모두 보기</button>
           </div>
         </section>
         <section id="fail" class="pf-fail" hidden></section>
