@@ -35,10 +35,14 @@ function withEmphasis(node, text) {
   return node;
 }
 
+// 진행 문구는 두 곳에 있다 — 첫 화면(가운데 버튼 아래)과 결과가 뜬 뒤의 줄.
+// 어느 쪽이 보이든 같은 말을 적는다.
 function setNote(text, cls) {
-  const n = $('note');
-  n.textContent = text || '';
-  n.className = 'pf-note' + (cls ? ' ' + cls : '');
+  for (const id of ['note', 'note2']) {
+    const n = $(id);
+    n.textContent = text || '';
+    n.className = 'pf-note' + (cls ? ' ' + cls : '');
+  }
 }
 
 function clear() {
@@ -56,7 +60,6 @@ function renderFail(d) {
   box.hidden = false;
   box.appendChild(el('div', 'pf-failtitle', d.error || '점검하지 못했다'));
   for (const n of d.notes || []) box.appendChild(el('div', 'pf-failnote', '· ' + n));
-
   if (d.hints && d.hints.length) {
     box.appendChild(el('div', 'pf-failhead', '확인할 것'));
     for (const h of d.hints) box.appendChild(el('div', 'pf-failnote', '· ' + h));
@@ -124,17 +127,38 @@ function renderStanding(rows) {
   }
 }
 
-async function run() {
-  const pw = $('pw').value;
-  if (!pw) { setNote('암호를 넣어라', 'bad'); $('pw').focus(); return; }
+// ── 암호 창 ──────────────────────────────────────────────────────────
+// 버튼을 누르면 뜬다. 이번 탭에서 한 번 맞히면 다시 안 묻는다 — 현장에서
+// 한 손으로 누르는 버튼이라 매번 치게 하면 실제로 안 누르게 된다.
+let pw = '';
+try { pw = sessionStorage.getItem('pf_pw') || ''; } catch { /* 사설 모드 */ }
 
-  const btn = $('go');
-  btn.disabled = true;
+function askPassword(err) {
+  $('pwErr').hidden = !err;
+  $('pwErr').textContent = err || '';
+  $('modal').hidden = false;
+  $('pw').value = '';
+  $('pw').focus();
+}
+
+function closeModal() {
+  $('modal').hidden = true;
+}
+
+// ── 점검 ────────────────────────────────────────────────────────────
+let busy = false;
+
+async function run() {
+  if (busy) return;
+  if (!pw) { askPassword(); return; }
+
+  busy = true;
+  $('go').disabled = true;
+  $('again').disabled = true;
   clear();
-  setNote('FC 에 붙는 중…', 'dim');
 
   const t0 = Date.now();
-  // 수집 시간만큼은 최소로 걸린다. 그 동안 무엇을 기다리는지 말해 준다.
+  setNote('FC 에 붙는 중…', 'dim');
   const tick = setInterval(() => {
     setNote(`점검 중… ${((Date.now() - t0) / 1000).toFixed(0)}초`, 'dim');
   }, 500);
@@ -146,32 +170,50 @@ async function run() {
     });
     const d = await res.json().catch(() => ({ error: '응답을 읽지 못했다' }));
 
-    if (res.status === 401) { setNote('암호가 틀렸다', 'bad'); return; }
+    if (res.status === 401) {
+      // 저장해 둔 암호가 더는 안 맞는다. 버리고 다시 묻는다.
+      pw = '';
+      try { sessionStorage.removeItem('pf_pw'); } catch { /* 사설 모드 */ }
+      setNote('', '');
+      askPassword('암호가 틀렸다');
+      return;
+    }
+
+    try { sessionStorage.setItem('pf_pw', pw); } catch { /* 사설 모드 */ }
+
+    // 결과가 왔으면 첫 화면의 큰 버튼을 치우고 결과 줄로 바꾼다.
+    $('hero').hidden = true;
+    $('bar').hidden = false;
 
     if (d.verdict) renderVerdict(d);
     if (d.error) renderFail(d);
     if (d.groups && d.groups.length) renderGroups(d.groups);
     renderStanding(d.standing);
 
-    if (!d.error) {
-      setNote('', '');
-      // 암호가 맞았으면 이번 탭에서는 다시 안 묻는다. 현장에서 한 손으로
-      // 누르는 버튼이라 매번 치게 하면 실제로 안 누르게 된다.
-      try { sessionStorage.setItem('pf_pw', pw); } catch { /* 사설 모드 */ }
-    } else {
-      setNote(d.error, 'bad');
-    }
+    setNote(d.error ? d.error : '', d.error ? 'bad' : '');
   } catch (e) {
     setNote('서버에 닿지 못했다: ' + e.message, 'bad');
   } finally {
     clearInterval(tick);
-    btn.disabled = false;
+    busy = false;
+    $('go').disabled = false;
+    $('again').disabled = false;
   }
 }
 
-$('go').addEventListener('click', run);
-$('pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') run(); });
-try {
-  const saved = sessionStorage.getItem('pf_pw');
-  if (saved) $('pw').value = saved;
-} catch { /* 사설 모드에서는 sessionStorage 가 던진다 */ }
+$('go').addEventListener('click', () => run());
+$('again').addEventListener('click', () => run());
+$('cancel').addEventListener('click', closeModal);
+$('pwForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const v = $('pw').value;
+  if (!v) { $('pw').focus(); return; }
+  pw = v;
+  closeModal();
+  run();
+});
+// 창 밖을 누르거나 Esc 를 누르면 닫는다.
+$('modal').addEventListener('click', (e) => { if (e.target === $('modal')) closeModal(); });
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('modal').hidden) closeModal();
+});
