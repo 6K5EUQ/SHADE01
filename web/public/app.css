@@ -202,7 +202,6 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 .pf-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 16px 0 14px; }
 .pf-bar .grow { flex: 1; }
 .pf-bar #again { font-family: var(--pf-mono); font-size: 12px; letter-spacing: .04em; }
-.pf-secs { color: var(--pf-label); font-size: 12px; display: flex; align-items: center; gap: 7px; }
 .pf-note { font-size: 12px; min-height: 1em; font-family: var(--pf-mono); }
 .pf-note.dim { color: var(--dim); }
 .pf-note.bad { color: var(--pf-stop); }

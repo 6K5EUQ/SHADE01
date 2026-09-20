@@ -9,6 +9,15 @@
 
 const $ = (id) => document.getElementById(id);
 
+// 🔴 텔레메트리 수집 시간(초). **고르게 두지 않는다.**
+//    FC 가 알아서 뿌리는 값 중 가장 느린 것이 HOME_POSITION·VIBRATION 으로
+//    2초 주기다 (2026-09-20 실측). 짧게 잡으면 그 항목이 통째로 빠져
+//    「데이터 없음」 이 되는데, 고를 수 있으면 현장에서 짧은 쪽을 고른다.
+//
+//    실제 소요는 이보다 짧다 — 필요한 것이 다 오면 gather 가 조기 종료한다
+//    (실측 2~3초). 끝까지 듣는 것은 FC 경고뿐이다: 언제 올지 모른다.
+const SECS = 10;
+
 // 등급 → 화면 말. preflight.py 의 GROUP_VERDICT 와 같은 짝이다.
 // 🔴 색만으로 말하지 않는다 — 글자로도 같은 것을 적는다 (색각 이상·인쇄).
 const LEVEL = {
@@ -79,12 +88,10 @@ function setProgress(prog) {
   }
 }
 
-/** 임무 머리. 사진 한 장으로도 근거가 되게 무엇을·어디서·언제를 채운다. */
+/** 임무 머리. 사진 한 장으로도 언제 점검한 것인지가 남아야 한다. */
 function setBrief(d) {
   if (d.airframe && d.airframe.type) $('bType').textContent = d.airframe.type;
-  if (d.how) $('bHow').textContent = d.how;
   if (d.at) $('bAt').textContent = d.at.replace('T', ' ').slice(0, 19);
-  if (d.elapsed != null) $('bElapsed').textContent = d.elapsed + '초';
 }
 
 function setGroupDone(g) {
@@ -245,7 +252,7 @@ async function run() {
   setNote('FC 에 붙는 중…', 'dim');
 
   try {
-    const res = await fetch('/api/preflight/stream?t=' + encodeURIComponent($('secs').value), {
+    const res = await fetch('/api/preflight/stream?t=' + SECS, {
       method: 'POST',
       headers: { 'X-Preflight-Password': pw },
     });
