@@ -149,7 +149,10 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 .pf {
   /* 🔴 폭을 묶지 않는다. 판정 화면은 읽을거리가 아니라 계기라서,
      넓은 화면에서 가운데 좁게 모이면 줄 하나가 그만큼 짧아진다. */
-  padding: 0 28px 72px;
+  padding: 0 28px 28px;
+  /* 헤더(53px)를 뺀 나머지를 쓴다. 목록이 화면 아래까지 닿는다. */
+  min-height: calc(100vh - 53px);
+  display: flex; flex-direction: column;
 
   /* 계기 색. 기존 팔레트 위에 판정용 세 가지를 얹는다. */
   --pf-go:   #7dd3a0;          /* 인광 — 통과 */
@@ -166,7 +169,7 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 /* ── 첫 화면 — 버튼 하나. 현장에서 한 손으로 누른다. ──────────────── */
 .pf-hero {
   display: flex; align-items: center; justify-content: center;
-  min-height: 56vh;
+  flex: 1 1 auto;
 }
 .pf-big {
   font-size: 16px; font-weight: 600; padding: 18px 44px; border-radius: 6px;
@@ -181,9 +184,9 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 
 /* ── 임무 머리 ───────────────────────────────────────────────────── */
 .pf-brief {
-  display: grid; grid-template-columns: 3fr 1fr; gap: 32px;
+  display: grid; grid-template-columns: 3fr 1fr; gap: 40px;
   align-items: baseline;
-  padding: 26px 4px 16px; margin: 0;
+  padding: 24px 4px 14px; margin: 0;
 }
 /* 호출부호와 진행 문구가 왼쪽 칸을 나눠 쓴다. 시각은 오른쪽 칸 —
    목록과 종합이 나뉜 자리와 같은 선에 선다. */
@@ -192,12 +195,12 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 .pf-note { grid-column: 1; justify-self: end; }
 .pf-bmeta { grid-column: 2; justify-self: center; }
 .pf-callsign {
-  font-family: var(--pf-mono); font-size: 19px; font-weight: 700;
+  font-family: var(--pf-mono); font-size: 22px; font-weight: 700;
   letter-spacing: .1em;
 }
 /* 시각 한 줄. 레이블과 값을 같은 줄에 두어 호출부호와 밑선이 맞는다 —
    두 줄로 쌓으면 머리 전체가 기울어 보인다. */
-.pf-bmeta { margin: 0; font-size: 12px; }
+.pf-bmeta { margin: 0; font-size: 13px; }
 .pf-bmeta > div { display: flex; align-items: baseline; gap: 8px; }
 .pf-bmeta dt {
   font-family: var(--pf-mono); font-size: 10px; letter-spacing: .12em;
@@ -216,28 +219,61 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
    🔴 **줄마다 상자를 두르지 않는다.** 열다섯 줄에 테두리·배경을 주면 테두리
       쪽이 먼저 읽히고 정작 판정이 묻힌다 (실제로 그랬다). 배경 위에 글자만
       놓고, 줄을 가르는 것은 가는 선 하나로 충분하다. */
-/* 3 : 1 — 왼쪽 점검 목록, 오른쪽 종합. 종합은 스크롤해도 따라온다:
-   목록이 길어도 "지금 답이 무엇인지" 가 늘 화면에 있어야 한다. */
+/* 3 : 1 — 왼쪽 점검 목록, 오른쪽 종합.
+   🔴 두 칸이 **화면 높이를 채운다.** 열다섯 줄이 위쪽에 몰리고 아래가
+      비면 계기판이 아니라 남다 만 문서로 보인다. */
+/* 🔴 화면에서 머리를 뺀 나머지를 **flex 가 재게** 한다. 상수로 빼 두면
+   (calc(100vh - 175px)) 머리 높이가 바뀌는 순간 어긋나 마지막 줄이 화면
+   밖으로 밀린다 — 실측에서 189px 을 쓰는데 175 로 빼고 있었다. */
+/* 🔴 flex: 1 이 있어야 이 칸이 남는 높이를 받는다. 없으면 내용 높이에서
+   멈추고, 그 아래로 목록에 줄 높이가 전달되지 않는다. */
+.pf-run { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
 .pf-split {
   display: grid; grid-template-columns: 3fr 1fr;
-  gap: 32px; align-items: start;
+  gap: 40px; align-items: stretch;
+  flex: 1 1 auto; min-height: 0;
 }
-/* 오른쪽 칸. 종합이 칸 가운데에 선다 — 목록이 아무리 길어도 시선이
-   떨어지는 자리가 늘 같다. */
+/* 왼쪽 — 줄이 이 높이를 **나눠 갖는다**. 줄 수가 달라져도 목록은 늘 화면에
+   꼭 맞는다. 펼치면 여기서 넘치고, 그때만 스크롤이 생긴다. */
+.pf-split > .pf-list {
+  display: flex; flex-direction: column;
+  min-height: 0;
+  /* 격자 칸 전체 높이를 쓴다 — 안 주면 내용 높이에서 멈춰 목록이 위로
+     몰리고 아래가 빈다. */
+  height: 100%;
+}
+
+/* 오른쪽 칸. 종합이 **세로 한가운데**에 선다 — 시선이 떨어지는 자리가
+   목록 길이와 무관하게 늘 같다. */
 .pf-side {
-  position: sticky; top: 74px;
-  display: flex; flex-direction: column; align-items: center;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
   text-align: center;
+  border-left: 1px solid var(--border);
+  padding-left: 40px;
+  /* 줄을 펼치면 목록이 화면보다 길어진다. 그때도 답은 화면에 남아야 한다. */
+  position: sticky; top: 74px;
+  /* 목록과 같은 높이. 줄을 펼쳐 목록이 길어져도 답은 화면에 남는다. */
+  max-height: calc(100vh - 100px);
 }
 
 .pf-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
-.pf-row { position: relative; border-bottom: 1px solid var(--border); }
+/* 줄이 남는 높이를 나눠 갖는다 — 목록이 화면 아래까지 닿는다. */
+.pf-row {
+  position: relative; border-bottom: 1px solid var(--border);
+  /* 🔴 basis 0 이라야 줄이 높이를 **똑같이** 나눈다. auto 면 내용 높이부터
+     깔고 남는 것만 나눠 가져서, 줄이 많으면 넘친다. */
+  flex: 1 1 0; display: flex; flex-direction: column; justify-content: center;
+  min-height: 34px;
+}
+/* 펼친 줄은 내용만큼만 — 늘어나면 다른 줄을 눌러 버린다. */
+.pf-row.open { flex: 0 0 auto; }
 /* 줄 전체가 버튼이다 — 눌러야 하는 곳을 따로 찾게 하지 않는다.
    안쪽도 3 : 1 — 이름 쪽이 넓고 판정이 오른쪽 끝에 붙는다. */
 .pf-rhead {
   width: 100%; display: grid; grid-template-columns: 30px 3fr 1fr;
   align-items: baseline; gap: 12px;
-  padding: 13px 4px; margin: 0;
+  padding: 6px 4px; margin: 0;
   background: none; border: 0; border-radius: 0;
   font: inherit; color: inherit; text-align: left; cursor: pointer;
 }
@@ -270,12 +306,12 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 .pf-empty { color: var(--pf-label); font-size: 12px; padding: 4px 0; }
 
 .pf-rnum {
-  font-family: var(--pf-mono); font-size: 12px; color: var(--pf-label);
+  font-family: var(--pf-mono); font-size: 14px; color: var(--pf-label);
   font-variant-numeric: tabular-nums;
 }
-.pf-rlabel { font-size: 15px; }
+.pf-rlabel { font-size: 18px; }
 .pf-rright {
-  font-family: var(--pf-mono); font-weight: 700; font-size: 13px;
+  font-family: var(--pf-mono); font-weight: 700; font-size: 17px;
   text-align: right; letter-spacing: .08em;
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }
@@ -312,20 +348,19 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 /* ── 종합 ─────────────────────────────────────────────────────────
    화면에서 제일 큰 글자다 — 현장에서 팔 길이 밖에서도 읽혀야 한다. */
 /* 종합. 화면에서 제일 큰 글자다 — 현장에서 팔 길이 밖에서도 읽혀야 한다. */
+/* 🔴 세로 중앙에 서므로 위쪽 선을 두지 않는다 — 선을 그으면 그 선이
+   칸을 가르는 것처럼 보여 가운데 정렬이 무너져 보인다. */
 .pf-total {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  margin: 0; padding: 18px 0 0; width: 100%;
-  border-top: 2px solid var(--border-2);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  margin: 0; width: 100%;
 }
-.pf-total.ok  { border-top-color: var(--pf-go); }
-.pf-total.blk { border-top-color: var(--pf-stop); }
 .pf-tlabel {
-  font-family: var(--pf-mono); font-size: 11px; letter-spacing: .14em;
+  font-family: var(--pf-mono); font-size: 13px; letter-spacing: .14em;
   text-transform: uppercase; color: var(--pf-label);
 }
 .pf-tverdict {
-  font-family: var(--pf-mono); font-size: 40px; font-weight: 700;
-  letter-spacing: -.01em; line-height: 1.1;
+  font-family: var(--pf-mono); font-size: 56px; font-weight: 700;
+  letter-spacing: -.02em; line-height: 1.05;
 }
 .pf-total.ok  .pf-tverdict { color: var(--pf-go); }
 .pf-total.blk .pf-tverdict { color: var(--pf-stop); }
@@ -334,11 +369,11 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 .pf-tcounts { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-top: 14px; }
 .pf-tactions { display: flex; flex-direction: column; gap: 7px; margin-top: 22px; width: 100%; max-width: 220px; }
 .pf-tactions button {
-  font-family: var(--pf-mono); font-size: 12px; letter-spacing: .03em;
-  padding: 9px 12px;
+  font-family: var(--pf-mono); font-size: 13px; letter-spacing: .03em;
+  padding: 11px 12px;
 }
 .pf-count {
-  font-size: 12px; color: var(--pf-label);
+  font-size: 14px; color: var(--pf-label);
   font-family: var(--pf-mono); font-variant-numeric: tabular-nums;
 }
 .pf-count b { font-weight: 700; margin-right: 2px; }
@@ -408,7 +443,8 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 
 /* 좁은 화면 — 현장에서는 휴대폰으로 본다. */
 @media (max-width: 680px) {
-  .pf { padding: 0 14px 60px; }
+  .pf { padding: 0 14px 60px; min-height: 0; display: block; }
+  .pf-run { display: block; }
   .pf-side { align-items: stretch; text-align: left; }
   .pf-total { align-items: flex-start; }
   .pf-tcounts { align-items: flex-start; }
@@ -417,12 +453,18 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
   .pf-brief { grid-template-columns: 1fr auto; gap: 12px; padding-top: 20px; }
   .pf-note { grid-column: 1; justify-self: start; }
   .pf-bmeta { grid-column: 2; }
-  .pf-split { grid-template-columns: 1fr; gap: 20px; }
+  .pf-split { grid-template-columns: 1fr; gap: 20px; height: auto; }
+  .pf-side { border-left: 0; padding-left: 0; justify-content: flex-start;
+             position: static; height: auto; }
+  .pf-row { flex: 0 0 auto; min-height: 0; }
+  .pf-rhead { padding: 12px 2px; }
+  .pf-rlabel { font-size: 15px; }
+  .pf-rright { font-size: 14px; }
   /* 🔴 좁은 화면에서는 종합이 **위**다. 현장에서 먼저 보는 것이 답이고,
      열다섯 줄을 스크롤해 내려가야 답이 나오면 화면이 제 일을 못 한다. */
-  .pf-side { position: static; order: -1; }
+  .pf-side { order: -1; }
   .pf-total { padding-top: 14px; }
-  .pf-tverdict { font-size: 34px; }
+  .pf-tverdict { font-size: 38px; }
   .pf-tcounts { flex-direction: row; flex-wrap: wrap; gap: 14px; }
   .pf-rhead { grid-template-columns: 24px 3fr 1fr; gap: 8px; padding: 12px 2px; }
   .pf-rbody { padding-left: 14px; margin-left: 26px; }
