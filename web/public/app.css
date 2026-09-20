@@ -166,14 +166,10 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
   display: flex; align-items: center; justify-content: center;
   min-height: 56vh;
 }
-.pf-hero { flex-direction: column; gap: 14px; }
 .pf-big {
   font-size: 16px; font-weight: 600; padding: 18px 44px; border-radius: 6px;
   font-family: var(--pf-mono); letter-spacing: .04em;
 }
-/* 누르기 전에 무슨 일이 일어나는지 — 읽기만 하고 10초 걸린다. */
-.pf-hint { margin: 0; color: var(--pf-label); font-size: 12px; }
-
 /* 🔴 키보드 사용자에게 지금 어디인지 보이게. */
 .pf button:focus-visible,
 .pf-modalbox button:focus-visible,
