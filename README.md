@@ -8,10 +8,22 @@
 
 수직이륙 고정익(VTOL) 기체를 조립해 운용하며, 매 비행의 로그를 수집·분석하고 기록합니다.
 
-| | |
+| 항목 | 내용 |
 |---|---|
-| 기체 | Striver Mini VTOL 4+1 (익폭 2.1m, 7kg) |
-| 비행 제어 | PX4 · Pixhawk 6C Mini |
+| 기체 | Makeflyeasy [Striver Mini VTOL 4+1](airframes/striver-mini-vtol/README.md) — 익폭 2100mm, 동체 1200mm |
+| 중량 | 최대 이륙 7.5kg · 최대 탑재 1kg |
+| 순항 | 18–21 m/s · 최대 이륙고도 3000m |
+| VTOL 모터 | [MFE M4112 KV460](components/motors/mfe-m4112-kv460/README.md) ×4 |
+| 크루즈 모터 | [MFE X4120 KV430](components/motors/mfe-x4120-kv430/README.md) ×1 |
+| VTOL ESC | [MFE ESC 650](components/esc/mfe-esc-650-50a/README.md) 6S 50A ×4 |
+| 크루즈 ESC | [MFE ESC 6100](components/esc/mfe-esc-6s-100a/README.md) 6S 100A ×1 |
+| 서보 | [MFE S3054](components/servos/mfe-s3054/README.md) 디지털 풀메탈 ×5 |
+| 비행 제어 | PX4 v1.17.0 · [Holybro Pixhawk 6C Mini](components/fc/holybro-pixhawk-6c-mini/README.md) |
+| GPS | [Holybro M10N](components/gps/holybro-m10n/README.md) (GNSS + 컴퍼스) |
+| 전원 | [Holybro PM08](components/power/holybro-pm08-can/README.md) DroneCAN |
+| 배터리 | [Fullymax 6S 16000mAh](components/batteries/fullymax-6s-16000mah/README.md) 25C (XT90S) |
+| 조종기 | [RadioMaster Boxer](components/transmitters/radiomaster-boxer/README.md) (EdgeTX) |
+| 수신기 | [RadioMaster RP4TD-M](components/receivers/radiomaster-rp4td-m/README.md) — ELRS 2.4GHz |
 | 기록 | 8일간 55회 비행, 누적 84분 |
 
 ---
