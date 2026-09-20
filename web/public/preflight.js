@@ -83,7 +83,6 @@ function setProgress(prog) {
 function setBrief(d) {
   if (d.airframe && d.airframe.type) $('bType').textContent = d.airframe.type;
   if (d.how) $('bHow').textContent = d.how;
-  if (d.agent_addr || d.agent) $('bAgent').textContent = d.agent || d.agent_addr;
   if (d.at) $('bAt').textContent = d.at.replace('T', ' ').slice(0, 19);
   if (d.elapsed != null) $('bElapsed').textContent = d.elapsed + '초';
 }
@@ -175,17 +174,6 @@ function renderFail(d) {
   }
 }
 
-function renderStanding(list) {
-  if (!list || !list.length) return;
-  $('standing').hidden = false;
-  const dl = $('standingList');
-  dl.textContent = '';
-  for (const r of list) {
-    dl.appendChild(el('dt', null, r.name));
-    dl.appendChild(withEmphasis(el('dd'), r.text));
-  }
-}
-
 // ── 암호 ────────────────────────────────────────────────────────────
 let pw = '';
 try { pw = sessionStorage.getItem('pf_pw') || ''; } catch { /* 사설 모드 */ }
@@ -201,25 +189,20 @@ const closeModal = () => { $('modal').hidden = true; };
 
 // ── 점검 ────────────────────────────────────────────────────────────
 let busy = false;
-let agentName = null;
 
 function reset() {
   $('total').hidden = true;
   $('fail').hidden = true;
   $('detailWrap').hidden = true;
-  $('standing').hidden = true;
   $('groups').textContent = '';
   $('list').textContent = '';
   rows.clear();
-  agentName = null;
 }
 
 /** 한 줄이 왔다. 종류대로 처리한다. */
 function onLine(d) {
   switch (d.t) {
     case 'agent':
-      // 어느 PC 가 답했는지. 임무 머리에 적는다.
-      agentName = d.agent_addr;
       setBrief(d);
       break;
     case 'start':
@@ -235,14 +218,12 @@ function onLine(d) {
       setGroupDone(d.group);
       break;
     case 'done':
-      if (d.agent) agentName = d.agent;
-      setBrief(Object.assign({}, d, { agent: d.agent || agentName }));
+      setBrief(d);
       // 마지막 한 벌로 목록을 맞춘다 — 늦게 온 값이 중간 판정을 바꿨을 수 있다.
       for (const g of d.groups || []) setGroupDone(g);
       if (d.error) renderFail(d);
       else renderTotal(d);
       if (d.groups && d.groups.length) renderGroups(d.groups);
-      renderStanding(d.standing);
       setNote('', '');
       break;
     default:

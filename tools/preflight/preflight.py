@@ -322,7 +322,7 @@ def gather(m, secs, verbose, on_progress=None):
     파라미터 응답을 기다리는 시간이 어차피 필요하므로, 그 동안 들어오는
     텔레메트리를 같이 주워 담는다. 따로 하면 시간이 두 배가 된다.
 
-    `on_progress(progress, params, mission, tel)` 을 주면 걷는 **중간에**
+    `on_progress(progress, params, mission, tel, msgs)` 을 주면 걷는 **중간에**
     묶음별 진행률을 흘린다. 🔴 묶음이 끝나는 순서는 정해져 있지 않다 —
     자기 데이터가 먼저 온 것이 먼저 끝난다. 화면도 그 순서로 채워진다."""
     from pymavlink import mavutil
@@ -355,7 +355,7 @@ def gather(m, secs, verbose, on_progress=None):
             v = group_progress(g, params, mission, tel, now - t0, secs)
             if v is not None:
                 prog[g] = v
-        on_progress(prog, params, mission, tel)
+        on_progress(prog, params, mission, tel, msgs)
 
     emit(force=True)
     while time.time() < t_end:
@@ -1247,18 +1247,22 @@ def stream(m, secs, meta, out):
           'groups': [{'name': g, 'label': GROUP_LABEL.get(g, g)}
                      for g in GROUP_ORDER if g in GROUP_NEEDS]})
 
-    def on_progress(prog, params, mission, tel):
+    def on_progress(prog, params, mission, tel, msgs):
         line({'t': 'prog', 'progress': {k: round(v, 3) for k, v in prog.items()},
               'elapsed': round(time.time() - t0, 2)})
         # 다 온 묶음은 그 자리에서 판정해 내보낸다. 기다릴 이유가 없다.
         ready = [g for g, v in prog.items() if v >= 1.0 and g not in sent]
         if not ready:
             return
-        r = judge(params, mission, tel, [])
+        r = judge(params, mission, tel, msgs)
         for g in ready:
             blob = group_of(r, g, time.time() - t0)
             if blob is None:
-                continue
+                # 판정거리가 아직 하나도 없는 묶음이다 (FC 가 경고를 안 뱉었다).
+                # 🔴 그래도 **끝난 것으로 내보낸다.** 안 그러면 화면이 100%
+                #    에 멈춘 채로 남아, 다 된 점검이 도는 중으로 보인다.
+                blob = {'name': g, 'items': [], 'level': 'ok', 'verdict': 'GO',
+                        'counts': {'blk': 0, 'warn': 0, 'ok': 0, 'info': 0}}
             sent.add(g)
             line({'t': 'group', 'group': blob,
                   'elapsed': round(time.time() - t0, 2)})
