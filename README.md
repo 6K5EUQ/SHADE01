@@ -26,7 +26,7 @@
 | 수신기 | [RadioMaster RP4TD-M](components/receivers/radiomaster-rp4td-m/README.md) — ELRS 2.4GHz |
 | 신고번호 | C2NV2850087 |
 | 보험 | 대인 무제한(2억원) · 대물 5억원 |
-| 기록 | 11일간 89회 비행, 누적 146.5분 (2026-08-21 ~ 09-15) |
+| 기록 | 10일간 83회 비행, 누적 136.8분 |
 
 ---
 

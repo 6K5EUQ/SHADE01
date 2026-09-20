@@ -53,11 +53,12 @@ function buildList(groups) {
   rows.clear();
   groups.forEach((g, i) => {
     const li = el('li', 'pf-row waiting');
-    li.appendChild(el('span', 'pf-rnum', String(i + 1) + '.'));
+    // 번호는 **자리 번호**다. 점검은 병렬이라 실행 순서가 아니다.
+    li.appendChild(el('span', 'pf-rnum', String(i + 1).padStart(2, '0')));
     li.appendChild(el('span', 'pf-rlabel', g.label));
     li.appendChild(el('span', 'pf-rdots'));
     // 진행률과 판정이 같은 자리에 온다 — 끝나면 퍼센트가 판정으로 바뀐다.
-    const right = el('span', 'pf-rright', '');
+    const right = el('span', 'pf-rright', '대기');
     li.appendChild(right);
     ol.appendChild(li);
     rows.set(g.name, { li, right, done: false });
@@ -69,13 +70,22 @@ function setProgress(prog) {
     const row = rows.get(name);
     if (!row || row.done) continue;
     const pct = Math.round(v * 100);
-    // 아직 아무것도 안 온 것은 회색 그대로 둔다. 0% 를 띄우면 「도는 중」
+    // 아직 아무것도 안 온 것은 대기 그대로 둔다. 0% 를 띄우면 「읽는 중」
     // 과 「아직 시작도 안 함」 이 같아 보인다.
     if (pct <= 0) continue;
     row.li.className = 'pf-row running';
     row.right.textContent = pct + '%';
     row.li.style.setProperty('--pct', pct + '%');
   }
+}
+
+/** 임무 머리. 사진 한 장으로도 근거가 되게 무엇을·어디서·언제를 채운다. */
+function setBrief(d) {
+  if (d.airframe && d.airframe.type) $('bType').textContent = d.airframe.type;
+  if (d.how) $('bHow').textContent = d.how;
+  if (d.agent_addr || d.agent) $('bAgent').textContent = d.agent || d.agent_addr;
+  if (d.at) $('bAt').textContent = d.at.replace('T', ' ').slice(0, 19);
+  if (d.elapsed != null) $('bElapsed').textContent = d.elapsed + '초';
 }
 
 function setGroupDone(g) {
@@ -98,6 +108,10 @@ function renderGroups(groups) {
 
     const head = el('header', 'pf-ghead');
     head.appendChild(el('span', 'pf-gname', g.name));
+    if (g.counts) {
+      const n = g.items.length;
+      head.appendChild(el('span', 'pf-gcount', n + '항목'));
+    }
     head.appendChild(el('span', 'pf-gdots'));
     head.appendChild(el('span', 'pf-gverdict', g.verdict));
     sec.appendChild(head);
@@ -130,16 +144,22 @@ function renderTotal(d) {
   sec.className = 'pf-total ' + (go ? 'ok' : 'blk');
   $('tverdict').textContent = go ? 'GOOD TO GO' : 'NO GO';
 
+  // 무엇이 몇 개인지. 🔴 이 수가 종합보다 많은 것을 말한다 — NO GO 하나가
+  //    진행 불가 때문인지 확인 필요 때문인지가 다음 행동을 정한다.
   const c = d.counts || {};
-  const bits = [];
-  if (c.blk) bits.push(`진행 불가 ${c.blk}`);
-  if (c.warn) bits.push(`확인 필요 ${c.warn}`);
-  if (c.ok) bits.push(`정상 ${c.ok}`);
-  if (d.how) bits.push(d.how);
-  if (d.agent) bits.push(d.agent);
-  if (d.elapsed != null) bits.push(`${d.elapsed}초`);
-  if (d.at) bits.push(d.at.replace('T', ' ').slice(0, 19));
-  $('tmeta').textContent = bits.join('  ·  ');
+  const box = $('tcounts');
+  box.textContent = '';
+  const add = (cls, n, label) => {
+    if (!n) return;
+    const t = el('span', 'pf-count ' + cls);
+    t.appendChild(el('b', null, String(n)));
+    t.appendChild(document.createTextNode(' ' + label));
+    box.appendChild(t);
+  };
+  add('blk', c.blk, '진행 불가');
+  add('warn', c.warn, '확인 필요');
+  add('ok', c.ok, '정상');
+  add('info', c.info, '참고');
 }
 
 /** 붙지 못했거나 서버가 막힌 경우. 🔴 이때 GOOD TO GO 를 그리지 않는다. */
@@ -198,12 +218,14 @@ function reset() {
 function onLine(d) {
   switch (d.t) {
     case 'agent':
-      // 어느 PC 가 답했는지. 종합 줄에 같이 적는다.
+      // 어느 PC 가 답했는지. 임무 머리에 적는다.
       agentName = d.agent_addr;
+      setBrief(d);
       break;
     case 'start':
       buildList(d.groups);
-      setNote('점검 중…', 'dim');
+      setBrief(d);
+      setNote('FC 를 읽는 중', 'dim');
       break;
     case 'prog':
       setProgress(d.progress || {});
@@ -214,10 +236,11 @@ function onLine(d) {
       break;
     case 'done':
       if (d.agent) agentName = d.agent;
+      setBrief(Object.assign({}, d, { agent: d.agent || agentName }));
       // 마지막 한 벌로 목록을 맞춘다 — 늦게 온 값이 중간 판정을 바꿨을 수 있다.
       for (const g of d.groups || []) setGroupDone(g);
       if (d.error) renderFail(d);
-      else renderTotal(Object.assign({}, d, { agent: d.agent || agentName }));
+      else renderTotal(d);
       if (d.groups && d.groups.length) renderGroups(d.groups);
       renderStanding(d.standing);
       setNote('', '');

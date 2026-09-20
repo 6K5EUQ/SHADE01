@@ -140,178 +140,317 @@ dialog::backdrop { background: rgba(0, 0, 0, .6); }
 dialog h2 { margin: 0 0 4px; font-size: 15px; }
 
 /* ── 비행 전 점검 (/preflight) ──────────────────────────────────────
-   🔴 판정은 서버가 내린다. 여기서는 색을 입힐 뿐이고, **색만으로 말하지
-      않는다** — 모든 판정에 글자(GO / 확인 / NO-GO)가 같이 붙는다.
+   계기판처럼 읽히게 짠다 — 줄마다 번호·점검 문장·상태가 같은 자리에 오고,
+   판정은 단어로 먼저 읽힌다. 색은 거들 뿐이다 (색각 이상·인쇄·햇빛).
 
-   🔴 점검은 병렬이다. 끝나는 순서가 정해져 있지 않으므로 목록을 미리 다
-      깔아 두고, 끝난 자리부터 색이 들어온다. 번호는 자리 번호지 순서가 아니다. */
-.pf { padding: 0 20px 60px; max-width: 980px; margin: 0 auto; }
+   🔴 판정은 서버가 내린다. 여기서는 색과 자리만 준다.
+   🔴 점검은 병렬이다 — 끝나는 순서가 정해져 있지 않으므로 목록을 미리 다
+      깔아 두고 끝난 자리부터 채운다. 번호는 자리 번호지 실행 순서가 아니다. */
+.pf {
+  padding: 0 20px 72px; max-width: 1000px; margin: 0 auto;
 
-/* `display:flex` 가 `hidden` 속성을 이긴다 — 숨긴 것이 그대로 보였다.
-   이 절의 요소는 전부 display 를 바꾸므로 여기서 한 번 못박는다. */
+  /* 계기 색. 기존 팔레트 위에 판정용 세 가지를 얹는다. */
+  --pf-go:   #7dd3a0;          /* 인광 — 통과 */
+  --pf-hold: #e3b341;          /* 호박 — 확인 필요 */
+  --pf-stop: #ff5347;          /* 적 — 진행 불가 */
+  --pf-rail: #30363d;          /* 계기 눈금 */
+  --pf-label: #5a6b7d;         /* 계기 레이블 — 본문보다 한 단계 뒤 */
+  --pf-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* `display:flex` 가 `hidden` 속성을 이긴다 — 숨긴 것이 그대로 보였다. */
 .pf [hidden], .pf-modal[hidden] { display: none !important; }
 
-/* 첫 화면 — 버튼 하나. 현장에서 한 손으로 누른다. */
-.pf-hero {
-  display: flex; align-items: center; justify-content: center;
-  min-height: 58vh;
+/* 계기 레이블 — 대문자·자간. 값이 아니라 이름이라는 표시다. */
+.pf-eyebrow {
+  margin: 0; font-family: var(--pf-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--pf-label);
 }
-.pf-big { font-size: 20px; font-weight: 600; padding: 22px 56px; border-radius: 10px; }
 
-.pf-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 20px 0 18px; }
+/* ── 첫 화면 ─────────────────────────────────────────────────────── */
+.pf-hero {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 14px;
+  padding: 52px 0 40px;
+  max-width: 62ch;
+}
+.pf-herotitle {
+  margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -.5px;
+  text-wrap: balance;
+}
+.pf-herosub { margin: 0; color: var(--dim); font-size: 14px; line-height: 1.75; }
+.pf-herosub b { color: var(--text); font-weight: 600; }
+.pf-big {
+  font-size: 15px; font-weight: 600; padding: 14px 30px; border-radius: 6px;
+  font-family: var(--pf-mono); letter-spacing: .04em;
+  margin-top: 6px;
+}
+/* 기체 식별 — 첫 화면에서 "무엇을 점검하는 화면인지" 를 말한다. */
+.pf-ident {
+  margin: 14px 0 0; display: grid; grid-template-columns: 56px 1fr;
+  gap: 6px 16px; font-size: 12px;
+  border-top: 1px solid var(--border); padding-top: 16px; width: 100%;
+}
+.pf-ident dt { color: var(--pf-label); font-family: var(--pf-mono); }
+.pf-ident dd { margin: 0; color: var(--dim); }
+
+/* ── 임무 머리 ───────────────────────────────────────────────────── */
+.pf-brief {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 20px; flex-wrap: wrap;
+  padding: 16px 18px; margin: 20px 0 0;
+  border: 1px solid var(--border-2); border-radius: 6px;
+  background: var(--panel);
+}
+.pf-bcall { display: flex; flex-direction: column; gap: 3px; }
+.pf-callsign {
+  font-family: var(--pf-mono); font-size: 19px; font-weight: 700;
+  letter-spacing: .1em;
+}
+.pf-btype { color: var(--pf-label); font-size: 12px; }
+.pf-bmeta {
+  margin: 0; display: flex; gap: 22px; flex-wrap: wrap;
+  font-size: 12px;
+}
+.pf-bmeta > div { display: flex; flex-direction: column; gap: 2px; }
+.pf-bmeta dt {
+  font-family: var(--pf-mono); font-size: 10px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--pf-label);
+}
+.pf-bmeta dd {
+  margin: 0; font-family: var(--pf-mono); color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 16px 0 14px; }
 .pf-bar .grow { flex: 1; }
-.pf-secs { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
-.pf-note { font-size: 13px; min-height: 1em; }
+.pf-bar #again { font-family: var(--pf-mono); font-size: 12px; letter-spacing: .04em; }
+.pf-secs { color: var(--pf-label); font-size: 12px; display: flex; align-items: center; gap: 7px; }
+.pf-note { font-size: 12px; min-height: 1em; font-family: var(--pf-mono); }
 .pf-note.dim { color: var(--dim); }
-.pf-note.bad { color: var(--bad); }
+.pf-note.bad { color: var(--pf-stop); }
 
-/* ── 점검 목록 ─────────────────────────────────────────────────────
-   한 줄 = 점검 하나. 왼쪽에 무엇을 보는지, 오른쪽에 진행률 또는 판정. */
+/* ── 점검 목록 ───────────────────────────────────────────────────
+   한 줄 = 점검 하나. 왼쪽 번호, 가운데 무엇을 보는지, 오른쪽 상태. */
 .pf-list { list-style: none; margin: 0; padding: 0; }
 .pf-row {
   position: relative;
-  display: flex; align-items: baseline; gap: 10px;
-  padding: 9px 14px;
-  border: 1px solid var(--border); border-radius: 6px;
-  background: var(--panel); margin-bottom: 6px;
+  display: grid; grid-template-columns: 30px 1fr auto 72px;
+  align-items: baseline; gap: 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: var(--panel); margin-bottom: 5px;
   overflow: hidden;
 }
-/* 진행 막대 — 줄 자체가 왼쪽부터 찬다. 별도 막대를 그리지 않는 것은
-   현장에서 한 눈에 보는 것이 「어디까지 왔나」 한 가지이기 때문이다. */
+/* 진행 막대 — 줄 자체가 왼쪽부터 찬다. 현장에서 한 눈에 보는 것은
+   「어디까지 왔나」 하나이므로 따로 막대를 그리지 않는다. */
 .pf-row::before {
   content: ''; position: absolute; inset: 0 auto 0 0;
-  width: var(--pct, 0%); background: var(--border);
+  width: var(--pct, 0%); background: #16283d;
   transition: width .18s linear;
 }
 .pf-row > * { position: relative; }
 
-.pf-rnum { color: var(--muted); font-family: var(--mono); font-size: 13px; min-width: 24px; }
+.pf-rnum {
+  font-family: var(--pf-mono); font-size: 12px; color: var(--pf-label);
+  font-variant-numeric: tabular-nums;
+}
 .pf-rlabel { font-size: 14px; }
-.pf-rdots { flex: 1; border-bottom: 1px dotted var(--border-2); transform: translateY(-3px); }
-.pf-rright { font-family: var(--mono); font-weight: 700; font-size: 13px; min-width: 52px; text-align: right; }
+.pf-rdots { border-bottom: 1px dotted var(--pf-rail); align-self: center; height: 1px; }
+.pf-rright {
+  font-family: var(--pf-mono); font-weight: 700; font-size: 12px;
+  text-align: right; letter-spacing: .06em;
+  font-variant-numeric: tabular-nums;
+}
 
-/* 아직 차례가 안 온 것 — 회색. 무엇을 기다리는지만 읽히면 된다. */
-.pf-row.waiting { opacity: .45; }
-.pf-row.waiting .pf-rlabel { color: var(--muted); }
+/* 아직 차례가 안 온 것 — 물러나 있다. 무엇을 기다리는지만 읽히면 된다. */
+.pf-row.waiting { border-color: var(--border); }
+.pf-row.waiting .pf-rlabel,
+.pf-row.waiting .pf-rnum { color: var(--pf-label); }
+.pf-row.waiting .pf-rright { color: var(--pf-label); font-weight: 400; }
 
-/* 도는 중 — 퍼센트가 오른쪽에 뜨고 줄이 왼쪽부터 찬다. */
+/* 읽는 중 — 퍼센트가 오른쪽에 뜨고 줄이 왼쪽부터 찬다. */
+.pf-row.running { border-color: #1f4468; }
 .pf-row.running .pf-rright { color: var(--accent); }
-.pf-row.running::before { background: #17304f; }
 
-/* 끝난 것 — 판정 색. 🔴 글자(GO/확인/NO-GO)가 같이 있으므로 색은 거들 뿐이다. */
+/* 끝난 것 — 판정 색. 🔴 단어가 같이 있으므로 색은 거들 뿐이다. */
 .pf-row.done::before { background: transparent; }
 .pf-row.done.ok   { border-color: #1d572f; }
 .pf-row.done.warn { border-color: #5c421c; }
-.pf-row.done.blk  { border-color: #63232a; }
-.pf-row.done.ok   .pf-rright { color: var(--ok); }
-.pf-row.done.warn .pf-rright { color: var(--warn); }
-.pf-row.done.blk  .pf-rright { color: var(--bad); }
-.pf-row.done.info .pf-rright { color: var(--muted); }
+.pf-row.done.blk  { border-color: #7a1f26; background: #1a1012; }
+.pf-row.done.ok   .pf-rright { color: var(--pf-go); }
+.pf-row.done.warn .pf-rright { color: var(--pf-hold); }
+.pf-row.done.blk  .pf-rright { color: var(--pf-stop); }
+.pf-row.done.info .pf-rright { color: var(--pf-label); }
 
 /* 🔴 애니메이션을 끄라고 한 사용자에게는 끈다. */
 @media (prefers-reduced-motion: reduce) { .pf-row::before { transition: none; } }
 
 /* ── 종합 ─────────────────────────────────────────────────────────
-   화면에서 제일 큰 글자다 — 현장에서 멀리서도 읽혀야 한다. */
+   화면에서 제일 큰 글자다 — 현장에서 팔 길이 밖에서도 읽혀야 한다. */
 .pf-total {
-  display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap;
-  margin: 18px 0 0; padding: 18px 22px;
-  border: 1px solid var(--border-2); border-left-width: 5px;
-  border-radius: 8px; background: var(--panel);
+  margin: 18px 0 0; padding: 20px 22px;
+  border: 1px solid var(--border-2); border-left-width: 4px;
+  border-radius: 4px; background: var(--panel);
 }
-.pf-total.ok  { border-left-color: var(--ok); }
-.pf-total.blk { border-left-color: var(--bad); }
-.pf-tlabel { font-size: 15px; font-weight: 600; color: var(--dim); }
-.pf-tdots { flex: 1; border-bottom: 1px dotted var(--border-2); transform: translateY(-5px); min-width: 30px; }
-.pf-tverdict { font-size: 28px; font-weight: 700; letter-spacing: -.5px; font-family: var(--mono); }
-.pf-total.ok  .pf-tverdict { color: var(--ok); }
-.pf-total.blk .pf-tverdict { color: var(--bad); }
-.pf-tmeta { flex-basis: 100%; color: var(--muted); font-size: 12px; font-family: var(--mono); }
+.pf-total.ok  { border-left-color: var(--pf-go); }
+.pf-total.blk { border-left-color: var(--pf-stop); }
+.pf-trow { display: flex; align-items: baseline; gap: 16px; }
+.pf-tlabel {
+  font-family: var(--pf-mono); font-size: 12px; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--pf-label); white-space: nowrap;
+}
+.pf-tdots { flex: 1; border-bottom: 1px dotted var(--pf-rail); transform: translateY(-6px); min-width: 24px; }
+.pf-tverdict {
+  font-family: var(--pf-mono); font-size: 30px; font-weight: 700;
+  letter-spacing: .04em; white-space: nowrap;
+}
+.pf-total.ok  .pf-tverdict { color: var(--pf-go); }
+.pf-total.blk .pf-tverdict { color: var(--pf-stop); }
+/* 무엇이 몇 개인지 — NO GO 하나가 진행 불가 때문인지 확인 필요 때문인지가
+   다음 행동을 정한다. */
+.pf-tcounts { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 12px; }
+.pf-count {
+  font-size: 12px; color: var(--pf-label);
+  font-family: var(--pf-mono); font-variant-numeric: tabular-nums;
+}
+.pf-count b { font-weight: 700; margin-right: 2px; }
+.pf-count.blk b  { color: var(--pf-stop); }
+.pf-count.warn b { color: var(--pf-hold); }
+.pf-count.ok b   { color: var(--pf-go); }
+.pf-count.info b { color: var(--dim); }
 
-/* 붙지 못했을 때. 🔴 이 자리가 비어 보이면 안 된다 — 모르는 것을 안전하다고
-   읽게 된다. 사유와 확인할 것을 그대로 적는다. */
+/* 붙지 못했을 때. 🔴 이 자리가 비어 보이면 안 된다 — 모르는 것을
+   안전하다고 읽게 된다. 사유와 확인할 것을 그대로 적는다. */
 .pf-fail {
-  margin: 18px 0 0; padding: 14px 18px;
-  border: 1px solid #63232a; border-left: 5px solid var(--bad);
-  border-radius: 8px; background: #1a1012;
+  margin: 16px 0 0; padding: 15px 18px;
+  border: 1px solid #7a1f26; border-left: 4px solid var(--pf-stop);
+  border-radius: 4px; background: #1a1012;
 }
-.pf-failtitle { color: var(--bad); font-weight: 600; margin-bottom: 8px; }
-.pf-failhead { color: var(--dim); font-size: 12px; margin: 10px 0 4px; font-weight: 600; }
-.pf-failnote { color: var(--dim); font-size: 12px; font-family: var(--mono); line-height: 1.8; }
+.pf-failtitle { color: var(--pf-stop); font-weight: 600; margin-bottom: 9px; }
+.pf-failhead {
+  color: var(--pf-label); font-size: 10px; margin: 12px 0 5px;
+  font-family: var(--pf-mono); letter-spacing: .12em; text-transform: uppercase;
+}
+.pf-failnote { color: var(--dim); font-size: 12px; font-family: var(--pf-mono); line-height: 1.8; }
 
-/* ── 항목별 상세 (접어 둔다) ────────────────────────────────────── */
-.pf-detail { margin-top: 20px; }
+/* ── 항목별 상세 ───────────────────────────────────────────────── */
+.pf-detail { margin-top: 26px; }
 .pf-detail > summary {
-  cursor: pointer; color: var(--dim); font-size: 13px;
-  padding: 8px 0; user-select: none;
+  cursor: pointer; color: var(--pf-label); font-size: 12px;
+  font-family: var(--pf-mono); letter-spacing: .06em;
+  padding: 9px 0; user-select: none;
 }
 .pf-detail > summary:hover { color: var(--text); }
+.pf-detail > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .pf-group {
-  border: 1px solid var(--border); border-radius: 8px;
-  background: var(--panel); margin-bottom: 10px; overflow: hidden;
+  border: 1px solid var(--border); border-radius: 4px;
+  background: var(--panel); margin-bottom: 8px; overflow: hidden;
 }
 .pf-ghead {
   display: flex; align-items: baseline; gap: 10px;
   padding: 11px 16px; border-bottom: 1px solid var(--border);
 }
-.pf-gname { font-weight: 600; font-size: 14px; }
-.pf-gdots { flex: 1; border-bottom: 1px dotted var(--border-2); transform: translateY(-3px); }
-.pf-gverdict { font-family: var(--mono); font-weight: 700; font-size: 13px; }
-.pf-group.ok   .pf-gverdict { color: var(--ok); }
-.pf-group.warn .pf-gverdict { color: var(--warn); }
-.pf-group.blk  .pf-gverdict { color: var(--bad); }
-.pf-group.info .pf-gverdict { color: var(--muted); }
-.pf-group.blk  { border-color: #63232a; }
+.pf-gname { font-weight: 600; font-size: 13px; }
+.pf-gcount { font-family: var(--pf-mono); font-size: 11px; color: var(--pf-label); }
+.pf-gdots { flex: 1; border-bottom: 1px dotted var(--pf-rail); transform: translateY(-3px); }
+.pf-gverdict {
+  font-family: var(--pf-mono); font-weight: 700; font-size: 12px; letter-spacing: .06em;
+}
+.pf-group.ok   .pf-gverdict { color: var(--pf-go); }
+.pf-group.warn .pf-gverdict { color: var(--pf-hold); }
+.pf-group.blk  .pf-gverdict { color: var(--pf-stop); }
+.pf-group.info .pf-gverdict { color: var(--pf-label); }
+.pf-group.blk  { border-color: #7a1f26; }
 .pf-group.warn { border-color: #5c421c; }
 
-.pf-items { padding: 4px 0; }
+.pf-items { padding: 3px 0; }
 .pf-item {
   display: grid;
-  grid-template-columns: 24px minmax(0, 190px) minmax(0, 1fr);
-  gap: 4px 8px; align-items: baseline;
+  grid-template-columns: 22px minmax(0, 200px) minmax(0, 1fr);
+  gap: 3px 10px; align-items: baseline;
   padding: 5px 16px;
 }
-.pf-mark { text-align: center; font-size: 12px; }
-.pf-item.ok   .pf-mark { color: var(--ok); }
-.pf-item.warn .pf-mark { color: var(--warn); }
-.pf-item.blk  .pf-mark { color: var(--bad); }
-.pf-item.info .pf-mark { color: var(--muted); }
-.pf-iname { font-family: var(--mono); font-size: 12px; color: var(--dim); word-break: break-all; }
-.pf-idetail { font-size: 13px; word-break: break-word; }
+.pf-mark { text-align: center; font-size: 11px; }
+.pf-item.ok   .pf-mark { color: var(--pf-go); }
+.pf-item.warn .pf-mark { color: var(--pf-hold); }
+.pf-item.blk  .pf-mark { color: var(--pf-stop); }
+.pf-item.info .pf-mark { color: var(--pf-label); }
+.pf-iname {
+  font-family: var(--pf-mono); font-size: 11px; color: var(--pf-label);
+  word-break: break-all;
+}
+.pf-idetail {
+  font-size: 13px; word-break: break-word;
+  font-variant-numeric: tabular-nums;
+}
 .pf-item.info .pf-idetail { color: var(--dim); }
-/* 왜 막혔는지가 다음 행동을 정한다 — 접지 않는다. */
-.pf-why { grid-column: 3; color: var(--muted); font-size: 12px; line-height: 1.6; margin-top: 2px; }
+/* 왜 막혔는지가 다음 행동을 정한다 — 접지 않는다 (터미널도 안 접는다). */
+.pf-why { grid-column: 3; color: var(--pf-label); font-size: 12px; line-height: 1.65; margin-top: 2px; }
 
-.pf-standing { margin-top: 28px; }
-.pf-standing h2 { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
-.pf-dim { color: var(--muted); font-weight: 400; font-size: 12px; }
-.pf-standing dl { margin: 0; display: grid; grid-template-columns: 76px 1fr; gap: 6px 12px; }
-.pf-standing dt { color: var(--dim); font-size: 12px; font-weight: 600; }
-.pf-standing dd { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+/* ── 상시 주의 · 터미널 절차 ──────────────────────────────────── */
+.pf-h2 {
+  font-family: var(--pf-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--pf-label);
+  margin: 0 0 12px; display: flex; gap: 10px; align-items: baseline;
+  border-bottom: 1px solid var(--border); padding-bottom: 9px;
+}
+.pf-dim { color: var(--pf-rail); letter-spacing: .06em; text-transform: none; }
 
-/* 암호 창 */
+.pf-standing { margin-top: 32px; }
+.pf-standing dl { margin: 0; display: grid; grid-template-columns: 80px 1fr; gap: 8px 16px; }
+.pf-standing dt {
+  color: var(--dim); font-size: 12px; font-weight: 600;
+  font-family: var(--pf-mono);
+}
+.pf-standing dd { margin: 0; color: var(--pf-label); font-size: 12px; line-height: 1.65; }
+
+.pf-cli { margin-top: 32px; }
+.pf-clinote { color: var(--pf-label); font-size: 12px; line-height: 1.75; margin: 0 0 14px; max-width: 68ch; }
+.pf-clinote b { color: var(--dim); }
+.pf-cmds { margin: 0 0 16px; display: flex; flex-direction: column; gap: 9px; }
+.pf-cmds > div { display: grid; grid-template-columns: minmax(0, 330px) 1fr; gap: 4px 18px; align-items: baseline; }
+.pf-cmds dt { min-width: 0; overflow-x: auto; }
+.pf-cmds code {
+  font-family: var(--pf-mono); font-size: 12px; color: var(--text);
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 3px; padding: 3px 8px; white-space: nowrap;
+}
+.pf-cmds dd { margin: 0; color: var(--pf-label); font-size: 12px; line-height: 1.6; }
+.pf-cmds dd code { border: 0; background: none; padding: 0; color: var(--dim); }
+
+/* ── 암호 창 ─────────────────────────────────────────────────────── */
 .pf-modal {
   position: fixed; inset: 0; z-index: 900;
-  background: rgba(1, 4, 9, .72);
+  background: rgba(1, 4, 9, .78);
   display: flex; align-items: center; justify-content: center; padding: 20px;
 }
 .pf-modalbox {
   background: var(--panel); border: 1px solid var(--border-2);
-  border-radius: 10px; padding: 22px; width: 280px;
+  border-radius: 6px; padding: 24px; width: 300px;
   display: flex; flex-direction: column; gap: 10px;
 }
 .pf-modalbox label { font-size: 13px; color: var(--dim); }
-.pf-modalbox input { width: 100%; font-size: 16px; letter-spacing: 2px; }
-.pf-modalerr { color: var(--bad); font-size: 12px; }
+.pf-modalbox input {
+  width: 100%; font-size: 17px; letter-spacing: .3em;
+  font-family: var(--pf-mono); text-align: center;
+}
+.pf-modalerr { color: var(--pf-stop); font-size: 12px; }
 .pf-modalrow { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+.pf-modalrow button { font-family: var(--pf-mono); font-size: 12px; letter-spacing: .04em; }
 
 /* 좁은 화면 — 현장에서는 휴대폰으로 본다. */
-@media (max-width: 620px) {
-  .pf { padding: 0 12px 60px; }
-  .pf-big { width: 100%; padding: 24px 0; }
+@media (max-width: 680px) {
+  .pf { padding: 0 14px 60px; }
+  .pf-hero { padding: 36px 0 28px; }
+  .pf-herotitle { font-size: 24px; }
+  .pf-big { width: 100%; padding: 16px 0; }
+  .pf-brief { flex-direction: column; gap: 14px; }
+  .pf-bmeta { gap: 16px; }
+  .pf-row { grid-template-columns: 26px 1fr auto 60px; gap: 8px; padding: 9px 12px; }
   .pf-rlabel { font-size: 13px; }
-  .pf-item { grid-template-columns: 20px minmax(0, 1fr); }
-  .pf-idetail, .pf-why { grid-column: 2; }
   .pf-tverdict { font-size: 24px; }
+  .pf-item { grid-template-columns: 18px minmax(0, 1fr); }
+  .pf-idetail, .pf-why { grid-column: 2; }
+  .pf-cmds > div { grid-template-columns: 1fr; }
 }

@@ -1120,6 +1120,17 @@ GROUP_NEEDS = {
     'FC 자신의 말': {'until_end': True},
 }
 
+# 🔴 기체 식별. 정본은 OPERATIONS.md 「기체 식별」 표다 — 바꿀 일이 생기면
+#    거기부터 고치고 여기를 맞춘다. 화면이 "무엇을 점검하고 있는지" 를
+#    말하려면 기체 이름이 필요한데, 그것을 FC 에서 읽어 올 방법이 없다.
+AIRFRAME = {
+    'callsign': 'SHADE01',
+    'type': 'Striver Mini VTOL (4+1)',
+    'fc': 'Pixhawk 6C Mini',
+    'fw': 'PX4 v1.17.0 커스텀 (37e76b278a)',
+    'link': 'FC USB → rim3 브리지',
+}
+
 # 화면에 낼 점검 문장. 🔴 판정이 아니라 **무엇을 보고 있는지**를 적는다.
 GROUP_LABEL = {
     '쿼드 전용 잠금': '쿼드 전용 잠금을 점검합니다',
@@ -1232,6 +1243,7 @@ def stream(m, secs, meta, out):
           'at': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
           'how': meta.get('how'),
           'secs': secs,
+          'airframe': AIRFRAME,
           'groups': [{'name': g, 'label': GROUP_LABEL.get(g, g)}
                      for g in GROUP_ORDER if g in GROUP_NEEDS]})
 
@@ -1291,6 +1303,7 @@ def as_json(r, meta, elapsed):
     return {
         'ok': True,
         'at': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+        'airframe': AIRFRAME,
         'verdict': r.verdict(),
         'exit': 0 if r.verdict() == 'GO' else (1 if r.verdict() == 'NO-GO' else 2),
         'elapsed': round(elapsed, 2),

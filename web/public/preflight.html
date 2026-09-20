@@ -2,6 +2,7 @@
 <meta charset="utf-8">
 <title>SHADE01 비행 전 점검</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap">
 <link rel="stylesheet" href="/app.css">
 
 <!--
@@ -25,16 +26,43 @@
 </header>
 
 <main class="pf">
-  <!-- 아무것도 안 한 상태의 화면은 버튼 하나다. 현장에서 한 손으로 누른다. -->
+  <!-- 아무것도 안 한 상태. 무엇을 하는 화면인지 알리고 버튼 하나를 준다. -->
   <section class="pf-hero" id="hero">
-    <button class="primary pf-big" id="go">기체 점검</button>
+    <p class="pf-eyebrow">PREFLIGHT · 비행 전 점검</p>
+    <h2 class="pf-herotitle">FC 를 읽어 GO / NO GO 를 낸다</h2>
+    <p class="pf-herosub">
+      파라미터·미션·센서·링크를 <b>한 번에</b> 걷는다. 읽기 전용이라
+      FC 안의 값은 바뀌지 않는다.
+    </p>
+    <button class="primary pf-big" id="go">기체 점검 개시</button>
+
+    <dl class="pf-ident" id="identIdle">
+      <dt>기체</dt><dd>Striver Mini VTOL (4+1)</dd>
+      <dt>FC</dt><dd>Pixhawk 6C Mini · PX4 v1.17.0 커스텀</dd>
+      <dt>경로</dt><dd>FC USB → rim3 브리지 → Tailscale</dd>
+    </dl>
   </section>
 
   <!-- 점검이 시작되면 이 아래가 켜진다. -->
   <div class="pf-run" id="run" hidden>
+    <!-- 임무 머리. 무엇을·어디서·언제 점검했는지가 한 줄에 있어야
+         나중에 사진 한 장으로도 근거가 된다. -->
+    <div class="pf-brief">
+      <div class="pf-bcall">
+        <span class="pf-callsign">SHADE01</span>
+        <span class="pf-btype" id="bType">Striver Mini VTOL (4+1)</span>
+      </div>
+      <dl class="pf-bmeta">
+        <div><dt>경로</dt><dd id="bHow">—</dd></div>
+        <div><dt>에이전트</dt><dd id="bAgent">—</dd></div>
+        <div><dt>시각</dt><dd id="bAt">—</dd></div>
+        <div><dt>소요</dt><dd id="bElapsed">—</dd></div>
+      </dl>
+    </div>
+
     <div class="pf-bar">
-      <button class="primary" id="again" hidden>다시 점검</button>
-      <label class="pf-secs">수집
+      <button class="primary" id="again" hidden>재점검</button>
+      <label class="pf-secs" for="secs">수집
         <select id="secs">
           <option value="4">4초</option>
           <option value="6" selected>6초</option>
@@ -50,23 +78,53 @@
 
     <!-- 종합. 전부 끝나야 뜬다. -->
     <section class="pf-total" id="total" hidden>
-      <span class="pf-tlabel">종합결과</span>
-      <span class="pf-tdots"></span>
-      <span class="pf-tverdict" id="tverdict">—</span>
-      <div class="pf-tmeta" id="tmeta"></div>
+      <div class="pf-trow">
+        <span class="pf-tlabel">종합결과</span>
+        <span class="pf-tdots"></span>
+        <span class="pf-tverdict" id="tverdict">—</span>
+      </div>
+      <div class="pf-tcounts" id="tcounts"></div>
     </section>
 
     <section id="fail" class="pf-fail" hidden></section>
 
-    <!-- 항목별 상세. 종합 아래에 접어 둔다 — 현장에서 먼저 보는 것은 판정이다. -->
+    <!-- 항목별 상세. 현장에서 먼저 보는 것은 판정이므로 접어 둔다. -->
     <details class="pf-detail" id="detailWrap" hidden>
-      <summary>항목별 상세</summary>
+      <summary>항목별 상세 — 무엇을 읽었는지</summary>
       <div id="groups"></div>
     </details>
 
     <section id="standing" class="pf-standing" hidden>
-      <h2>기억할 것 <span class="pf-dim">(판정과 무관 — 매번 같다)</span></h2>
+      <h2 class="pf-h2">상시 주의 <span class="pf-dim">판정과 무관 · 매 비행 동일</span></h2>
       <dl id="standingList"></dl>
+    </section>
+
+    <!-- 이 화면이 못 하는 것. 터미널 절차를 그대로 적어 둔다. -->
+    <section class="pf-cli">
+      <h2 class="pf-h2">같은 점검을 터미널에서</h2>
+      <p class="pf-clinote">
+        판정은 <b>같은 코드</b>가 낸다. 화면이 안 열리는 곳에서도, 스크립트
+        안에서도 쓸 수 있다.
+      </p>
+      <dl class="pf-cmds">
+        <div><dt><code>./shade01 test</code></dt>
+             <dd>판정만. 종료코드 <code>0</code> GO · <code>1</code> NO-GO · <code>2</code> 확인 후 판단</dd></div>
+        <div><dt><code>./shade01 test -v</code></dt>
+             <dd>정상·참고 항목까지 전부</dd></div>
+        <div><dt><code>./shade01 test -t 10</code></dt>
+             <dd>텔레메트리를 10초 모은다 (기본 6초)</dd></div>
+        <div><dt><code>./shade01 test --json</code></dt>
+             <dd>판정 한 벌을 JSON 으로</dd></div>
+        <div><dt><code>./shade01 test --stream</code></dt>
+             <dd>끝나는 묶음부터 NDJSON 으로 — 이 화면이 쓰는 것</dd></div>
+        <div><dt><code>./shade01 test --conn udpout:100.117.47.105:14550</code></dt>
+             <dd>다른 PC 에 꽂힌 FC 를 직접 지정</dd></div>
+      </dl>
+      <p class="pf-clinote">
+        연결 순서는 <b>시리얼 직결 → 이 PC 의 브리지 → 다른 PC 의 브리지</b> 다.
+        FC 시리얼은 한 번에 하나만 쓰므로, 누가 쥐고 있으면 도구가 점유자를
+        이름으로 대 준다.
+      </p>
     </section>
   </div>
 </main>
@@ -74,12 +132,13 @@
 <!-- 암호 창. 버튼을 누르면 뜬다. -->
 <div class="pf-modal" id="modal" hidden>
   <form class="pf-modalbox" id="pwForm">
-    <label for="pw">암호</label>
+    <p class="pf-eyebrow">인증</p>
+    <label for="pw">점검 암호</label>
     <input type="password" id="pw" inputmode="numeric" autocomplete="current-password">
     <div class="pf-modalerr" id="pwErr" hidden></div>
     <div class="pf-modalrow">
       <button type="button" id="cancel">취소</button>
-      <button type="submit" class="primary">점검</button>
+      <button type="submit" class="primary">개시</button>
     </div>
   </form>
 </div>

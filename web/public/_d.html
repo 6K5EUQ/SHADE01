@@ -1,0 +1,15 @@
+<!doctype html><meta charset="utf-8"><title>d</title>
+<script>
+// 🔴 검증용. 커밋하지 않는다.
+window.addEventListener('DOMContentLoaded', async () => {
+  const f=document.createElement('iframe');
+  f.src='/preflight'; f.style.cssText='width:1090px;height:3000px;border:0';
+  document.body.style.margin='0'; document.body.appendChild(f);
+  await new Promise(r=>f.onload=r);
+  const D=f.contentDocument,W=f.contentWindow;
+  D.getElementById('go').click();
+  D.getElementById('pw').value='7777';
+  D.getElementById('pwForm').dispatchEvent(new W.Event('submit',{cancelable:true}));
+  setTimeout(()=>{const dw=D.getElementById('detailWrap'); if(dw) dw.open=false;},5000);
+});
+</script>
