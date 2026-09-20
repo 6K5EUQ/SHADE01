@@ -173,22 +173,15 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 
 /* ── 임무 머리 ───────────────────────────────────────────────────── */
 .pf-brief {
-  display: flex; justify-content: space-between; align-items: flex-start;
-  gap: 20px; flex-wrap: wrap;
-  padding: 16px 18px; margin: 20px 0 0;
-  border: 1px solid var(--border-2); border-radius: 6px;
-  background: var(--panel);
+  display: flex; align-items: baseline; gap: 18px; flex-wrap: wrap;
+  padding: 26px 4px 16px; margin: 0;
 }
-.pf-bcall { display: flex; flex-direction: column; gap: 3px; }
+.pf-brief .grow { flex: 1; }
 .pf-callsign {
   font-family: var(--pf-mono); font-size: 19px; font-weight: 700;
   letter-spacing: .1em;
 }
-.pf-btype { color: var(--pf-label); font-size: 12px; }
-.pf-bmeta {
-  margin: 0; display: flex; gap: 22px; flex-wrap: wrap;
-  font-size: 12px;
-}
+.pf-bmeta { margin: 0; display: flex; gap: 22px; flex-wrap: wrap; font-size: 12px; }
 .pf-bmeta > div { display: flex; flex-direction: column; gap: 2px; }
 .pf-bmeta dt {
   font-family: var(--pf-mono); font-size: 10px; letter-spacing: .12em;
@@ -199,30 +192,27 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
   font-variant-numeric: tabular-nums;
 }
 
-.pf-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 16px 0 14px; }
-.pf-bar .grow { flex: 1; }
-.pf-bar #again { font-family: var(--pf-mono); font-size: 12px; letter-spacing: .04em; }
 .pf-note { font-size: 12px; min-height: 1em; font-family: var(--pf-mono); }
 .pf-note.dim { color: var(--dim); }
 .pf-note.bad { color: var(--pf-stop); }
 
 /* ── 점검 목록 ───────────────────────────────────────────────────
-   한 줄 = 점검 하나. 왼쪽 번호, 가운데 무엇을 보는지, 오른쪽 상태. */
-.pf-list { list-style: none; margin: 0; padding: 0; }
+   🔴 **줄마다 상자를 두르지 않는다.** 열다섯 줄에 테두리·배경을 주면 테두리
+      쪽이 먼저 읽히고 정작 판정이 묻힌다 (실제로 그랬다). 배경 위에 글자만
+      놓고, 줄을 가르는 것은 가는 선 하나로 충분하다. */
+.pf-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
 .pf-row {
   position: relative;
-  display: grid; grid-template-columns: 30px 1fr auto 72px;
+  display: grid; grid-template-columns: 30px 1fr 74px;
   align-items: baseline; gap: 12px;
-  padding: 10px 16px;
-  border: 1px solid var(--border); border-radius: 4px;
-  background: var(--panel); margin-bottom: 5px;
-  overflow: hidden;
+  padding: 13px 4px;
+  border-bottom: 1px solid var(--border);
 }
-/* 진행 막대 — 줄 자체가 왼쪽부터 찬다. 현장에서 한 눈에 보는 것은
-   「어디까지 왔나」 하나이므로 따로 막대를 그리지 않는다. */
+/* 진행 막대 — 줄 바닥을 왼쪽부터 채운다. 도는 중에만 보이고, 끝나면 사라져
+   판정 말고는 아무것도 안 남는다. */
 .pf-row::before {
-  content: ''; position: absolute; inset: 0 auto 0 0;
-  width: var(--pct, 0%); background: #16283d;
+  content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  width: var(--pct, 0%); background: var(--accent);
   transition: width .18s linear;
 }
 .pf-row > * { position: relative; }
@@ -231,33 +221,29 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
   font-family: var(--pf-mono); font-size: 12px; color: var(--pf-label);
   font-variant-numeric: tabular-nums;
 }
-.pf-rlabel { font-size: 14px; }
-.pf-rdots { border-bottom: 1px dotted var(--pf-rail); align-self: center; height: 1px; }
+.pf-rlabel { font-size: 15px; }
 .pf-rright {
-  font-family: var(--pf-mono); font-weight: 700; font-size: 12px;
-  text-align: right; letter-spacing: .06em;
-  font-variant-numeric: tabular-nums;
+  font-family: var(--pf-mono); font-weight: 700; font-size: 13px;
+  text-align: right; letter-spacing: .08em;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 
-/* 아직 차례가 안 온 것 — 물러나 있다. 무엇을 기다리는지만 읽히면 된다. */
-.pf-row.waiting { border-color: var(--border); }
-.pf-row.waiting .pf-rlabel,
-.pf-row.waiting .pf-rnum { color: var(--pf-label); }
-.pf-row.waiting .pf-rright { color: var(--pf-label); font-weight: 400; }
+/* 아직 차례가 안 온 것 — 물러나 있다. */
+.pf-row.waiting .pf-rlabel { color: var(--pf-label); }
+.pf-row.waiting .pf-rright { color: var(--pf-rail); font-weight: 400; }
 
-/* 읽는 중 — 퍼센트가 오른쪽에 뜨고 줄이 왼쪽부터 찬다. */
-.pf-row.running { border-color: #1f4468; }
-.pf-row.running .pf-rright { color: var(--accent); }
+/* 읽는 중 — 퍼센트가 오른쪽에 뜨고 줄 바닥이 찬다. */
+.pf-row.running .pf-rright { color: var(--accent); font-weight: 500; }
 
-/* 끝난 것 — 판정 색. 🔴 단어가 같이 있으므로 색은 거들 뿐이다. */
-.pf-row.done::before { background: transparent; }
-.pf-row.done.ok   { border-color: #1d572f; }
-.pf-row.done.warn { border-color: #5c421c; }
-.pf-row.done.blk  { border-color: #7a1f26; background: #1a1012; }
+/* 끝난 것. 🔴 판정은 둘뿐이다 — GO 아니면 NO GO. 색도 둘이다. */
+.pf-row.done::before { width: 0; }
 .pf-row.done.ok   .pf-rright { color: var(--pf-go); }
-.pf-row.done.warn .pf-rright { color: var(--pf-hold); }
+.pf-row.done.warn .pf-rright,
 .pf-row.done.blk  .pf-rright { color: var(--pf-stop); }
-.pf-row.done.info .pf-rright { color: var(--pf-label); }
+.pf-row.done.info .pf-rright { color: var(--pf-label); font-weight: 400; }
+/* NO GO 는 이름 쪽도 함께 든다 — 훑을 때 어느 줄인지가 먼저 보여야 한다. */
+.pf-row.done.warn .pf-rlabel,
+.pf-row.done.blk  .pf-rlabel { color: var(--pf-stop); }
 
 /* 🔴 애니메이션을 끄라고 한 사용자에게는 끈다. */
 @media (prefers-reduced-motion: reduce) { .pf-row::before { transition: none; } }
@@ -265,12 +251,11 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 /* ── 종합 ─────────────────────────────────────────────────────────
    화면에서 제일 큰 글자다 — 현장에서 팔 길이 밖에서도 읽혀야 한다. */
 .pf-total {
-  margin: 18px 0 0; padding: 20px 22px;
-  border: 1px solid var(--border-2); border-left-width: 4px;
-  border-radius: 4px; background: var(--panel);
+  margin: 0; padding: 26px 4px 0;
+  border-top: 2px solid var(--border-2);
 }
-.pf-total.ok  { border-left-color: var(--pf-go); }
-.pf-total.blk { border-left-color: var(--pf-stop); }
+.pf-total.ok  { border-top-color: var(--pf-go); }
+.pf-total.blk { border-top-color: var(--pf-stop); }
 .pf-trow { display: flex; align-items: baseline; gap: 16px; }
 .pf-tlabel {
   font-family: var(--pf-mono); font-size: 12px; letter-spacing: .14em;
@@ -388,10 +373,10 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 @media (max-width: 680px) {
   .pf { padding: 0 14px 60px; }
   .pf-big { width: 100%; padding: 18px 0; }
-  .pf-brief { flex-direction: column; gap: 14px; }
+  .pf-brief { gap: 10px; padding-top: 20px; }
   .pf-bmeta { gap: 16px; }
-  .pf-row { grid-template-columns: 26px 1fr auto 60px; gap: 8px; padding: 9px 12px; }
-  .pf-rlabel { font-size: 13px; }
+  .pf-row { grid-template-columns: 24px 1fr 62px; gap: 8px; padding: 12px 2px; }
+  .pf-rlabel { font-size: 14px; }
   .pf-tverdict { font-size: 24px; }
   .pf-item { grid-template-columns: 18px minmax(0, 1fr); }
   .pf-idetail, .pf-why { grid-column: 2; }

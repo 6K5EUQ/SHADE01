@@ -65,7 +65,6 @@ function buildList(groups) {
     // 번호는 **자리 번호**다. 점검은 병렬이라 실행 순서가 아니다.
     li.appendChild(el('span', 'pf-rnum', String(i + 1).padStart(2, '0')));
     li.appendChild(el('span', 'pf-rlabel', g.label));
-    li.appendChild(el('span', 'pf-rdots'));
     // 진행률과 판정이 같은 자리에 온다 — 끝나면 퍼센트가 판정으로 바뀐다.
     const right = el('span', 'pf-rright', '대기');
     li.appendChild(right);
@@ -90,7 +89,6 @@ function setProgress(prog) {
 
 /** 임무 머리. 사진 한 장으로도 언제 점검한 것인지가 남아야 한다. */
 function setBrief(d) {
-  if (d.airframe && d.airframe.type) $('bType').textContent = d.airframe.type;
   if (d.at) $('bAt').textContent = d.at.replace('T', ' ').slice(0, 19);
 }
 
@@ -162,9 +160,11 @@ function renderTotal(d) {
     t.appendChild(document.createTextNode(' ' + label));
     box.appendChild(t);
   };
-  add('blk', c.blk, '진행 불가');
-  add('warn', c.warn, '확인 필요');
-  add('ok', c.ok, '정상');
+  // 🔴 NO GO 안에서 무엇이 막는 것이고 무엇이 볼 것인지는 갈라 둔다 —
+  //    그 차이가 다음 행동을 정한다. 이름은 줄 판정과 같은 말을 쓴다.
+  add('blk', c.blk, 'NO GO · 진행 불가');
+  add('warn', c.warn, 'NO GO · 확인 필요');
+  add('ok', c.ok, 'GO');
   add('info', c.info, '참고');
 }
 
@@ -244,10 +244,8 @@ async function run() {
 
   busy = true;
   $('go').disabled = true;
-  $('again').disabled = true;
   $('hero').hidden = true;
   $('run').hidden = false;
-  $('again').hidden = false;
   reset();
   setNote('FC 에 붙는 중…', 'dim');
 
@@ -301,12 +299,10 @@ async function run() {
   } finally {
     busy = false;
     $('go').disabled = false;
-    $('again').disabled = false;
   }
 }
 
 $('go').addEventListener('click', () => run());
-$('again').addEventListener('click', () => run());
 $('cancel').addEventListener('click', closeModal);
 $('pwForm').addEventListener('submit', (e) => {
   e.preventDefault();
