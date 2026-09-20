@@ -1,0 +1,21 @@
+# FC 가 USB 로 꽂힌 PC 에 둔다 (지금은 rim3).
+#   ~/.config/systemd/user/shade-preflight.service 로 복사하고
+#   systemctl --user enable --now shade-preflight
+#
+# 🔴 암호는 이 파일에 적지 않는다. ~/.config/shade-preflight.env 에 두고
+#    그 파일을 chmod 600 한다 — 리포가 public 이다.
+#      SHADE_PREFLIGHT_KEY=<웹서버의 PREFLIGHT_KEY 와 같은 값>
+[Unit]
+Description=SHADE01 preflight agent (FC -> JSON over Tailscale)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/shade-preflight.env
+ExecStart=/usr/bin/python3 %h/SHADE01/tools/preflight/agent.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,78 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>SHADE01 비행 전 점검</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/app.css">
+
+<!--
+  비행 전 점검 화면.
+
+  🔴 **판정은 이 파일에서 하지 않는다.** 여기서 하는 일은 서버가 준 JSON 을
+     그리는 것뿐이다. 임계값은 tools/preflight/preflight.py 의 EXPECT 한 곳에만
+     있고, 터미널(`./shade01 test`)과 이 화면이 같은 코드로 같은 답을 내야
+     한다. 값을 JS 에서 다시 해석하면 그 순간부터 두 벌이 따로 늙는다.
+
+  경로: 브라우저 → 웹서버(/api/preflight) → FC 가 꽂힌 PC 의 에이전트
+        → preflight.py → FC. FC 상행은 그 PC 안에 갇혀 있다.
+-->
+
+<header>
+  <h1><a href="/">SHADE01 비행로그</a></h1>
+  <span class="sub">비행 전 점검</span>
+  <span class="grow"></span>
+  <a class="btn" href="/intro">소개</a>
+  <a class="btn" href="/live">실시간</a>
+</header>
+
+<main class="pf">
+  <section class="pf-run">
+    <div class="pf-runrow">
+      <button class="primary" id="go">기체 점검</button>
+      <input type="password" id="pw" placeholder="암호" autocomplete="current-password">
+      <label class="pf-secs">수집
+        <select id="secs">
+          <option value="4">4초</option>
+          <option value="6" selected>6초</option>
+          <option value="10">10초</option>
+        </select>
+      </label>
+      <span class="grow"></span>
+      <span class="pf-note" id="note"></span>
+    </div>
+    <p class="pf-read">
+      🔴 <b>읽기 전용이다.</b> FC 에 보내는 것은 하트비트와 읽기 요청
+      (<code>PARAM_REQUEST_READ</code> · <code>MISSION_REQUEST_LIST</code>)뿐이다.
+      파라미터를 쓰지 않으므로 <code>FC_CHANGELOG.md</code> 에 적을 일이 없다.
+    </p>
+  </section>
+
+  <section id="verdict" class="pf-verdict" hidden>
+    <div class="pf-vbig"><span id="vtext">—</span></div>
+    <div class="pf-vmeta" id="vmeta"></div>
+  </section>
+
+  <section id="fail" class="pf-fail" hidden></section>
+
+  <section id="groups" class="pf-groups"></section>
+
+  <section id="standing" class="pf-standing" hidden>
+    <h2>기억할 것 <span class="pf-dim">(판정과 무관 — 매번 같다)</span></h2>
+    <dl id="standingList"></dl>
+  </section>
+
+  <section class="pf-hand">
+    <h2>계기가 못 보는 것 — 사람이 해야 한다</h2>
+    <p class="pf-dim">
+      이 기체는 3m 낙하 이력이 있고 최대 90.2A(XT90 정격의 2배)를 뽑는다.
+      전선 안쪽은 계기가 못 본다.
+    </p>
+    <ul>
+      <li><b>육안</b> — 프레임·모터 마운트·프롭 균열</li>
+      <li><b>손</b> — 착륙 후 커넥터 발열</li>
+      <li><b>arm 뒤</b> — QGC 지도에서 H 아이콘이 기체 위인지. RTL 이 그리로 간다</li>
+      <li><b>조종기</b> — SB(3단) + SC/SF 래치로 5슬롯. <b>CH6 RC 캘리브레이션 금지</b></li>
+    </ul>
+  </section>
+</main>
+
+<script src="/preflight.js"></script>

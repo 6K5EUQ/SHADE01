@@ -39,6 +39,16 @@ const MAX_UPLOAD = parseInt(process.env.MAX_UPLOAD || String(64 * 1024 * 1024), 
 // 라이브 중계용 암호. rim3 의 livepush.py 가 같은 값을 보낸다.
 // 🔴 비우면 라이브 **수신**이 막힌다 (보기는 계속 공개다).
 const LIVE_PUSH_KEY = process.env.LIVE_PUSH_KEY || '';
+// 비행 전 점검. FC 가 꽂힌 PC 의 에이전트(tools/preflight/agent.py)를 부른다.
+// 🔴 비우면 점검이 **막힌 채로** 뜬다. 점검은 읽기 전용이지만 FC 링크를
+//    실제로 쓰므로, 공개 조회와 같은 문으로 두지 않는다.
+const PREFLIGHT_KEY = process.env.PREFLIGHT_KEY || '';
+// 에이전트 후보. 앞에서부터 붙어 보고 먼저 답하는 것을 쓴다.
+// 이름이 아니라 주소를 쓰는 이유: 이 서버는 MagicDNS 가 없는 환경에서도 돈다.
+const PREFLIGHT_AGENTS = (process.env.PREFLIGHT_AGENTS ||
+  '100.117.47.105:4402,100.99.120.110:4402')
+  .split(',').map((x) => x.trim()).filter(Boolean);
+const PREFLIGHT_TIMEOUT = parseInt(process.env.PREFLIGHT_TIMEOUT || '60000', 10);
 const PARSE_TIMEOUT = parseInt(process.env.PARSE_TIMEOUT || '60000', 10);
 const MAX_JOBS = parseInt(process.env.MAX_JOBS || '3', 10);
 
@@ -682,6 +692,91 @@ function handleLiveState(req, res, url) {
   return sendJson(req, res, 200, out);
 }
 
+// ── 비행 전 점검 ─────────────────────────────────────────────────────
+// 🔴 **이 서버는 FC 와 직접 말하지 않는다.** FC 가 꽂힌 PC(rim3)의 에이전트를
+//    HTTP 로 부르고 그 JSON 을 그대로 넘긴다. 그래야 FC 상행이 정비 PC 안에
+//    갇힌 채로 남는다 — 공개 웹이 도는 이 기계를 브리지 허용 목록에 넣으면
+//    웹서버 버그 하나가 조종 포트(14550)로 흘러갈 길이 생긴다.
+//
+// 🔴 **판정은 여기서 하지 않는다.** 임계값은 preflight.py 의 EXPECT 한 곳에만
+//    있고, 터미널(`./shade01 test`)과 이 화면이 같은 코드로 같은 답을 내야 한다.
+//    node 쪽에서 값을 다시 해석하면 그 순간부터 두 벌이 따로 늙는다.
+
+/** 에이전트 하나에 점검을 청한다. */
+function askAgent(addr, secs) {
+  return new Promise((resolve) => {
+    const [host, port] = addr.split(':');
+    const r = http.request(
+      { host, port: Number(port) || 4402, path: `/preflight?t=${secs}`,
+        method: 'GET', timeout: PREFLIGHT_TIMEOUT,
+        headers: { 'X-Preflight-Key': PREFLIGHT_KEY, 'Accept-Encoding': 'identity' } },
+      (up) => {
+        let buf = '';
+        up.setEncoding('utf8');
+        up.on('data', (d) => { buf += d; });
+        up.on('end', () => {
+          try { resolve({ addr, status: up.statusCode, body: JSON.parse(buf) }); }
+          catch { resolve({ addr, status: 502, error: '에이전트 응답이 JSON 이 아니다' }); }
+        });
+      });
+    r.on('error', (e) => resolve({ addr, status: 0, error: e.code || e.message }));
+    r.on('timeout', () => { r.destroy(); resolve({ addr, status: 0, error: '응답 없음' }); });
+    r.end();
+  });
+}
+
+let preflightBusy = false;
+
+async function handlePreflight(req, res, url) {
+  if (!PREFLIGHT_KEY) {
+    return sendJson(req, res, 503, {
+      ok: false, verdict: 'NO-GO', error: 'PREFLIGHT_KEY 미설정 — 점검이 막혀 있다',
+      notes: ['웹서버 .env 에 PREFLIGHT_KEY 를 넣고 에이전트에 같은 값을 준다'],
+      groups: [], standing: [],
+    });
+  }
+  if (!passwordOk(req.headers['x-preflight-password'])) {
+    return sendJson(req, res, 401, { ok: false, error: '암호가 틀렸다' });
+  }
+  // 점검은 FC 링크를 쓴다. 겹쳐 돌리면 서로 밟으므로 한 번에 하나만 보낸다.
+  if (preflightBusy) {
+    return sendJson(req, res, 409, {
+      ok: false, verdict: 'NO-GO', error: '이미 점검이 돌고 있다',
+      groups: [], standing: [],
+    });
+  }
+
+  let secs = parseFloat(url.searchParams.get('t') || '6');
+  if (!Number.isFinite(secs)) secs = 6;
+  secs = Math.max(2, Math.min(20, secs));
+
+  preflightBusy = true;
+  const tried = [];
+  try {
+    for (const addr of PREFLIGHT_AGENTS) {
+      const got = await askAgent(addr, secs);
+      // 200 이든 아니든 **에이전트가 판정을 냈으면** 그대로 넘긴다.
+      // 붙지 못했다는 것도 판정이다 (preflight.py 가 NO-GO 로 낸다).
+      if (got.body) {
+        got.body.agent_addr = addr;
+        got.body.tried = tried;
+        return sendJson(req, res, got.status === 200 ? 200 : got.status, got.body);
+      }
+      tried.push({ addr, error: got.error });
+    }
+  } finally {
+    preflightBusy = false;
+  }
+  return sendJson(req, res, 503, {
+    ok: false, verdict: 'NO-GO',
+    error: '점검 에이전트에 닿지 못했다',
+    notes: tried.map((t) => `${t.addr}: ${t.error}`),
+    hints: ['FC 가 꽂힌 PC 에서 에이전트가 도나 (systemctl --user status shade-preflight)',
+            '그 PC 가 Tailscale 에 올라와 있나 (tailscale status)'],
+    groups: [], standing: [],
+  });
+}
+
 // ── 라우팅 ───────────────────────────────────────────────────────────
 const ID_RE = /^[0-9a-f]{16}$/;
 
@@ -693,6 +788,7 @@ async function route(req, res) {
     return sendJson(req, res, 200, {
       ok: true, logs: catalog.size, fingerprint: FINGERPRINT,
       running, queued: queue.length, upload: UPLOAD_PASSWORD ? 'enabled' : 'disabled',
+      preflight: PREFLIGHT_KEY ? 'enabled' : 'disabled',
     });
   }
 
@@ -739,6 +835,9 @@ async function route(req, res) {
 
   if (p === '/api/upload' && req.method === 'POST') return handleUpload(req, res);
 
+  // 비행 전 점검 — 버튼 하나가 FC 를 읽고 GO/NO-GO 를 낸다.
+  if (p === '/api/preflight' && req.method === 'POST') return handlePreflight(req, res, url);
+
   // 라이브 — rim3 가 밀어 올리고(POST), 브라우저가 폴링한다(GET).
   if (p === '/api/live/push' && req.method === 'POST') return handleLivePush(req, res);
   if (p === '/api/live/state' && req.method === 'GET') return handleLiveState(req, res, url);
@@ -778,6 +877,8 @@ async function route(req, res) {
   if (/^\/compare\b/.test(p)) return serveStatic(req, res, '/compare.html');
   // /intro 는 체계 소개 페이지. 실제 파일은 intro.html 이다.
   if (p === '/intro' || p === '/intro/') return serveStatic(req, res, '/intro.html');
+  // /preflight 는 비행 전 점검 페이지.
+  if (p === '/preflight' || p === '/preflight/') return serveStatic(req, res, '/preflight.html');
   return serveStatic(req, res, p);
 }
 
@@ -830,6 +931,8 @@ async function main() {
   }
 
   if (!UPLOAD_PASSWORD) log('⚠️  UPLOAD_PASSWORD 미설정 — 업로드가 막힌 채로 뜬다');
+  if (!PREFLIGHT_KEY) log('⚠️  PREFLIGHT_KEY 미설정 — 비행 전 점검이 막힌 채로 뜬다');
+  else log(`점검 에이전트 후보: ${PREFLIGHT_AGENTS.join(', ')}`);
   log(`지문 ${FINGERPRINT}, 로그 ${LOGS}`);
   await reconcile();
 

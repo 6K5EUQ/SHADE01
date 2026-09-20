@@ -27,6 +27,7 @@
 """
 
 import argparse
+import json
 import math
 import os
 import subprocess
@@ -411,14 +412,22 @@ def _absorb(m, msg, t, tgt, tcomp, params, mission, tel, msgs):
 
 # ── 판정 ────────────────────────────────────────────────────────────────────
 class Report:
-    """판정을 모은다. 등급은 셋뿐이다 — 막을 것, 볼 것, 괜찮은 것."""
+    """판정을 모은다. 등급은 셋뿐이다 — 막을 것, 볼 것, 괜찮은 것.
+
+    `seq` 는 항목이 **불린 순서**다. 터미널은 등급으로 묶어 찍지만 웹 화면은
+    절차 순서(1. GPS … 2. 기압계 …)로 줄세워야 해서, 순서를 여기서 같이 들고
+    간다 — 화면 쪽에서 되짚으면 두 벌이 따로 늙는다.
+    """
 
     def __init__(self):
         self.blk, self.warn, self.ok, self.info = [], [], [], []
+        self.rows = []          # 부른 순서대로 (group, level, name, detail, why)
+        self.group = '기타'     # check_* 가 절마다 바꿔 준다
 
-    def add(self, level, name, detail, why=''):
+    def add(self, level, name, detail, why='', group=None):
         {'blk': self.blk, 'warn': self.warn, 'ok': self.ok, 'info': self.info}[level] \
             .append((name, detail, why))
+        self.rows.append((group or self.group, level, name, detail, why))
 
     def verdict(self):
         return 'NO-GO' if self.blk else ('확인 후 판단' if self.warn else 'GO')
@@ -441,8 +450,27 @@ def near(a, b, tol=1e-3):
 def check_params(r, p):
     missing = [n for n in ALL_PARAMS if n not in p]
 
+    # 파라미터마다 어느 묶음인지. EXPECT 순서를 화면이 그대로 쓰므로, 여기서
+    # 이름을 붙여 두면 절차 목록이 저절로 절 단위로 줄선다.
+    G = {
+        'RC_MAP_TRANS_SW': '쿼드 전용 잠금', 'VT_ELEV_MC_LOCK': '쿼드 전용 잠금',
+        'VT_ARSP_TRANS': '쿼드 전용 잠금',
+        'NAV_RCL_ACT': 'failsafe', 'NAV_DLL_ACT': 'failsafe',
+        'RTL_RETURN_ALT': 'failsafe', 'RTL_DESCEND_ALT': 'failsafe',
+        'RC_MAP_KILL_SW': 'failsafe',
+        'GF_ACTION': '지오펜스', 'GF_MAX_HOR_DIST': '지오펜스',
+        'GF_MAX_VER_DIST': '지오펜스',
+        'NAV_ACC_RAD': '항법·미션', 'MIS_TAKEOFF_ALT': '항법·미션',
+        'NAV_FORCE_VT': '항법·미션',
+        'BAT1_N_CELLS': '전원', 'MPC_THR_HOVER': '전원',
+        'MAV_0_RATE': '링크', 'MAV_0_FORWARD': '링크',
+        'COM_RC_IN_MODE': '링크', 'COM_ARM_WO_GPS': '항법·미션',
+        'SENS_DPRES_OFF': '센서',
+    }
+
     # 기대값 대조
     for name, (want, level, why) in EXPECT.items():
+        r.group = G.get(name, '파라미터')
         if name not in p:
             r.add('warn', name, '읽지 못했다', '값을 모르면 판정도 못 한다')
             continue
@@ -454,6 +482,7 @@ def check_params(r, p):
 
     # 매핑만 확인하면 되는 것
     for name, (level, why) in MUST_BE_MAPPED.items():
+        r.group = G.get(name, '파라미터')
         if name not in p:
             r.add('warn', name, '읽지 못했다', why)
         elif int(p[name]) == 0:
@@ -462,6 +491,7 @@ def check_params(r, p):
             r.add('ok', name, 'CH%d' % int(p[name]))
 
     # 🔴 비행모드 6슬롯에 고정익 모드가 있으면 스위치 하나로 천이한다.
+    r.group = '쿼드 전용 잠금'
     slots, fw_slots = [], []
     for i, name in enumerate(FLTMODE_PARAMS, 1):
         if name not in p:
@@ -484,9 +514,11 @@ def check_params(r, p):
             r.add('ok', '비행모드 슬롯', ' '.join(slots))
 
     for name, note in INFORM.items():
+        r.group = G.get(name, '파라미터')
         if name in p:
             r.add('info', name, fmtv(p[name]), note)
 
+    r.group = '파라미터'
     if missing:
         r.add('warn', '파라미터 수신', '%d개 못 받음' % len(missing),
               ', '.join(missing[:8]) + ('…' if len(missing) > 8 else ''))
@@ -499,6 +531,7 @@ def fmtv(v):
 
 
 def check_mission(r, mission):
+    r.group = '미션'
     n = mission['count']
     if n is None:
         r.add('warn', '미션', '못 받았다', 'FC 가 MISSION_COUNT 를 안 줬다')
@@ -543,6 +576,7 @@ SENSOR_BITS = [
 
 
 def check_live(r, tel, msgs):
+    r.group = '기체 상태'
     # ARM 상태 — 점검은 DISARM 에서 해야 안전하다.
     # 🔴 `armed` 가 아예 없으면 "DISARMED" 라고 답하면 안 된다. 하트비트를 못 읽은
     #    것과 무장이 안 된 것은 전혀 다르고, 전자를 후자로 답하면 도구가
@@ -555,6 +589,7 @@ def check_live(r, tel, msgs):
         r.add('ok', 'ARM 상태', 'DISARMED')
 
     # GPS
+    r.group = 'GPS·추정'
     fix, sats, eph = tel.get('fix'), tel.get('sats'), tel.get('eph')
     if fix is None:
         r.add('warn', 'GPS', '데이터 없음', 'GPS_RAW_INT 가 안 온다')
@@ -571,6 +606,7 @@ def check_live(r, tel, msgs):
             r.add('ok', 'GPS', d)
 
     # 배터리 — 6S 기준
+    r.group = '전원'
     v = tel.get('volt')
     if v is None:
         r.add('warn', '배터리', '전압 없음', '')
@@ -585,6 +621,7 @@ def check_live(r, tel, msgs):
             r.add('ok', '배터리', d)
 
     # 자세 — 지상에서 기울어 있으면 수평 아닌 곳이거나 IMU 가 틀어진 것
+    r.group = '기체 상태'
     roll, pitch = tel.get('roll'), tel.get('pitch')
     if roll is not None:
         d = 'roll %+.1f° pitch %+.1f°' % (roll, pitch)
@@ -594,6 +631,7 @@ def check_live(r, tel, msgs):
             r.add('ok', '지상 자세', d)
 
     # 진동
+    r.group = '기체 상태'
     vibe = tel.get('vibe')
     if vibe:
         mx = max(vibe)
@@ -610,6 +648,7 @@ def check_live(r, tel, msgs):
             r.add('ok', '진동', d)
 
     # EKF 혁신비 — 1.0 을 넘으면 센서끼리 안 맞는다
+    r.group = 'GPS·추정'
     # 🔴 NaN 을 그냥 지나치면 안 된다. `NaN > 1.0` 은 False 라 비교만으로는
     #    조용히 '정상' 이 된다 — 모르는 것을 안전하다고 답하는 그 부류다.
     #    실기에서 EKF 가 아직 안 선 동안 vel·pos 가 NaN 으로 나온다.
@@ -633,6 +672,7 @@ def check_live(r, tel, msgs):
             r.add('ok', 'EKF 혁신비', d)
 
     # 센서 건강 비트
+    r.group = '센서'
     pres, health = tel.get('sensors_present'), tel.get('sensors_health')
     if pres is not None and health is not None:
         bad = [nm for bit, nm in SENSOR_BITS if (pres & bit) and not (health & bit)]
@@ -642,6 +682,7 @@ def check_live(r, tel, msgs):
             r.add('ok', '센서 상태', '보고된 센서 전부 정상')
 
     # VTOL 상태 — 쿼드 전용
+    r.group = '쿼드 전용 잠금'
     vs = tel.get('vtol_state')
     if vs is not None:
         name = {0: '미정', 1: '천이 중(FW로)', 2: '천이 중(MC로)', 3: 'MC', 4: 'FW'}.get(vs, vs)
@@ -653,6 +694,7 @@ def check_live(r, tel, msgs):
             r.add('ok', 'VTOL 상태', name)
 
     # RC
+    r.group = '링크'
     rc = tel.get('rc')
     if rc:
         r.add('ok', 'RC 입력', 'CH1~8 %s' % ' '.join(str(x) for x in rc[:8]))
@@ -670,6 +712,7 @@ def check_live(r, tel, msgs):
     # ⚠️ 실내에서는 **에어컨 바람**이 그대로 읽힌다 (2026-09-13 실측 +2.2 m/s).
     #    그 값으로 영점을 판정하지 마라 — 한 번 「과보정」이라 오판하고 철회했다.
     #    판정은 야외 무풍 또는 실비행 로그로 한다 (CLAUDE.md 「값을 뽑을 때」).
+    r.group = '센서'
     a = tel.get('airspeed')
     if a is not None:
         if a > 1.5:
@@ -685,6 +728,7 @@ def check_live(r, tel, msgs):
                   '정지 ±2 m/s 안 — 영점은 정상. 남은 것은 ASPD_SCALE_1 (고정익 비행으로만 학습)')
 
     # 홈 위치
+    r.group = 'GPS·추정'
     if tel.get('home') and tel.get('lat'):
         import math
         hlat, hlon = tel['home']
@@ -700,6 +744,7 @@ def check_live(r, tel, msgs):
         r.add('info', '홈 위치', '아직 없다', 'arm 하면 잡힌다')
 
     # FC 가 스스로 뱉은 경고 — 임계값 판정보다 맥락이 짙다
+    r.group = 'FC 자신의 말'
     seen, out = set(), []
     for sev, txt in msgs:
         if txt not in seen:
@@ -733,6 +778,57 @@ def paint(on):
     if not on:
         for k in C:
             C[k] = ''
+
+
+# 묶음을 화면에 낼 순서. 여기 없는 이름은 뒤에 붙는다.
+# 🔴 순서는 **현장 점검 순서**다 — 먼저 막을 것(쿼드 잠금·failsafe)을 위로 둔다.
+GROUP_ORDER = ['쿼드 전용 잠금', 'failsafe', '지오펜스', '미션', '항법·미션',
+               'GPS·추정', '전원', '센서', '기체 상태', '링크', '파라미터',
+               'FC 자신의 말']
+
+# 묶음 하나의 판정 = 그 안에서 가장 나쁜 등급. 등급이 셋뿐이라 규칙도 하나다.
+# 🔴 이 계산은 여기에만 있다. 화면(JS)에서 다시 하면 두 벌이 따로 늙는다.
+GROUP_VERDICT = {'blk': 'NO-GO', 'warn': '확인', 'ok': 'GO', 'info': '참고'}
+
+
+def as_json(r, meta, elapsed):
+    """판정을 기계가 읽는 모양으로. 🔴 판정 자체는 여기서 하지 않는다 —
+    check_* 가 이미 내린 것을 묶어서 옮길 뿐이다. 값을 다시 해석하면
+    터미널과 웹이 다른 답을 내게 된다."""
+    order = {g: i for i, g in enumerate(GROUP_ORDER)}
+    groups = {}
+    for i, (g, level, name, detail, why) in enumerate(r.rows):
+        gr = groups.setdefault(g, {'name': g, 'items': []})
+        gr['items'].append({'level': level, 'name': name,
+                            'detail': detail, 'why': why, 'seq': i})
+    out = []
+    for g in sorted(groups, key=lambda g: (order.get(g, 99), g)):
+        gr = groups[g]
+        lv = {it['level'] for it in gr['items']}
+        # 가장 나쁜 것 하나가 묶음을 정한다. 전부 info 면 판정이 아니라 참고다.
+        worst = ('blk' if 'blk' in lv else
+                 'warn' if 'warn' in lv else
+                 'ok' if 'ok' in lv else 'info')
+        gr['level'] = worst
+        gr['verdict'] = GROUP_VERDICT[worst]
+        gr['counts'] = {k: sum(1 for it in gr['items'] if it['level'] == k)
+                        for k in ('blk', 'warn', 'ok', 'info')}
+        out.append(gr)
+
+    return {
+        'ok': True,
+        'at': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+        'verdict': r.verdict(),
+        'exit': 0 if r.verdict() == 'GO' else (1 if r.verdict() == 'NO-GO' else 2),
+        'elapsed': round(elapsed, 2),
+        'how': meta.get('how'),
+        'notes': meta.get('notes') or [],
+        'counts': {'blk': len(r.blk), 'warn': len(r.warn),
+                   'ok': len(r.ok), 'info': len(r.info)},
+        'groups': out,
+        # 🔴 매 비행 같은 내용이다. 판정과 섞지 말라고 따로 낸다.
+        'standing': [{'name': n, 'text': t} for n, t in STANDING],
+    }
 
 
 def render(r, meta, elapsed, verbose):
@@ -810,12 +906,36 @@ def main():
                     help='텔레메트리 수집 시간 (기본 6초)')
     ap.add_argument('-v', '--verbose', action='store_true', help='정상 항목까지 전부')
     ap.add_argument('--no-color', action='store_true')
+    ap.add_argument('--json', action='store_true',
+                    help='판정을 JSON 으로 낸다 (웹 화면·에이전트용). '
+                         '판정 로직은 터미널과 같은 것을 쓴다')
     a = ap.parse_args()
-    paint(not a.no_color and sys.stdout.isatty())
+    paint(not a.no_color and not a.json and sys.stdout.isatty())
 
     t0 = time.time()
-    m, how, hb_s, notes = connect(a.conn, a.verbose)
+    # --json 일 때는 verbose 로 모은다. 화면이 정상 항목까지 다 그리기 때문이다.
+    verbose = a.verbose or a.json
+    m, how, hb_s, notes = connect(a.conn, verbose)
     if m is None:
+        if a.json:
+            # 🔴 붙지 못한 것을 "이상 없음" 으로 내지 않는다. 판정 자리에
+            #    붙지 못했다는 사실을 그대로 넣는다 — 화면이 GO 를 그리면 안 된다.
+            json.dump({
+                'ok': False,
+                'at': time.strftime('%Y-%m-%dT%H:%M:%S%z'),
+                'verdict': 'NO-GO',
+                'exit': 1,
+                'elapsed': round(time.time() - t0, 2),
+                'error': 'FC 에 붙지 못했다',
+                'notes': notes,
+                'hints': ['FC USB 가 그 PC 에 꽂혀 있나 (ls /dev/ttyACM*)',
+                          '누가 포트를 쥐고 있나 (fuser -v /dev/ttyACM0)',
+                          '브리지가 떠 있나 (pgrep -af mav_bridge)'],
+                'groups': [], 'standing': [],
+                'counts': {'blk': 1, 'warn': 0, 'ok': 0, 'info': 0},
+            }, sys.stdout, ensure_ascii=False)
+            sys.stdout.write('\n')
+            return 1
         print()
         print('%sFC 에 붙지 못했다.%s' % (C['r'] + C['b'], C['0']))
         for n in notes:
@@ -827,7 +947,7 @@ def main():
         print('  · 브리지가 떠 있나               (pgrep -af mav_bridge)')
         return 1
 
-    params, mission, tel, msgs, dropped = gather(m, a.secs, a.verbose)
+    params, mission, tel, msgs, dropped = gather(m, a.secs, verbose and not a.json)
 
     r = Report()
     check_params(r, params)
@@ -835,11 +955,17 @@ def main():
     check_live(r, tel, msgs)
     if dropped:
         # 조용히 버리면 "왜 그 항목이 안 나왔지" 를 아무도 못 쫓는다.
+        r.group = '링크'
         uniq = sorted(set(d.split(':')[0] for d in dropped))
         r.add('warn', '해석 못한 메시지', '%d건 (%s)' % (len(dropped), ', '.join(uniq)),
               dropped[0])
 
-    meta = {'how': how, 'notes': notes if a.verbose else []}
+    meta = {'how': how, 'notes': notes if verbose else []}
+    if a.json:
+        json.dump(as_json(r, meta, time.time() - t0), sys.stdout, ensure_ascii=False)
+        sys.stdout.write('\n')
+        v = r.verdict()
+        return 0 if v == 'GO' else (1 if v == 'NO-GO' else 2)
     return render(r, meta, time.time() - t0, a.verbose)
 
 

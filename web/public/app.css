@@ -138,3 +138,115 @@ dialog {
 }
 dialog::backdrop { background: rgba(0, 0, 0, .6); }
 dialog h2 { margin: 0 0 4px; font-size: 15px; }
+
+/* ── 비행 전 점검 (/preflight) ──────────────────────────────────────
+   🔴 판정은 서버가 내린다. 여기서는 색을 입힐 뿐이고, **색만으로 말하지
+      않는다** — 모든 판정에 글자(GO / 확인 / NO-GO)가 같이 붙는다. */
+.pf { padding: 0 20px 60px; max-width: 980px; margin: 0 auto; }
+
+.pf-run { margin: 20px 0 8px; }
+.pf-runrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pf-runrow .grow { flex: 1; }
+.pf-runrow #go { font-size: 15px; padding: 10px 22px; }
+.pf-runrow #pw { width: 130px; }
+.pf-secs { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 6px; }
+
+.pf-note { font-size: 13px; }
+.pf-note.dim { color: var(--dim); }
+.pf-note.bad { color: var(--bad); }
+
+.pf-read {
+  color: var(--dim); font-size: 12px; line-height: 1.7;
+  margin: 12px 0 0; padding: 10px 14px;
+  border: 1px solid var(--border); border-radius: 6px; background: var(--panel);
+}
+.pf-read code { font-family: var(--mono); font-size: 11px; color: var(--text); }
+
+/* 종합 판정. 화면에서 제일 큰 글자다 — 현장에서 멀리서도 읽혀야 한다. */
+.pf-verdict {
+  margin: 20px 0; padding: 18px 22px;
+  border: 1px solid var(--border-2); border-radius: 8px; background: var(--panel);
+  border-left-width: 5px;
+}
+.pf-verdict.ok   { border-left-color: var(--ok); }
+.pf-verdict.warn { border-left-color: var(--warn); }
+.pf-verdict.blk  { border-left-color: var(--bad); }
+.pf-vbig { font-size: 30px; font-weight: 700; letter-spacing: -.5px; }
+.pf-verdict.ok   .pf-vbig { color: var(--ok); }
+.pf-verdict.warn .pf-vbig { color: var(--warn); }
+.pf-verdict.blk  .pf-vbig { color: var(--bad); }
+.pf-vmeta { color: var(--muted); font-size: 12px; margin-top: 6px; font-family: var(--mono); }
+
+/* 붙지 못했을 때. 🔴 이 자리가 비어 보이면 안 된다 — 모르는 것을 안전하다고
+   읽게 된다. 사유와 확인할 것을 그대로 적는다. */
+.pf-fail {
+  margin: 0 0 20px; padding: 14px 18px;
+  border: 1px solid #63232a; border-left: 5px solid var(--bad);
+  border-radius: 8px; background: #1a1012;
+}
+.pf-failtitle { color: var(--bad); font-weight: 600; margin-bottom: 8px; }
+.pf-failhead { color: var(--dim); font-size: 12px; margin: 10px 0 4px; font-weight: 600; }
+.pf-failnote { color: var(--dim); font-size: 12px; font-family: var(--mono); line-height: 1.8; }
+
+/* 묶음 하나 = 점검 절차 한 줄 */
+.pf-group {
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel); margin-bottom: 10px; overflow: hidden;
+}
+.pf-ghead {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 11px 16px; border-bottom: 1px solid var(--border);
+}
+.pf-gnum { color: var(--muted); font-family: var(--mono); font-size: 13px; min-width: 22px; }
+.pf-gname { font-weight: 600; font-size: 14px; }
+/* 점선 — 항목 이름과 판정 사이를 잇는다. 절차서를 눈으로 훑는 방식 그대로. */
+.pf-gdots {
+  flex: 1; border-bottom: 1px dotted var(--border-2);
+  transform: translateY(-3px);
+}
+.pf-gverdict { font-family: var(--mono); font-weight: 700; font-size: 13px; }
+.pf-group.ok   .pf-gverdict { color: var(--ok); }
+.pf-group.warn .pf-gverdict { color: var(--warn); }
+.pf-group.blk  .pf-gverdict { color: var(--bad); }
+.pf-group.info .pf-gverdict { color: var(--muted); }
+.pf-group.blk  { border-color: #63232a; }
+.pf-group.warn { border-color: #5c421c; }
+
+.pf-items { padding: 4px 0; }
+.pf-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 190px) minmax(0, 1fr);
+  gap: 4px 8px; align-items: baseline;
+  padding: 5px 16px;
+}
+.pf-mark { text-align: center; font-size: 12px; }
+.pf-item.ok   .pf-mark { color: var(--ok); }
+.pf-item.warn .pf-mark { color: var(--warn); }
+.pf-item.blk  .pf-mark { color: var(--bad); }
+.pf-item.info .pf-mark { color: var(--muted); }
+.pf-iname { font-family: var(--mono); font-size: 12px; color: var(--dim); word-break: break-all; }
+.pf-idetail { font-size: 13px; word-break: break-word; }
+.pf-item.info .pf-idetail { color: var(--dim); }
+/* 왜 막혔는지가 다음 행동을 정한다 — 접지 않는다. */
+.pf-why {
+  grid-column: 3; color: var(--muted); font-size: 12px;
+  line-height: 1.6; margin-top: 2px;
+}
+
+.pf-standing, .pf-hand { margin-top: 28px; }
+.pf-standing h2, .pf-hand h2 { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
+.pf-dim { color: var(--muted); font-weight: 400; font-size: 12px; }
+.pf-standing dl { margin: 0; display: grid; grid-template-columns: 76px 1fr; gap: 6px 12px; }
+.pf-standing dt { color: var(--dim); font-size: 12px; font-weight: 600; }
+.pf-standing dd { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.pf-hand ul { margin: 0; padding-left: 20px; color: var(--muted); font-size: 13px; line-height: 1.9; }
+.pf-hand b { color: var(--dim); }
+
+/* 좁은 화면 — 현장에서는 휴대폰으로 본다. 항목 이름과 값이 겹쳐 눌리면
+   읽을 수 없으므로 한 줄로 편다. */
+@media (max-width: 620px) {
+  .pf { padding: 0 12px 60px; }
+  .pf-item { grid-template-columns: 20px minmax(0, 1fr); }
+  .pf-idetail, .pf-why { grid-column: 2; }
+  .pf-vbig { font-size: 26px; }
+}
