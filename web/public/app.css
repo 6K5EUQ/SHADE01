@@ -147,7 +147,9 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
    🔴 점검은 병렬이다 — 끝나는 순서가 정해져 있지 않으므로 목록을 미리 다
       깔아 두고 끝난 자리부터 채운다. 번호는 자리 번호지 실행 순서가 아니다. */
 .pf {
-  padding: 0 20px 72px; max-width: 1000px; margin: 0 auto;
+  /* 🔴 폭을 묶지 않는다. 판정 화면은 읽을거리가 아니라 계기라서,
+     넓은 화면에서 가운데 좁게 모이면 줄 하나가 그만큼 짧아진다. */
+  padding: 0 28px 72px;
 
   /* 계기 색. 기존 팔레트 위에 판정용 세 가지를 얹는다. */
   --pf-go:   #7dd3a0;          /* 인광 — 통과 */
@@ -188,7 +190,7 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 .pf-brief .grow { display: none; }
 .pf-callsign { grid-column: 1; }
 .pf-note { grid-column: 1; justify-self: end; }
-.pf-bmeta { grid-column: 2; }
+.pf-bmeta { grid-column: 2; justify-self: center; }
 .pf-callsign {
   font-family: var(--pf-mono); font-size: 19px; font-weight: 700;
   letter-spacing: .1em;
@@ -220,7 +222,13 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
   display: grid; grid-template-columns: 3fr 1fr;
   gap: 32px; align-items: start;
 }
-.pf-side { position: sticky; top: 74px; }
+/* 오른쪽 칸. 종합이 칸 가운데에 선다 — 목록이 아무리 길어도 시선이
+   떨어지는 자리가 늘 같다. */
+.pf-side {
+  position: sticky; top: 74px;
+  display: flex; flex-direction: column; align-items: center;
+  text-align: center;
+}
 
 .pf-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--border); }
 .pf-row { position: relative; border-bottom: 1px solid var(--border); }
@@ -305,8 +313,8 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
    화면에서 제일 큰 글자다 — 현장에서 팔 길이 밖에서도 읽혀야 한다. */
 /* 종합. 화면에서 제일 큰 글자다 — 현장에서 팔 길이 밖에서도 읽혀야 한다. */
 .pf-total {
-  display: flex; flex-direction: column; gap: 4px;
-  margin: 0; padding: 18px 0 0;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  margin: 0; padding: 18px 0 0; width: 100%;
   border-top: 2px solid var(--border-2);
 }
 .pf-total.ok  { border-top-color: var(--pf-go); }
@@ -323,11 +331,11 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 .pf-total.blk .pf-tverdict { color: var(--pf-stop); }
 /* 무엇이 몇 개인지 — NO GO 하나가 진행 불가 때문인지 확인 필요 때문인지가
    다음 행동을 정한다. */
-.pf-tcounts { display: flex; flex-direction: column; gap: 5px; margin-top: 12px; }
-.pf-tactions { display: flex; flex-direction: column; gap: 7px; margin-top: 18px; }
+.pf-tcounts { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-top: 14px; }
+.pf-tactions { display: flex; flex-direction: column; gap: 7px; margin-top: 22px; width: 100%; max-width: 220px; }
 .pf-tactions button {
   font-family: var(--pf-mono); font-size: 12px; letter-spacing: .03em;
-  padding: 8px 12px; text-align: left;
+  padding: 9px 12px;
 }
 .pf-count {
   font-size: 12px; color: var(--pf-label);
@@ -342,7 +350,7 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 /* 붙지 못했을 때. 🔴 이 자리가 비어 보이면 안 된다 — 모르는 것을
    안전하다고 읽게 된다. 사유와 확인할 것을 그대로 적는다. */
 .pf-fail {
-  margin: 16px 0 0; padding: 14px 16px;
+  margin: 16px 0 0; padding: 14px 16px; width: 100%; text-align: left;
   border: 1px solid #7a1f26; border-left: 4px solid var(--pf-stop);
   border-radius: 4px; background: #1a1012;
 }
@@ -401,6 +409,10 @@ dialog h2 { margin: 0 0 4px; font-size: 15px; }
 /* 좁은 화면 — 현장에서는 휴대폰으로 본다. */
 @media (max-width: 680px) {
   .pf { padding: 0 14px 60px; }
+  .pf-side { align-items: stretch; text-align: left; }
+  .pf-total { align-items: flex-start; }
+  .pf-tcounts { align-items: flex-start; }
+  .pf-tactions { max-width: none; }
   .pf-big { width: 100%; padding: 18px 0; }
   .pf-brief { grid-template-columns: 1fr auto; gap: 12px; padding-top: 20px; }
   .pf-note { grid-column: 1; justify-self: start; }
