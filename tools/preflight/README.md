@@ -4,16 +4,49 @@
 
 ```
 ./shade01 test                              터미널 (사람용)
-./shade01 test --json                       JSON (기계용)
+./shade01 test --json                       JSON 한 벌 (기계용)
+./shade01 test --stream                     NDJSON — 끝나는 대로 한 줄씩
 https://shade01.bewe.co.kr/preflight         웹 화면 (암호 필요)
 ```
 
+## 🔴 점검은 병렬이다 — 끝나는 순서가 없다
+
+파라미터 40개 요청과 미션 요청을 한 번에 던지고, 그 응답을 기다리는 **동안**
+같은 소켓에서 텔레메트리를 줍는다. 그래서 묶음은 **자기 데이터가 먼저 온
+것이 먼저 끝난다.** 실측(2026-09-20, rim3 FC):
+
+```
+0.15s  쿼드 전용 잠금 · failsafe · 지오펜스 · 미션 · 항법·미션   (다섯이 동시에)
+0.31s  전원 · 센서
+0.61s  GPS·추정
+1.07s  기체 상태
+ —     링크 · FC 자신의 말 은 중간에 안 끝났다 (조종기가 꺼져 있다)
+```
+
+화면도 그 순서대로 채워진다. 목록 번호는 **자리 번호지 실행 순서가 아니다.**
+
+진행률은 `GROUP_NEEDS` 에 적힌 것 중 **몇 개가 실제로 도착했나**다. 남은
+시간을 백분율로 바꿔 보여 주지 않는다 — 그러면 화면은 그럴듯한데 아무것도
+안 온 상태일 수 있다.
+
 | 파일 | 하는 일 |
 |---|---|
-| `preflight.py` | 🔴 **판정의 정본.** 임계값(`EXPECT`)·검사·묶음이 전부 여기 있다 |
+| `preflight.py` | 🔴 **판정의 정본.** 임계값(`EXPECT`)·검사·묶음·진행률이 전부 여기 있다 |
 | `agent.py` | FC 가 꽂힌 PC 에서 돌며 `preflight.py --json` 을 HTTP 로 낸다 |
 | `fakefc.py` | 기체 없이 판정 코드를 돌려 보는 가짜 FC |
 | `shade-preflight.service` | `agent.py` 의 systemd user 유닛 |
+
+## 스트림이 내는 줄
+
+| `t` | 뜻 |
+|---|---|
+| `start` | 무엇을 볼 것인지 — 묶음 이름과 화면 문장 |
+| `prog` | 묶음별 진행률 `0.0~1.0`. 0.15초마다, 값이 바뀔 때만 |
+| `group` | 한 묶음이 끝났다. 판정이 들어 있다 |
+| `done` | 전부 끝났다. `--json` 과 같은 한 벌 |
+
+🔴 **`done` 이 정본이다.** 중간 `group` 은 그때까지 온 것만 보고 낸 판정이라,
+늦게 도착한 값이 판정을 바꿨을 수 있다. 화면은 `done` 으로 자기 상태를 맞춘다.
 
 ## 🔴 판정은 `preflight.py` 한 곳에서만 한다
 
@@ -25,14 +58,18 @@ https://shade01.bewe.co.kr/preflight         웹 화면 (암호 필요)
 ## 🔴 웹서버는 FC 와 직접 말하지 않는다
 
 ```
-브라우저 ──HTTP──▶ 웹서버(ku-labserver)
+브라우저 ──HTTP──▶ 웹서버(ku-labserver)      POST /api/preflight/stream
                       │  HTTP + X-Preflight-Key
                       ▼
-                  agent.py (rim3 — FC 가 꽂힌 PC)
+                  agent.py (rim3 — FC 가 꽂힌 PC)   /preflight/stream
                       │  subprocess
                       ▼
                   preflight.py ──MAVLink──▶ FC
 ```
+
+NDJSON 이 이 길을 **해석 없이** 거슬러 온다. 에이전트도 웹서버도 줄을 열어
+보지 않는다 — 순서를 고치거나 판정을 다시 재면 "웹에서만 다르게 보이는" 층이
+하나 더 생긴다.
 
 **왜 이렇게 나눠 놨나.** 웹서버는 랩서버에서 돌고 FC 는 정비 PC 에 꽂힌다.
 랩서버에서 FC 를 직접 읽으려면 rim3 브리지의 허용 목록(`pc_bridge.sh` 의

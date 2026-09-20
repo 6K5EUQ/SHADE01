@@ -7,13 +7,13 @@
 <!--
   비행 전 점검 화면.
 
-  🔴 **판정은 이 파일에서 하지 않는다.** 여기서 하는 일은 서버가 준 JSON 을
-     그리는 것뿐이다. 임계값은 tools/preflight/preflight.py 의 EXPECT 한 곳에만
-     있고, 터미널(`./shade01 test`)과 이 화면이 같은 코드로 같은 답을 내야
-     한다. 값을 JS 에서 다시 해석하면 그 순간부터 두 벌이 따로 늙는다.
+  🔴 **판정은 이 파일에서 하지 않는다.** 서버가 준 level/verdict 를 그린다.
+     임계값은 tools/preflight/preflight.py 의 EXPECT 한 곳에만 있고,
+     터미널(`./shade01 test`)과 이 화면이 같은 코드로 같은 답을 내야 한다.
 
-  경로: 브라우저 → 웹서버(/api/preflight) → FC 가 꽂힌 PC 의 에이전트
-        → preflight.py → FC. FC 상행은 그 PC 안에 갇혀 있다.
+  🔴 **점검은 병렬이다.** 묶음이 끝나는 순서는 정해져 있지 않다 — 자기
+     데이터가 먼저 온 것이 먼저 끝난다. 그래서 목록은 미리 다 깔아 두고,
+     끝난 자리부터 색이 들어온다. 번호는 목록 자리 번호지 실행 순서가 아니다.
 -->
 
 <header>
@@ -28,36 +28,47 @@
   <!-- 아무것도 안 한 상태의 화면은 버튼 하나다. 현장에서 한 손으로 누른다. -->
   <section class="pf-hero" id="hero">
     <button class="primary pf-big" id="go">기체 점검</button>
-    <div class="pf-note" id="note"></div>
   </section>
 
-  <!-- 결과가 있을 때만 켜지는 줄. 다시 점검·수집 시간이 여기로 옮겨 온다. -->
-  <div class="pf-bar" id="bar" hidden>
-    <button class="primary" id="again">다시 점검</button>
-    <label class="pf-secs">수집
-      <select id="secs">
-        <option value="4">4초</option>
-        <option value="6" selected>6초</option>
-        <option value="10">10초</option>
-      </select>
-    </label>
-    <span class="grow"></span>
-    <span class="pf-note" id="note2"></span>
+  <!-- 점검이 시작되면 이 아래가 켜진다. -->
+  <div class="pf-run" id="run" hidden>
+    <div class="pf-bar">
+      <button class="primary" id="again" hidden>다시 점검</button>
+      <label class="pf-secs">수집
+        <select id="secs">
+          <option value="4">4초</option>
+          <option value="6" selected>6초</option>
+          <option value="10">10초</option>
+        </select>
+      </label>
+      <span class="grow"></span>
+      <span class="pf-note" id="note"></span>
+    </div>
+
+    <!-- 점검 목록. 시작하자마자 전부 깔리고, 끝난 자리부터 색이 들어온다. -->
+    <ol class="pf-list" id="list"></ol>
+
+    <!-- 종합. 전부 끝나야 뜬다. -->
+    <section class="pf-total" id="total" hidden>
+      <span class="pf-tlabel">종합결과</span>
+      <span class="pf-tdots"></span>
+      <span class="pf-tverdict" id="tverdict">—</span>
+      <div class="pf-tmeta" id="tmeta"></div>
+    </section>
+
+    <section id="fail" class="pf-fail" hidden></section>
+
+    <!-- 항목별 상세. 종합 아래에 접어 둔다 — 현장에서 먼저 보는 것은 판정이다. -->
+    <details class="pf-detail" id="detailWrap" hidden>
+      <summary>항목별 상세</summary>
+      <div id="groups"></div>
+    </details>
+
+    <section id="standing" class="pf-standing" hidden>
+      <h2>기억할 것 <span class="pf-dim">(판정과 무관 — 매번 같다)</span></h2>
+      <dl id="standingList"></dl>
+    </section>
   </div>
-
-  <section id="verdict" class="pf-verdict" hidden>
-    <div class="pf-vbig"><span id="vtext">—</span></div>
-    <div class="pf-vmeta" id="vmeta"></div>
-  </section>
-
-  <section id="fail" class="pf-fail" hidden></section>
-
-  <section id="groups" class="pf-groups"></section>
-
-  <section id="standing" class="pf-standing" hidden>
-    <h2>기억할 것 <span class="pf-dim">(판정과 무관 — 매번 같다)</span></h2>
-    <dl id="standingList"></dl>
-  </section>
 </main>
 
 <!-- 암호 창. 버튼을 누르면 뜬다. -->
