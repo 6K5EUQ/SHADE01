@@ -69,7 +69,39 @@ EXPECT = {
     # 링크
     'MAV_0_RATE':      (1400, 'warn', 'MAV_0_FORWARD=0 으로 "Sensor lost" 를 잡은 뒤 재배분 (9/9 14:20)'),
     'MAV_0_FORWARD':   (0, 'warn', '1 이면 USB 브리지 트래픽이 조종기 링크로 넘어가 센서가 죽는다 (9/9 13:10)'),
+    'COM_RC_LOSS_T':   (1.0, 'warn', 'RC 상실 판정 1초 (config/SETTINGS.md)'),
 
+    # 🔴 배터리 저전압 대응. 이 값들이 어긋나면 "알아서 돌아온다" 가 거짓이 된다.
+    #    근거: config/SETTINGS.md 「전원」·docs/emergency/03-emergency.md
+    'COM_LOW_BAT_ACT': (3, 'blk', '저전압 시 RTL 이어야 한다. 0 이면 경고만 하고 계속 난다'),
+    'BAT_LOW_THR':     (0.15, 'warn', '잔량 15% 경고 (SETTINGS.md 전원)'),
+    'BAT_CRIT_THR':    (0.07, 'warn', '잔량 7% 위험'),
+    'BAT_EMERGEN_THR': (0.05, 'warn', '잔량 5% 비상 — 즉시 착륙'),
+    'BAT1_CAPACITY':   (16000, 'warn', '16000 mAh. 틀리면 잔량 %가 통째로 어긋난다'),
+    'BAT1_V_CHARGED':  (4.2, 'warn', '셀 만충 전압'),
+    'BAT1_V_EMPTY':    (3.6, 'warn', '셀 공전압'),
+    'CBRK_SUPPLY_CHK': (0, 'warn', '0 = 공급 검사 켜짐 (SETTINGS.md). 풀면 전원 이상을 못 잡는다'),
+
+    # 착륙·arm. 지상 시험용으로 바꿔 둔 것이 남아 있기 쉬운 자리다.
+    'COM_DISARM_LAND': (2.0, 'warn', '착륙 2초 뒤 자동 disarm (SETTINGS.md)'),
+    'COM_ARM_MAG_ANG': (60, 'warn', '지자기 편차 허용각 60° (SETTINGS.md)'),
+    'SENS_BOARD_ROT':  (0, 'blk', 'FC 장착 방향. 틀리면 자세가 통째로 뒤집힌다'),
+
+    # 쿼드 기동 한계. 넘으면 이 기체가 실측으로 겪어 본 적 없는 영역이다.
+    'MPC_XY_VEL_MAX':  (8.0, 'warn', '수평 최대 8 m/s'),
+    'MPC_Z_VEL_MAX_UP': (3.0, 'warn', '상승 최대 3 m/s'),
+    'MPC_TILTMAX_AIR': (45.0, 'warn', '최대 기울기 45°'),
+}
+
+# 🔴 값을 보여 주되 **판정하지 않는** 것. 리포에 근거가 없어서다.
+#    근거 없이 등급을 매기면 "왜 NO-GO 인지" 를 아무도 못 쫓는다 —
+#    임계값을 정하려면 FC_CHANGELOG.md 에 근거부터 남겨라 (CLAUDE.md).
+CBRK_OPEN = {
+    # PX4 의 "회로차단기" 는 매직 넘버를 넣으면 그 검사를 통째로 끈다.
+    'CBRK_FLIGHTTERM': (121212, 'Flight Termination 차단 — 치명 실패에도 종단이 안 걸린다'),
+    'CBRK_IO_SAFETY':  (22027, 'IO 안전 스위치 우회'),
+    'CBRK_USB_CHK':    (197848, 'USB 연결 중 arm 허용'),
+    'CBRK_AIRSPD_CHK': (162128, '대기속도 검사 차단'),
 }
 
 # 스위치는 "매핑되어 있기만" 하면 된다. 채널 번호는 조종기 구성에 따라 바뀐다.
@@ -84,6 +116,19 @@ INFORM = {
     'COM_ARM_WO_GPS':  '1 이어도 Position·Mission 은 자체 검사가 막는다',
     'MIS_TAKEOFF_ALT': '미션 이륙 고도',
     'NAV_FORCE_VT':    '기체가 이미 FW 일 때만 동작한다 — 84 를 막지 못한다',
+    'COM_DISARM_PRFLT': '🟡 arm 후 이륙 안 하면 자동 disarm 까지의 초. '
+                        'SETTINGS.md 가 지상테스트용 변경분으로 표시해 둔 값이다',
+    'COM_PREARM_MODE': '🟡 동상 — SETTINGS.md 원복 확인 대상',
+    'SDLOG_MODE':      '로깅 시점. 0=arm 부터 / -1=끔 / 1=부팅부터. '
+                       '이 리포는 로그가 유일한 영구 기록이다',
+    'SDLOG_PROFILE':   '로그에 담는 항목 묶음',
+    'RTL_TYPE':        'RTL 경로 방식',
+    'NAV_MC_ALT_RAD':  '고도 도달 판정 반경',
+    'MC_AIRMODE':      '0 = 저스로틀에서 자세제어 약화 (쿼드 기본)',
+    'EKF2_HGT_REF':    '고도 기준 센서. 0=기압 1=GPS 2=거리계',
+    'FD_FAIL_P':       '자세 실패 감지 피치 한계(°)',
+    'FD_FAIL_R':       '자세 실패 감지 롤 한계(°)',
+    'MIS_DIST_1WP':    '첫 웨이포인트까지 허용 거리 — 넘으면 미션을 거부한다',
 }
 
 FLTMODE_PARAMS = ['COM_FLTMODE%d' % i for i in range(1, 7)]
@@ -107,7 +152,8 @@ CMD_NAME = {16: 'WAYPOINT', 20: 'RTL', 21: 'LAND', 22: 'TAKEOFF',
             84: 'VTOL_TAKEOFF', 85: 'VTOL_LAND', 189: 'DO_LAND_START'}
 FW_MISSION_CMDS = {84: 'VTOL_TAKEOFF', 85: 'VTOL_LAND', 3000: 'DO_VTOL_TRANSITION'}
 
-ALL_PARAMS = (list(EXPECT) + list(MUST_BE_MAPPED) + list(INFORM) + FLTMODE_PARAMS)
+ALL_PARAMS = (list(EXPECT) + list(MUST_BE_MAPPED) + list(INFORM)
+              + list(CBRK_OPEN) + FLTMODE_PARAMS)
 
 
 def i32(v):
@@ -436,6 +482,48 @@ def _absorb(m, msg, t, tgt, tcomp, params, mission, tel, msgs):
         tel['lon'] = msg.lon / 1e7
         tel['alt_rel'] = msg.relative_alt / 1000.0
 
+    elif t == 'HIGHRES_IMU':
+        # 원시 IMU. 가속도 크기와 자기장 세기를 여기서만 볼 수 있다 —
+        # SYS_STATUS 의 건강 비트는 "살아 있다" 만 말하고 값이 맞는지는 모른다.
+        import math
+        tel['acc'] = (msg.xacc, msg.yacc, msg.zacc)
+        tel['acc_mag'] = math.sqrt(msg.xacc ** 2 + msg.yacc ** 2 + msg.zacc ** 2)
+        tel['gyro'] = (msg.xgyro, msg.ygyro, msg.zgyro)
+        tel['gyro_mag'] = math.sqrt(msg.xgyro ** 2 + msg.ygyro ** 2 + msg.zgyro ** 2)
+        tel['mag'] = (msg.xmag, msg.ymag, msg.zmag)
+        tel['mag_mag'] = math.sqrt(msg.xmag ** 2 + msg.ymag ** 2 + msg.zmag ** 2)
+        tel['imu_temp'] = msg.temperature
+        tel['imu_press'] = msg.abs_pressure
+        tel['imu_diff_press'] = msg.diff_pressure
+
+    elif t == 'SCALED_PRESSURE':
+        # 🔴 HIGHRES_IMU 와 **다른 기압계**다. 둘을 맞대 보면 한쪽이 틀어진 것을
+        #    잡는다 — 건강 비트는 둘 다 "정상" 이라고 답한다.
+        tel['baro_press'] = msg.press_abs
+        tel['baro_temp'] = msg.temperature / 100.0
+
+    elif t == 'ALTITUDE':
+        tel['alt_amsl'] = msg.altitude_amsl
+        tel['alt_local'] = msg.altitude_local
+        tel['alt_terrain'] = msg.altitude_terrain
+
+    elif t == 'SERVO_OUTPUT_RAW':
+        # 모터 출력. arm 전에는 전부 idle 이어야 한다.
+        tel['servo'] = [getattr(msg, 'servo%d_raw' % i) for i in range(1, 9)]
+
+    elif t == 'SYSTEM_TIME':
+        # FC 시계. 로그 시각이 여기서 나온다 — 어긋나면 로그를 맞춰 볼 수 없다.
+        tel['fc_unix'] = msg.time_unix_usec / 1e6 if msg.time_unix_usec else None
+        tel['fc_boot_s'] = msg.time_boot_ms / 1000.0
+
+    elif t == 'MISSION_CURRENT':
+        tel['mission_seq'] = msg.seq
+        tel['mission_state'] = getattr(msg, 'mission_state', None)
+
+    elif t == 'LOCAL_POSITION_NED':
+        import math
+        tel['vel_ned'] = math.sqrt(msg.vx ** 2 + msg.vy ** 2 + msg.vz ** 2)
+
 
 
 # ── 판정 ────────────────────────────────────────────────────────────────────
@@ -493,7 +581,19 @@ def check_params(r, p):
         'BAT1_N_CELLS': '전원', 'MPC_THR_HOVER': '전원',
         'MAV_0_RATE': '링크', 'MAV_0_FORWARD': '링크',
         'COM_RC_IN_MODE': '링크', 'COM_ARM_WO_GPS': '항법·미션',
-        'SENS_DPRES_OFF': '센서',
+        'SENS_DPRES_OFF': '센서', 'SENS_BOARD_ROT': '센서',
+        'COM_LOW_BAT_ACT': '전원', 'BAT_LOW_THR': '전원', 'BAT_CRIT_THR': '전원',
+        'BAT_EMERGEN_THR': '전원', 'BAT1_CAPACITY': '전원',
+        'BAT1_V_CHARGED': '전원', 'BAT1_V_EMPTY': '전원', 'CBRK_SUPPLY_CHK': '전원',
+        'COM_RC_LOSS_T': 'failsafe', 'COM_DISARM_LAND': 'ARM 조건',
+        'COM_ARM_MAG_ANG': 'ARM 조건', 'COM_DISARM_PRFLT': 'ARM 조건',
+        'COM_PREARM_MODE': 'ARM 조건',
+        'MPC_XY_VEL_MAX': '기동 한계', 'MPC_Z_VEL_MAX_UP': '기동 한계',
+        'MPC_TILTMAX_AIR': '기동 한계', 'MC_AIRMODE': '기동 한계',
+        'FD_FAIL_P': '기동 한계', 'FD_FAIL_R': '기동 한계',
+        'SDLOG_MODE': '기록', 'SDLOG_PROFILE': '기록',
+        'RTL_TYPE': 'failsafe', 'NAV_MC_ALT_RAD': '항법·미션',
+        'MIS_DIST_1WP': '항법·미션', 'EKF2_HGT_REF': 'GPS·추정',
     }
 
     # 기대값 대조
@@ -540,6 +640,20 @@ def check_params(r, p):
                   'Mission(3) 이 6슬롯 어디에도 없다 — 조종기로 미션 진입 불가')
         else:
             r.add('ok', '비행모드 슬롯', ' '.join(slots))
+
+    # 🔴 회로차단기 — 열려 있으면 그 검사가 **통째로 꺼진 것**이다.
+    #    리포에 왜 열었는지가 없으므로 등급을 매기지 않고 사실만 낸다.
+    #    (임계값을 정하려면 FC_CHANGELOG.md 에 근거부터 남겨라 — CLAUDE.md)
+    r.group = '회로차단기'
+    for name, (magic, what) in CBRK_OPEN.items():
+        if name not in p:
+            continue
+        if int(p[name]) == magic:
+            r.add('warn', name, '열림 (%d)' % magic,
+                  '%s. 왜 열어 뒀는지가 리포에 없다 — 의도한 것이면 '
+                  'FC_CHANGELOG.md 에 근거를 남겨라' % what)
+        else:
+            r.add('ok', name, '닫힘 (%s)' % fmtv(p[name]), what + ' 검사가 켜져 있다')
 
     for name, note in INFORM.items():
         r.group = G.get(name, '파라미터')
@@ -594,6 +708,20 @@ def check_mission(r, mission):
         else:
             r.add('ok', '미션 고도', '%.0f~%.0f m' % (lo, hi))
 
+
+# 🔴 이 기체의 출력 배치. 정본은 config/SETTINGS.md 「PWM_MAIN_FUNC」 표이고
+#    2026-09-11 에 로그(`actuator_outputs`)로 재검증됐다. 번호는 MAVLink
+#    기준(1부터)이라 로그의 output[2,3,5,6] 이 여기서 servo3/4/6/7 이다.
+#    ⚠️ 다른 기체에 그대로 쓰면 안 된다 — 배치가 기체마다 다르다.
+SERVO_ROLE = {
+    1: '좌 에일러론', 2: '우 에일러론',
+    3: 'VTOL 우후 모터', 4: 'VTOL 우전 모터',
+    5: '미사용 (UBEC 급전)',
+    6: 'VTOL 좌후 모터', 7: 'VTOL 좌전 모터',
+    8: '크루즈 모터',
+}
+# disarm 중 기대값. 서보는 중립 1500, 모터는 정지 1000, 미사용은 0.
+SERVO_DISARM = {1: 1500, 2: 1500, 3: 1000, 4: 1000, 5: None, 6: 1000, 7: 1000, 8: 1000}
 
 # SYS_STATUS 센서 비트. PX4 가 실제로 채우는 것만 본다.
 SENSOR_BITS = [
@@ -755,6 +883,116 @@ def check_live(r, tel, msgs):
             r.add('info', '대기속도', '%.1f m/s' % a,
                   '정지 ±2 m/s 안 — 영점은 정상. 남은 것은 ASPD_SCALE_1 (고정익 비행으로만 학습)')
 
+    # ── 원시 IMU — 건강 비트가 못 보는 것 ─────────────────────────────
+    # 🔴 SYS_STATUS 의 건강 비트는 "센서가 응답한다" 만 말한다. 값이 맞는지는
+    #    모른다. 정지한 기체에서 가속도 크기는 1G 여야 하고 자이로는 0 이어야
+    #    한다 — 아니면 IMU 가 틀어졌거나 기체가 흔들리고 있는 것이다.
+    r.group = '센서'
+    am = tel.get('acc_mag')
+    if am is not None:
+        d = '%.2f m/s² (%.3f G)' % (am, am / 9.80665)
+        if abs(am - 9.80665) > 0.5:
+            r.add('warn', '가속도 크기', d,
+                  '정지 중이면 1G(9.81)여야 한다. 벗어나면 IMU 보정이 틀어졌거나 '
+                  '기체가 움직이고 있다')
+        else:
+            r.add('ok', '가속도 크기', d)
+
+    gm = tel.get('gyro_mag')
+    if gm is not None:
+        d = '%.4f rad/s' % gm
+        if gm > 0.05:
+            r.add('warn', '자이로 정지값', d, '정지 중인데 각속도가 있다 — 흔들리거나 드리프트다')
+        else:
+            r.add('ok', '자이로 정지값', d)
+
+    # 지자기 세기. 한국 지자기는 약 0.50 Gauss 다. 크게 벗어나면 근처 금속·전류.
+    # 🔴 이 기체는 전류-자기장 상관 −0.91 이 실측돼 있다
+    #    (flights/2026-09-05-hover-compass-interference.md).
+    mm = tel.get('mag_mag')
+    if mm is not None:
+        d = '%.3f Gauss' % mm
+        if mm < 0.25 or mm > 0.75:
+            r.add('warn', '지자기 세기', d,
+                  '한국 지자기는 약 0.50 G 다. 벗어나면 근처 금속이나 전류 간섭이다')
+        else:
+            r.add('ok', '지자기 세기', d)
+
+    tc = tel.get('imu_temp')
+    if tc is not None:
+        d = '%.1f °C' % tc
+        if tc < -10 or tc > 60:
+            r.add('warn', 'IMU 온도', d, '보정 범위를 벗어났다 — 자이로 바이어스가 흐른다')
+        else:
+            r.add('ok', 'IMU 온도', d)
+
+    # 기압계 둘. HIGHRES_IMU 와 SCALED_PRESSURE 는 **다른 센서**이고, 이 기체는
+    # 둘이 10.7 hPa 어긋나 있다 (2026-09-20 실측, 실내).
+    #
+    # 🔴 **판정하지 않는다.** 정상 편차가 얼마인지가 리포에 없다. 둘 중 무엇이
+    #    고도의 기준인지는 확인했다 — `HIGHRES_IMU.pressure_alt` 가
+    #    `ALTITUDE.altitude_amsl` 와 같은 값을 낸다. 판정을 붙이려면
+    #    야외 실비행 로그로 정상 편차부터 재고 FC_CHANGELOG.md 에 남겨라
+    #    (CLAUDE.md 「값을 뽑을 때」 — 실내 조회값으로 판정 금지).
+    p1, p2 = tel.get('imu_press'), tel.get('baro_press')
+    if p1 is not None and p2 is not None:
+        gap = abs(p1 - p2)
+        r.add('info', '기압계 2중', '%.2f / %.2f hPa (차 %.2f)' % (p1, p2, gap),
+              'HIGHRES_IMU 와 SCALED_PRESSURE 는 다른 센서다. 정상 편차가 '
+              '얼마인지는 아직 실측이 없다 — 실내 조회값으로 판정하지 마라')
+
+    # ── 액추에이터 출력 ───────────────────────────────────────────────
+    # 🔴 **번호마다 기대값이 다르다.** 이 기체는 VTOL(4+1)이라 servo1·2 는
+    #    에일러론이고 disarm 중립이 1500 이다 — 모터로 착각하면 정상 기체를
+    #    NO-GO 로 만든다 (실제로 한 번 그랬다).
+    #
+    #    정본은 config/SETTINGS.md 의 출력 배치표다. 2026-09-11 에 로그
+    #    (`actuator_outputs`)로 재검증된 표이고, MAVLink 쪽은 번호가 1부터라
+    #    로그의 output[2,3,5,6] 이 여기서는 servo3/4/6/7 이 된다.
+    r.group = '기체 상태'
+    sv = tel.get('servo')
+    if sv:
+        d = ' '.join(str(v) for v in sv[:8])
+        bad = []
+        for i, v in enumerate(sv[:8], 1):
+            want = SERVO_DISARM.get(i)
+            if want is None or v == 0:        # 미사용 핀은 0 으로 온다
+                continue
+            if abs(v - want) > 60:
+                bad.append('%d번 %d (기대 %d, %s)' % (i, v, want, SERVO_ROLE[i]))
+        if tel.get('armed') is False and bad:
+            # 모터가 도는 것과 서보가 어긋난 것은 다르다 — 모터만 진행 불가다.
+            motors = [b for b in bad if '모터' in b]
+            r.add('blk' if motors else 'warn', '액추에이터 출력', d,
+                  '🔴 DISARM 인데 어긋난 출력이 있다: ' + ' · '.join(bad) +
+                  '. 배치표는 config/SETTINGS.md')
+        else:
+            r.add('ok', '액추에이터 출력', d)
+
+    # 속도 — 지상에 놓인 기체는 0 이어야 한다. EKF 가 흐르면 여기서 보인다.
+    v = tel.get('vel_ned')
+    if v is not None:
+        d = '%.2f m/s' % v
+        if v > 0.5:
+            r.add('warn', '추정 속도', d, '지상에 있는데 추정기가 움직인다고 본다 — EKF 드리프트')
+        else:
+            r.add('ok', '추정 속도', d)
+
+    # ── FC 시계 — 로그 시각이 여기서 나온다 ──────────────────────────
+    r.group = '기록'
+    fu = tel.get('fc_unix')
+    if fu:
+        skew = abs(time.time() - fu)
+        d = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(fu))
+        if skew > 60:
+            r.add('warn', 'FC 시계', '%s (%.0f초 차)' % (d, skew),
+                  '지상 시계와 어긋났다 — 로그 시각으로 다른 기록과 맞춰 볼 수 없다')
+        else:
+            r.add('ok', 'FC 시계', d)
+    elif tel.get('fc_boot_s') is not None:
+        r.add('warn', 'FC 시계', '시각 없음 (부팅 후 %.0f초)' % tel['fc_boot_s'],
+              'GPS 를 못 잡아 UTC 가 안 섰다. 로그에 실제 시각이 안 남는다')
+
     # 홈 위치
     r.group = 'GPS·추정'
     if tel.get('home') and tel.get('lat'):
@@ -827,35 +1065,56 @@ GROUP_NEEDS = {
     },
     'failsafe': {
         'params': ['NAV_RCL_ACT', 'NAV_DLL_ACT', 'RTL_RETURN_ALT', 'RTL_DESCEND_ALT',
-                   'RC_MAP_KILL_SW'],
+                   'RC_MAP_KILL_SW', 'COM_RC_LOSS_T', 'RTL_TYPE'],
     },
     '지오펜스': {
         'params': ['GF_ACTION', 'GF_MAX_HOR_DIST', 'GF_MAX_VER_DIST'],
     },
     '미션': {'mission': True},
     '항법·미션': {
-        'params': ['NAV_ACC_RAD', 'MIS_TAKEOFF_ALT', 'NAV_FORCE_VT', 'COM_ARM_WO_GPS'],
+        'params': ['NAV_ACC_RAD', 'MIS_TAKEOFF_ALT', 'NAV_FORCE_VT', 'COM_ARM_WO_GPS',
+                   'NAV_MC_ALT_RAD', 'MIS_DIST_1WP'],
     },
     'GPS·추정': {
         # 홈은 arm 전에는 안 온다 — 기다리면 영영 안 끝난다. 여기 넣지 않는다.
+        'params': ['EKF2_HGT_REF'],
         'tel': ['fix', 'sats', 'ekf_vel', 'ekf_pos'],
     },
     '전원': {
-        'params': ['BAT1_N_CELLS', 'MPC_THR_HOVER'],
+        'params': ['BAT1_N_CELLS', 'MPC_THR_HOVER', 'COM_LOW_BAT_ACT',
+                   'BAT_LOW_THR', 'BAT_CRIT_THR', 'BAT_EMERGEN_THR',
+                   'BAT1_CAPACITY', 'BAT1_V_CHARGED', 'BAT1_V_EMPTY',
+                   'CBRK_SUPPLY_CHK'],
         # 배터리를 빼 놓으면 volt 가 None 이다. 키가 **있기만** 하면 된다 —
         # 값이 None 인 것도 판정거리다 ("전압 없음").
         'tel': ['sensors_present'],
     },
     '센서': {
-        'params': ['SENS_DPRES_OFF'],
-        'tel': ['sensors_health', 'airspeed'],
+        'params': ['SENS_DPRES_OFF', 'SENS_BOARD_ROT'],
+        'tel': ['sensors_health', 'airspeed', 'acc_mag', 'gyro_mag', 'mag_mag',
+                'imu_temp', 'baro_press'],
     },
     '기체 상태': {
-        'tel': ['armed', 'roll', 'vibe'],
+        'tel': ['armed', 'roll', 'vibe', 'servo', 'vel_ned'],
     },
     '링크': {
-        'params': ['MAV_0_RATE', 'MAV_0_FORWARD', 'COM_RC_IN_MODE'],
+        'params': ['MAV_0_RATE', 'MAV_0_FORWARD', 'COM_RC_IN_MODE', 'COM_RC_LOSS_T'],
         'tel': ['rc'],
+    },
+    'ARM 조건': {
+        'params': ['COM_DISARM_LAND', 'COM_ARM_MAG_ANG', 'COM_DISARM_PRFLT',
+                   'COM_PREARM_MODE'],
+    },
+    '기동 한계': {
+        'params': ['MPC_XY_VEL_MAX', 'MPC_Z_VEL_MAX_UP', 'MPC_TILTMAX_AIR',
+                   'MC_AIRMODE', 'FD_FAIL_P', 'FD_FAIL_R'],
+    },
+    '회로차단기': {
+        'params': list(CBRK_OPEN),
+    },
+    '기록': {
+        'params': ['SDLOG_MODE', 'SDLOG_PROFILE'],
+        'tel': ['fc_boot_s'],
     },
     # FC 가 스스로 말할 때까지는 알 수 없다. 수집이 끝나야 끝난 것이다.
     'FC 자신의 말': {'until_end': True},
@@ -875,6 +1134,10 @@ GROUP_LABEL = {
     '링크':           '링크와 조종기를 점검합니다',
     'FC 자신의 말':    'FC 경고를 수집합니다',
     '파라미터':        '파라미터 수신을 확인합니다',
+    'ARM 조건':       'ARM 조건을 점검합니다',
+    '기동 한계':       '기동 한계를 점검합니다',
+    '회로차단기':      '회로차단기 상태를 점검합니다',
+    '기록':           '로깅과 FC 시계를 점검합니다',
 }
 
 
@@ -908,9 +1171,9 @@ def group_progress(name, params, mission, tel, elapsed, secs):
 
 # 묶음을 화면에 낼 순서. 여기 없는 이름은 뒤에 붙는다.
 # 🔴 순서는 **현장 점검 순서**다 — 먼저 막을 것(쿼드 잠금·failsafe)을 위로 둔다.
-GROUP_ORDER = ['쿼드 전용 잠금', 'failsafe', '지오펜스', '미션', '항법·미션',
-               'GPS·추정', '전원', '센서', '기체 상태', '링크', '파라미터',
-               'FC 자신의 말']
+GROUP_ORDER = ['쿼드 전용 잠금', 'failsafe', '회로차단기', '지오펜스', '미션',
+               '항법·미션', 'ARM 조건', 'GPS·추정', '전원', '센서', '기체 상태',
+               '기동 한계', '링크', '기록', '파라미터', 'FC 자신의 말']
 
 # 묶음 하나의 판정 = 그 안에서 가장 나쁜 등급. 등급이 셋뿐이라 규칙도 하나다.
 # 🔴 이 계산은 여기에만 있다. 화면(JS)에서 다시 하면 두 벌이 따로 늙는다.

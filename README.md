@@ -11,7 +11,7 @@
 | 항목 | 내용 |
 |---|---|
 | 기체 | Makeflyeasy [Striver Mini VTOL 4+1](airframes/striver-mini-vtol/README.md) — 익폭 2100mm, 동체 1200mm |
-| 중량 | 최대 이륙 7.5kg · 최대 탑재 1kg |
+| 중량 | 최대 이륙 6.98kg · 최대 탑재 1kg |
 | 순항 | 18–21 m/s · 최대 이륙고도 3000m |
 | VTOL 모터 | [MFE M4112 KV460](components/motors/mfe-m4112-kv460/README.md) ×4 |
 | 크루즈 모터 | [MFE X4120 KV430](components/motors/mfe-x4120-kv430/README.md) ×1 |
@@ -24,7 +24,9 @@
 | 배터리 | [Fullymax 6S 16000mAh](components/batteries/fullymax-6s-16000mah/README.md) 25C (XT90S) |
 | 조종기 | [RadioMaster Boxer](components/transmitters/radiomaster-boxer/README.md) (EdgeTX) |
 | 수신기 | [RadioMaster RP4TD-M](components/receivers/radiomaster-rp4td-m/README.md) — ELRS 2.4GHz |
-| 기록 | 8일간 55회 비행, 누적 84분 |
+| 신고번호 | C2NV2850087 |
+| 보험 | 대인 무제한(2억원) · 대물 5억원 |
+| 기록 | 11일간 89회 비행, 누적 146.5분 (2026-08-21 ~ 09-15) |
 
 ---
 
