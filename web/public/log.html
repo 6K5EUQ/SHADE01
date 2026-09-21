@@ -451,6 +451,14 @@ const CHARTS = [
       { key: 'volt', color: 'var(--c-volt)', label: '전압', axis: 'right', unit: 'V' }],
     thresholds: [{ v: 45, label: '45A', color: '#d29922' },
                  { v: 90, label: '90A', color: '#f85149' }] },
+  // 🔴 **나침반 간섭** — 전류가 자기장을 끌어당기는 정도를 본다.
+  //    |B| 는 3축 합성 세기다. 기체가 돌아도 지자기 세기는 안 변하는 것이
+  //    정상이므로, 비행 중 이 선이 출렁이면 방향이 아니라 간섭이다.
+  //    전류를 같은 칸에 겹쳐 두는 이유가 그것이다 — 두 선이 같이 움직이면
+  //    원인이 전원선이다 (2026-09-05 실측 상관 −0.91).
+  { id: 'c14', title: '나침반 간섭', bands: true, series: [
+      { key: 'mag_norm', color: '#a371f7', label: '자기장 |B|', axis: 'left', weight: 2, unit: 'G' },
+      { key: 'cur', color: 'var(--c-cur)', label: '전류', axis: 'right', unit: 'A' }] },
   { id: 'c8', title: '진동', bands: true, series: [
       { key: 'vib', color: '#f0883e', label: '진동', axis: 'left', weight: 2 }],
     thresholds: [{ v: 10, label: '경고 10', color: '#d29922' },

@@ -284,6 +284,24 @@ def build_track(ulog, t0, t1):
     if im is not None and "accel_vibration_metric" in im.data:
         trk["vib"] = to_grid(tim, clean(im.data["accel_vibration_metric"][mim], 1000.0), grid)
 
+    # ── 나침반 간섭 ─────────────────────────────────────────────
+    # 🔴 **무엇을 보는 것인가**: 모터 전류가 만드는 자기장이 나침반을 끌어당기는
+    #    정도다. 이 기체는 최대 90A 를 뽑는데 전원선이 나침반 근처를 지난다 —
+    #    2026-09-05 실측에서 전류와 자기장 세기의 상관이 **−0.91** 이었다.
+    #    상관이 크면 스로틀을 올릴 때마다 기수가 돌아간다 (Position 모드 드리프트).
+    #
+    #    |B| 는 3축 합성 세기(Gauss)다. 기체가 회전해도 지자기 세기 자체는
+    #    안 변하는 것이 정상이므로, 비행 중 |B| 가 출렁이면 그것은 방향이
+    #    아니라 **간섭**이다. 전류와 나란히 그려야 원인이 보인다.
+    mg, tmg, mmg = win(ulog, "vehicle_magnetometer", t0, t1)
+    if mg is not None and "magnetometer_ga[0]" in mg.data:
+        mx = clean(mg.data["magnetometer_ga[0]"][mmg], 10.0)
+        my = clean(mg.data["magnetometer_ga[1]"][mmg], 10.0)
+        mz = clean(mg.data["magnetometer_ga[2]"][mmg], 10.0)
+        n = min(len(mx), len(my), len(mz))
+        if n:
+            trk["mag_norm"] = to_grid(tmg[:n], np.sqrt(mx[:n]**2 + my[:n]**2 + mz[:n]**2), grid)
+
     # ── GPS 품질 ────────────────────────────────────────────────
     gp, tgp, mgp = win(ulog, "sensor_gps", t0, t1)
     if gp is not None:
