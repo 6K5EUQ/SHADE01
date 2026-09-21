@@ -115,10 +115,12 @@ main {
 #hudTemp.warn { color: var(--warn); }
 #hudTemp.bad  { color: var(--bad); }
 
-/* 붙어 있는 기체. 온도와 같은 높이·같은 규칙으로 반대쪽에 둔다 — 폭을 고정해
-   가운데 정렬하므로 이름 길이가 달라져도 자리가 안 흔들린다. */
+/* 붙어 있는 기체. 온도와 같은 높이(bottom)·같은 여백(8px)으로 반대쪽에 둔다.
+   🔴 온도처럼 폭을 고정하지 않는다. 이름은 자릿수가 늘었다 줄었다 하는 값이
+   아니라 둘 중 하나로 고정이라, 고정 폭을 주면 남는 여백만큼 글자가 안쪽으로
+   밀려 **오른쪽 끝에 안 붙은 것처럼 보인다** (조종자 지적). */
 #hudCraft { position: absolute; right: 8px; bottom: 6px;
-            width: 88px; text-align: center;
+            text-align: right;
             font-size: 13px; font-weight: 700; letter-spacing: .3px;
             color: #cbd5e1; text-shadow: 0 0 3px #000, 0 0 6px #000;
             pointer-events: none; font-variant-numeric: tabular-nums; }
