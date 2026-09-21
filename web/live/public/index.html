@@ -20,6 +20,10 @@
            평소 볼 일이 없고, 뜨거워질 때만 눈에 들어오면 되는 값이다.
            PM08 이 준다 (BATTERY_STATUS.temperature). ESC·모터 온도는 없다. -->
         <div id="hudTemp">0.0°C</div>
+        <!-- 지금 붙어 있는 기체. 포트를 두 기체가 공유하므로(쿼드=Pixhawk 2.4.8,
+             VTOL=Pixhawk 6C) 화면만 보고는 어느 쪽인지 모른다. HEARTBEAT 의
+             MAV_TYPE 으로 가른다 — 2=쿼드, 22=VTOL. -->
+        <div id="hudCraft"></div>
       </div>
 
     <!-- HUD 아래 계기판. 우측 2번째 차트 아랫선까지 올라온다 (2026-09-05).

@@ -1042,6 +1042,16 @@ function render(s) {
   setText(bt, (t == null ? 0 : t).toFixed(1) + '°C');
   bt.className = t == null ? '' : t > 60 ? 'bad' : t > 45 ? 'warn' : '';
 
+  // 어느 기체가 붙어 있나. 두 기체가 같은 USB 포트를 쓰므로(쿼드=Pixhawk
+  // 2.4.8, VTOL=Pixhawk 6C) 화면만 보고는 구분이 안 된다.
+  // MAV_TYPE: 2=QUADROTOR, 22=VTOL_QUADROTOR. 그 둘만 가른다 — 다른 값이
+  // 오면 무엇인지 모르는 것이지 둘 중 하나가 아니므로 숫자를 그대로 보인다.
+  const craft = d.mav_type == null ? ''
+              : d.mav_type === 2 ? 'QUAD01'
+              : d.mav_type === 22 ? 'SHADE01'
+              : 'TYPE ' + d.mav_type;
+  setText($('hudCraft'), craft);
+
   setText($('st-spd'), fmt(d.groundspeed));
   setText($('st-alt'), fmt(d.alt));
 

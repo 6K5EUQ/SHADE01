@@ -115,6 +115,14 @@ main {
 #hudTemp.warn { color: var(--warn); }
 #hudTemp.bad  { color: var(--bad); }
 
+/* 붙어 있는 기체. 온도와 같은 높이·같은 규칙으로 반대쪽에 둔다 — 폭을 고정해
+   가운데 정렬하므로 이름 길이가 달라져도 자리가 안 흔들린다. */
+#hudCraft { position: absolute; right: 8px; bottom: 6px;
+            width: 88px; text-align: center;
+            font-size: 13px; font-weight: 700; letter-spacing: .3px;
+            color: #cbd5e1; text-shadow: 0 0 3px #000, 0 0 6px #000;
+            pointer-events: none; font-variant-numeric: tabular-nums; }
+
 /* SVG 요소에는 HTML 의 [hidden] 이 안 먹는다(UA 스타일시트가 HTML 전용).
    반드시 클래스로 껐다 켠다. */
 #hud .off { display: none; }
