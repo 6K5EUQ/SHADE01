@@ -245,7 +245,7 @@ MAG_WIN_S = 30.0        # 창 길이. 위 실측에서 30/45/60 중 30 이 가�
 MAG_MIN_N = 30          # magcheck.py 와 같은 최소 표본
 MAG_GATE_A = 3.0        # 창 안 전류 std 최소치. 이보다 평평하면 판정하지 않는다
 MAG_THRESH = 0.5        # magcheck.py THRESH 와 같은 판정선
-MAG_HZ = 5.0            # 50Hz HIGHRES_IMU 를 이 속도로 솎는다 (상관에 충분)
+MAG_HZ = 5.0            # USB 의 42Hz HIGHRES_IMU 를 이 속도로 솎는다 (상관에 충분)
 
 
 class MagCorr:
@@ -1231,10 +1231,15 @@ def handle(msg, st):
                      round(msg.vibration_z, 2)]
 
     elif t == 'HIGHRES_IMU':
-        # 🔴 자력계 생값이 여기로 온다 — PX4 기본 스트림이라 요청하지 않아도
-        #    50Hz 로 들어온다 (실측 2026-08-22 tlog: 49.96Hz, 42021 샘플).
-        #    ULog 의 `vehicle_magnetometer` 는 518ms(2Hz)인데 텔레메트리 쪽이
-        #    25배 빠르다 — 사후분석보다 표본이 많다.
+        # 자력계 생값이 여기로 온다 — PX4 기본 스트림이라 요청하지 않아도 온다.
+        #
+        # 🔴 **USB 직결일 때만 쓸 만하다** (2026-09-21 실측). 이 메시지는
+        #    페이로드가 커서 ELRS 백팩의 좁은 대역에서 PX4 가 솎아낸다:
+        #      FC(USB)  41.9Hz     ← 계기가 돈다
+        #      ELRS     0.01~0.02Hz (43~91초에 1개)  ← 영영 n<30, 「대기」
+        #    같은 기록에서 ATTITUDE 는 ELRS 로도 4.1~4.4Hz 온다 — 링크가
+        #    죽은 것이 아니라 **이 메시지만** 밀린다.
+        #    그래서 이 계기는 야외 비행(백팩)이 아니라 **지상 시험(USB)** 용이다.
         #
         #    단위는 가우스(G). 이 기체 실측 |B| ≈ 0.45 G.
         B = math.sqrt(msg.xmag ** 2 + msg.ymag ** 2 + msg.zmag ** 2)
