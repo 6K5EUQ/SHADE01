@@ -159,6 +159,9 @@ SEVERITY = ['EMERG', 'ALERT', 'CRIT', 'ERROR', 'WARN', 'NOTICE', 'INFO', 'DEBUG'
 
 MAX_MESSAGES = 200
 
+# 쪼개진 STATUSTEXT 의 나머지 조각을 이만큼 기다린다. 넘으면 있는 것만 잇는다.
+CHUNK_TIMEOUT = 2.0
+
 # 실시간 기록물이 쌓이는 곳. `.ulg` 와 섞이지 않게 하위 폴더를 쓴다 —
 # qgclog 의 `_repair()` 가 형제 로그를 기증자로 찾으므로 `logs/` 평면에
 # tlog 를 끼워 넣으면 안 된다 (PROCEDURE.md "평면으로 쌓는다").
@@ -637,6 +640,7 @@ class Player:
         st.track_total = 0
         st._last_pt = None
         st.messages.clear()
+        st._chunks.clear()         # 재조립 중이던 조각도 같이 버린다
         st.home = None
         st.mission = []
         st._seq += 1
@@ -923,7 +927,8 @@ class State:
         self.rec_gps = {}
         self.d = {}                # 화면에 그대로 나가는 값들
         self.track = []            # [[lat, lon, alt_rel], ...]
-        self.messages = []         # STATUSTEXT 최근 것
+        self.messages = []         # STATUSTEXT 최근 것 (청크를 이어붙인 것)
+        self._chunks = {}          # 재조립 중인 STATUSTEXT. {id: [sev, {seq: text}, 받은시각]}
         self.home = None           # [lat, lon]
         self.mission = []          # [[lat, lon, seq, cmd], ...]
         self._last_pt = None
@@ -1079,6 +1084,9 @@ def handle(msg, st):
             return
         st.sysid = msg.get_srcSystem()
         st.compid = msg.get_srcComponent()
+        # 마지막 조각을 놓친 STATUSTEXT 를 여기서 털어낸다. 하트비트는 1Hz 로
+        # 꾸준히 오므로, 조각이 유실돼도 2초 안에 있는 것만이라도 나온다.
+        _flush_chunks(st, time.time(), keep=None)
         armed = bool(msg.base_mode & mavlink2.MAV_MODE_FLAG_SAFETY_ARMED)
         # 바뀐 순간에만 기록기를 건드린다. 하트비트는 1Hz 로 계속 오므로
         # 매번 부르면 파일을 여닫는 판정이 초마다 돈다.
@@ -1321,14 +1329,96 @@ def handle(msg, st):
     elif t == 'STATUSTEXT':
         text = msg.text.decode() if isinstance(msg.text, bytes) else msg.text
         sev = SEVERITY[msg.severity] if msg.severity < len(SEVERITY) else '?'
-        st.messages.append({'t': round(time.time()), 'sev': sev, 'text': text.strip()})
-        if len(st.messages) > MAX_MESSAGES:
-            del st.messages[:len(st.messages) - MAX_MESSAGES]
+        _statustext(st, sev, text, getattr(msg, 'id', 0), getattr(msg, 'chunk_seq', 0))
 
     else:
         return
 
     st._seq += 1
+
+
+def _push_message(st, sev, text):
+    """완성된 한 줄을 목록에 넣는다."""
+    st.messages.append({'t': round(time.time()), 'sev': sev, 'text': text.strip()})
+    if len(st.messages) > MAX_MESSAGES:
+        del st.messages[:len(st.messages) - MAX_MESSAGES]
+
+
+def _statustext(st, sev, text, sid, seq):
+    """STATUSTEXT 청크를 이어붙여 한 줄로 만든다.
+
+    🔴 MAVLink 의 text 필드는 **50바이트 고정**이다. 더 긴 문장은 PX4 가
+       쪼개 보내고, 같은 `id` 에 `chunk_seq` 0,1,2… 를 매긴다. 이어붙이지
+       않으면 꼬리 조각이 **따로 한 줄**이 된다:
+
+           'Arming denied: Resolve system health failures firs'   (seq 0)
+           't'                                                    (seq 1)
+
+       화면은 새 메시지 중 마지막 것을 띄우므로 **`t` 만 떴다** — 무엇을
+       하라는 것인지 알 수가 없다. 2026-09-15 로그에도 같은 것이 있다
+       ('RTL: start return at 61 m (20 m above destin' + '\\t').
+
+    청크가 유실될 수 있어(ELRS 는 손실 링크다) 끝을 기다리기만 하면 영영
+    안 나온다. 그래서 두 가지로 끊는다 — 50바이트를 다 못 채운 조각이 오면
+    그것이 마지막이고, 그 전에 다른 id 가 오거나 시간이 지나면 있는 것만
+    이어붙여 내보낸다. **불완전해도 내보내는 편이 낫다** — 조각 하나보다는
+    읽을 수 있다.
+    """
+    now = time.time()
+
+    # 🔴 PX4 는 50바이트를 널로 채워 보낸다. 이어붙이기 **전에** 떼야 한다 —
+    #    나중에 strip() 해도 가운데에 낀 널은 안 없어진다.
+    text = text.rstrip('\x00')
+
+    # 쪼개지지 않은 보통 메시지. 버퍼를 거치지 않는다.
+    if not sid and not seq:
+        _flush_chunks(st, now, keep=None, before=True)
+        _push_message(st, sev, text)
+        return
+
+    buf = st._chunks.get(sid)
+    if buf is None:
+        # 새 id 가 시작됐다 — 먼저 오던 것들은 더 기다려도 안 온다. 그것들을
+        # **먼저** 내보내야 화면에 시간 순서대로 쌓인다.
+        _flush_chunks(st, now, keep=sid, before=True)
+        buf = st._chunks[sid] = [sev, {}, now]
+    buf[1][seq] = text
+    buf[2] = now
+
+    # 끝났는지 본다. 50바이트를 다 못 채운 조각이 마지막이고(PX4 는 꽉 채워야
+    # 이어 보낸다), seq 0 부터 그 조각까지 빠짐없이 있어야 한다.
+    #
+    # ⚠️ 조각 하나만 보고 판단하면 안 된다. UDP 는 순서를 보장하지 않아
+    #    꼬리(seq 1)가 먼저 도착하는 일이 있다 — 그때 바로 내보내면 예전처럼
+    #    't' 한 글자만 뜬다.
+    parts = buf[1]
+    last = max(parts)
+    if len(parts[last].encode()) < 50 and set(parts) == set(range(last + 1)):
+        _emit_chunks(st, sid)
+
+
+def _emit_chunks(st, sid):
+    """버퍼에 모인 조각을 seq 순으로 이어붙여 내보낸다."""
+    buf = st._chunks.pop(sid, None)
+    if not buf:
+        return
+    sev, parts, _ = buf
+    text = ''.join(parts[k] for k in sorted(parts))
+    if text.strip():           # 조각을 다 놓쳤으면 빈 줄을 남기지 않는다
+        _push_message(st, sev, text)
+
+
+def _flush_chunks(st, now, keep=None, before=False):
+    """끝나지 않은 재조립을 정리한다. `keep` 인 id 는 건드리지 않는다.
+
+    `before=True` 는 새 메시지가 도착해서 부르는 경우다 — 먼저 오던 것이
+    더 올 리 없으니 시간을 안 따지고 바로 내보낸다. 그래야 화면에 도착
+    순서대로 쌓인다. `before=False` 는 하트비트가 부르는 주기 청소라
+    `CHUNK_TIMEOUT` 을 넘긴 것만 턴다.
+    """
+    for sid in [k for k in st._chunks if k != keep]:
+        if before or now - st._chunks[sid][2] > CHUNK_TIMEOUT:
+            _emit_chunks(st, sid)
 
 
 def _moved(a, b):
@@ -1776,6 +1866,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.st.track_total = 0      # 안 되돌리면 dropped 가 음수가 된다
                 self.st._last_pt = None
                 self.st.messages.clear()
+                self.st._chunks.clear()
             return self._send(200, '{"ok":true}', 'application/json')
 
         # ── 재생 ──────────────────────────────────────────────────
