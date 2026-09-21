@@ -547,6 +547,24 @@ const CHARTS = [
       { key: 'ekf_mag', color: '#a371f7', label: '지자기', axis: 'left', minSpan: 1.2, nonNeg: true }],
     // 비율이다. 1 을 넘으면 그 센서의 혁신 검사가 깨지고 있다는 뜻.
     thresholds: [{ v: 1, label: '한계', color: '#d29922' }] },
+  // 🔴 나침반 간섭 (2026-09-21). |B| 와 전류-|B| 상관을 한 칸에 겹친다 —
+  //    "전류가 오를 때 |B| 가 꺼지는가" 가 이 칸의 판정이라 둘이 같은
+  //    시간축 위에 있어야 눈으로 확인된다.
+  //    상관은 전류가 평평한 구간에서 null 이라 선이 끊긴다 — 그것이 맞다.
+  //    이어 그리면 판정하지 않은 구간을 판정한 것처럼 보인다.
+  { id: 'k-mag', title: '나침반 간섭', on: false, series: [
+      // 🔴 상관을 **왼쪽**에 둔다. chart.js 의 임계선은 왼쪽 축에만 그려진다
+      //    (chart.js:129, :258 — `y(th.v, 'left')`). 오른쪽에 두면 ±0.5 선이
+      //    |B| 축(0.45G)에 그려져 조용히 엉뚱한 자리에 눕는다.
+      // r 은 -1~+1 이라 축이 늘 그 폭을 담아야 0.5 선과의 거리가 읽힌다.
+      { key: 'magr', color: '#f85149', label: '전류-자기 상관', axis: 'left', weight: 2, minSpan: 2 },
+      // |B| 는 장소마다 다르므로 폭을 좁게 잡는다. 이 기체 실측 0.45G 근처,
+      // 9/5 간섭 때 변동폭이 0.206G 였다.
+      { key: 'magB', color: '#a371f7', label: '자기장 |B|', axis: 'right', weight: 2, unit: 'G', minSpan: 0.1, nonNeg: true }],
+    // magcheck.py THRESH 와 같은 0.5. 음수 쪽이 실제로 나오는 방향이라
+    // 아래쪽 선이 판정선이다.
+    thresholds: [{ v: -0.5, label: '-0.5', color: '#d29922' },
+                 { v: 0.5, label: '+0.5', color: '#d29922' }] },
 ];
 const shownIds = new Set(CHARTS.filter((c) => c.on).map((c) => c.id));
 
@@ -583,6 +601,10 @@ function pushSample(d) {
   put('eph', d.eph);
   const r = d.ekf_ratio || {};
   put('ekf_vel', r.vel); put('ekf_pos', r.pos); put('ekf_alt', r.alt); put('ekf_mag', r.mag);
+  put('magB', d.magB);
+  // 🔴 판정한 구간만 넣는다. 'flat'(전류 평평)·'wait' 는 null 이라 선이 끊긴다 —
+  //    그것이 맞다. 이어 그리면 판정하지 않은 구간을 판정한 것처럼 보인다.
+  put('magr', d.magcorr && d.magcorr.state === 'ok' ? d.magcorr.r : null);
 
   trk.n++;
   trk.dur = (trk.n - 1) / trk.hz;
@@ -1053,6 +1075,37 @@ function render(s) {
   // 실측 평소 0.15~0.23m. 1m 넘으면 노랑, 3m 넘으면 빨강.
   setText($('st-eph'), d.eph != null ? d.eph.toFixed(2) : '—');
   sc('sc-eph', d.eph != null && d.eph > 3 ? 'bad' : d.eph != null && d.eph > 1 ? 'warn' : '');
+
+  // 나침반 자기장 세기. |B| 는 회전불변량이라 **변하면 안 되는 값**이다.
+  // 절대값 자체로는 판정하지 않는다 — 장소마다 지자기가 다르다. 옆칸의
+  // 상관이 판정이고, 이 칸은 그 상관이 무엇을 보고 있는지를 보여 준다.
+  setText($('st-magb'), d.magB != null ? d.magB.toFixed(3) : '—');
+
+  // 전류-자기 상관. 9/5 사후분석(flights/2026-09-05-hover-compass-interference.md)
+  // 이 확정한 간섭을 비행 중에 본다.
+  //
+  // 🔴 'flat'(전류가 평평함) 일 때 숫자를 찍으면 안 된다. 그 구간의 r 은
+  //    잡음이고, 실측에서 전체 -0.90 인 비행이 -0.40 으로 보였다.
+  //    모르는 것은 모른다고 둔다 — 빈 값이 틀린 값보다 낫다.
+  const mc = d.magcorr;
+  if (!mc) {
+    setText($('st-magr'), '—');
+    sc('sc-magr', '');
+  } else if (mc.state === 'ok') {
+    // 부호는 방향일 뿐이고 **크기**가 간섭의 세기다. |r|>0.5 가 판정선
+    // (magcheck.py THRESH 와 같다). 0.8 을 넘으면 9/5 수준이다.
+    const a = Math.abs(mc.r);
+    setText($('st-magr'), (mc.r > 0 ? '+' : '') + mc.r.toFixed(2));
+    sc('sc-magr', a > 0.8 ? 'bad' : a > 0.5 ? 'warn' : '');
+  } else if (mc.state === 'flat') {
+    // 전류가 안 변하면 판정 불가다. 왜 못 내는지를 같이 보여 준다 —
+    // "고장" 으로 오해하지 않게.
+    setText($('st-magr'), '전류 일정');
+    sc('sc-magr', 'txt');
+  } else {
+    setText($('st-magr'), '대기');
+    sc('sc-magr', 'txt');
+  }
 
   // 모터 4개를 **기체 형상 위에** 그린다. 절대값보다 **넷이 서로 비슷한가**
   // 가 판정이라, 부하를 원의 크기·밝기로 주고 튄 놈에만 색을 얹는다.
@@ -1628,6 +1681,16 @@ function demoState(n) {
       batt_pct: 63, mah: 4820,
       fix: 4, sats: 27, eph: 0.19, eph_ekf: 0.4,
       vibe: [2.5, 3.1, 4.4], ekf: { pos: 1, vel: 1, hgt: 1 }, ekf_ratio: { vel: 0.3 },
+      // 나침반 간섭 — ?magr=N 으로 상관을, ?magstate=flat|wait 로 판정 불가
+      // 상태를 강제한다. 기본은 실측을 닮은 0.45G 에 간섭 없음.
+      magB: fx('magb', 0.45 + 0.01 * Math.sin(t / 8)),
+      magcorr: (() => {
+        const s = fx2('magstate');
+        if (s === 'flat') return { state: 'flat', n: 150, r: null, cur_sd: 0.8, gate: 3 };
+        if (s === 'wait') return { state: 'wait', n: 12, r: null, need: 30, cur_sd: null };
+        return { state: 'ok', r: fx('magr', -0.12), n: 150, span: 30,
+                 cur_sd: 11.2, B: 0.45, bad: Math.abs(fx('magr', -0.12)) > 0.5 };
+      })(),
       rssi: 200, wp_seq: 3, wp_dist: 27.4, xtrack: -2.1,
       // 링크 — ?dbm=N 으로 색 경로를 강제한다. 기본은 실측을 닮은 -68dBm.
       link_dbm: Math.round(fx('dbm', -68)),

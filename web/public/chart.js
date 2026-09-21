@@ -127,7 +127,14 @@ function drawChart(el, trk, spec) {
     }
     const extra = {};
     if (ax === 'left' && spec.thresholds) {
-      for (const th of spec.thresholds) extra.max = Math.max(extra.max ?? -Infinity, th.v);
+      // 🔴 위아래 양쪽으로 늘린다. 예전에는 max 만 늘려서 **음수 임계선이
+      //    축 밖으로 밀려나면 그냥 안 그려졌다** (:258 의 범위 검사에서
+      //    걸러진다) — 선이 없는 것이 "임계를 안 넘었다" 로 읽혀 조용히
+      //    틀린 화면이 된다. 나침반 간섭의 판정선이 -0.5 라 물렸다 (2026-09-21).
+      for (const th of spec.thresholds) {
+        extra.max = Math.max(extra.max ?? -Infinity, th.v);
+        extra.min = Math.min(extra.min ?? Infinity, th.v);
+      }
     }
     // 그 축에 실린 계열들이 요구하는 최소 폭 중 가장 큰 것을 쓴다.
     for (const sx of spec.series) {

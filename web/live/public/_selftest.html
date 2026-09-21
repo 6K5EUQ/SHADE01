@@ -162,6 +162,39 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
   ok('전류 50A → .warn', /\bwarn\b/.test(D.getElementById('sc-cur').className),
      D.getElementById('sc-cur').className);
 
+  // ── 나침반 간섭 ─────────────────────────────────────────────────
+  // 🔴 이 칸의 핵심은 "못 내는 값을 안 내는 것" 이다. 전류가 평평한 구간의
+  //    상관은 잡음이라, 9/5 실측에서 전체 -0.90 인 비행이 창 단위로는
+  //    -0.40 으로 보였다 (mav_live.py MagCorr 주석). 숫자를 찍으면 안 된다.
+  note('■ 나침반 간섭 — 못 내는 값은 안 낸다');
+  f = await load('magr=-0.12'); D = f.contentDocument;
+  ok('상관 -0.12 는 무채색', D.getElementById('sc-magr').className === 'sc',
+     D.getElementById('sc-magr').className + ' 값=' + D.getElementById('st-magr').textContent);
+  f = await load('magr=-0.62'); D = f.contentDocument;
+  ok('상관 -0.62 → .warn (판정선 0.5)',
+     /\bwarn\b/.test(D.getElementById('sc-magr').className),
+     D.getElementById('sc-magr').className + ' 값=' + D.getElementById('st-magr').textContent);
+  f = await load('magr=-0.88'); D = f.contentDocument;
+  ok('상관 -0.88 → .bad (9/5 수준)',
+     /\bbad\b/.test(D.getElementById('sc-magr').className),
+     D.getElementById('sc-magr').className + ' 값=' + D.getElementById('st-magr').textContent);
+  f = await load('magstate=flat'); D = f.contentDocument;
+  {
+    const txt = D.getElementById('st-magr').textContent.trim();
+    ok('전류가 평평하면 숫자를 안 찍는다', !/[0-9]/.test(txt), `표시="${txt}"`);
+    ok('전류가 평평하면 경고색도 없다',
+       !/\b(bad|warn)\b/.test(D.getElementById('sc-magr').className),
+       D.getElementById('sc-magr').className);
+  }
+  f = await load('magstate=wait'); D = f.contentDocument;
+  ok('표본이 모자라면 "대기"',
+     !/[0-9]/.test(D.getElementById('st-magr').textContent),
+     D.getElementById('st-magr').textContent);
+  // |B| 는 회전불변량이라 값 자체는 늘 보여야 한다 — 판정과 무관하다.
+  f = await load('magb=0.451'); D = f.contentDocument;
+  ok('자기장 |B| 가 보인다', /0\.45/.test(D.getElementById('st-magb').textContent),
+     D.getElementById('st-magb').textContent);
+
   // ── 비상정지 ────────────────────────────────────────────────────
   note('■ 비상정지 — 모터가 끊긴 것보다 급한 상태는 없다');
   f = await load('sys=8'); D = f.contentDocument; svg = D.getElementById('hud');
@@ -203,10 +236,12 @@ const MOT = ['LF', 'RF', 'LB', 'RB'];
   // WP 칸은 통합하면서 뺐다. 대신 남긴 6칸이 전부 있는지 본다 —
   // 하나라도 없으면 render 가 조용히 죽은 것이다.
   // 모터는 칸 넷이 아니라 **기체 그림 하나 + 요약 둘**이다 (2026-09-09).
+  // 나침반 간섭 두 칸은 2026-09-21 에 들어왔다.
   const want = ['sc-spd', 'sc-alt', 'sc-batt', 'sc-cur', 'sc-sats', 'sc-eph',
+                'sc-magb', 'sc-magr',
                 'sc-frame', 'sc-mspread', 'sc-mavg'];
   const missing = want.filter((id) => !D.getElementById(id));
-  ok('계기판 9칸이 전부 있다', missing.length === 0, missing.join(',') || 'ok');
+  ok('계기판 11칸이 전부 있다', missing.length === 0, missing.join(',') || 'ok');
   // 로터 4개가 실제 기체 배치와 같은 자리인지 — 좌전이 좌상단이어야 한다.
   // getBoundingClientRect 는 SVG 요소에도 화면 좌표로 답한다.
   const cellBox = (id) => D.getElementById(id).getBoundingClientRect();
