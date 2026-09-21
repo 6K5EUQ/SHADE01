@@ -31,7 +31,6 @@ HTTP 로 내준다. 로그(.ulg) 재생이 아니라 **현재 프레임**이다.
 """
 
 import argparse
-import collections
 import errno
 import json
 import math
@@ -220,94 +219,6 @@ REC_MIN_KEEP_DEFAULT = 1_000_000      # 모르는 경로는 보수적으로
 # 지운다 — git 에도 안 올라가니(.gitignore) 조용히 디스크만 먹는다.
 # 정본은 shade01.bewe.co.kr 이고 이것은 이 PC 의 사본이므로 넉넉히 잡아도 된다.
 REC_KEEP_DAYS = 90
-
-
-# ── 나침반 전류 간섭 실시간 추적 ────────────────────────────────────────
-#
-# 9/5 에 사후분석으로 확정한 것(flights/2026-09-05-hover-compass-interference.md)
-# 을 비행 중에도 본다. |B|(자기장 세기) 는 **회전불변량**이라 기체가 어떻게 돌든
-# 변하면 안 되는데, 전류에 따라 변하면 전력선이 나침반을 흔드는 것이다.
-#
-# 🔴 창(window) 안에서 전류가 안 변하면 상관을 내면 안 된다.
-#    9/5 로그 실측: 창 안 전류 std 는 1.4A 인데 비행 전체는 7.8A 다. 전류가
-#    평평한 창에서 상관을 내면 잡음을 증폭해 **엉뚱한 값**이 나온다 —
-#    게이트 없이 30초 창을 돌리면 중앙값 -0.40 이 나와 전체값 -0.90 을
-#    "간섭 약함" 으로 오해하게 만든다. 3A 게이트를 걸면 -0.86 으로 붙는다.
-#
-#    실측 (logs/2026-09-05_09_17_46.ulg / _09_24_04.ulg, 공중 구간):
-#      전체 상관        -0.899 / -0.659
-#      30초 게이트 없음  -0.399 / -0.519   ← 쓰면 안 되는 값
-#      30초 게이트 3A   -0.862 / -0.569   ← 전체값을 재현한다
-#
-#    게이트를 통과하는 시간은 비행의 23~72% 다. 나머지 구간은 값을 내지 않고
-#    "대기" 로 둔다 — 모르는 것을 아는 척하는 것보다 낫다.
-MAG_WIN_S = 30.0        # 창 길이. 위 실측에서 30/45/60 중 30 이 가장 빨리 붙는다
-MAG_MIN_N = 30          # magcheck.py 와 같은 최소 표본
-MAG_GATE_A = 3.0        # 창 안 전류 std 최소치. 이보다 평평하면 판정하지 않는다
-MAG_THRESH = 0.5        # magcheck.py THRESH 와 같은 판정선
-MAG_HZ = 5.0            # USB 의 42Hz HIGHRES_IMU 를 이 속도로 솎는다 (상관에 충분)
-
-
-class MagCorr:
-    """전류 vs |B| 슬라이딩 상관. 수신 스레드에서만 만진다.
-
-    표본을 통째로 들고 있지 않고 누적합(Welford 아님, 단순 모멘트)만 굴린다 —
-    창이 30초·5Hz 라 150개면 충분하고, 덱에서 빠지는 값을 빼면 되므로
-    매 프레임 전체를 다시 도는 것보다 싸다.
-    """
-
-    def __init__(self, win=MAG_WIN_S, hz=MAG_HZ):
-        self.win = win
-        self.min_dt = 1.0 / hz
-        self.buf = collections.deque()      # (t, cur, B)
-        self._last = 0.0
-
-    def add(self, t, cur, B):
-        """표본 하나. t 는 monotonic 초. cur 가 None 이면 버린다."""
-        if cur is None or B is None or not math.isfinite(B):
-            return
-        if t - self._last < self.min_dt:
-            return                          # 솎기
-        self._last = t
-        self.buf.append((t, cur, B))
-        cut = t - self.win
-        while self.buf and self.buf[0][0] < cut:
-            self.buf.popleft()
-
-    def value(self):
-        """{'r','n','span','cur_sd','state'} 또는 None.
-
-        state: 'ok'(판정함) | 'flat'(전류가 안 변함) | 'wait'(표본 부족)
-        """
-        n = len(self.buf)
-        if n < MAG_MIN_N:
-            return {'state': 'wait', 'n': n, 'r': None,
-                    'need': MAG_MIN_N, 'cur_sd': None}
-        xs = [b[1] for b in self.buf]
-        ys = [b[2] for b in self.buf]
-        mx = sum(xs) / n
-        my = sum(ys) / n
-        vx = sum((x - mx) ** 2 for x in xs)
-        vy = sum((y - my) ** 2 for y in ys)
-        cur_sd = math.sqrt(vx / n)
-        if cur_sd < MAG_GATE_A:
-            # 🔴 여기서 r 을 내보내면 안 된다. 위 주석의 실측 참조.
-            return {'state': 'flat', 'n': n, 'r': None,
-                    'cur_sd': round(cur_sd, 2), 'gate': MAG_GATE_A}
-        if vx <= 0 or vy <= 0:
-            return {'state': 'flat', 'n': n, 'r': None,
-                    'cur_sd': round(cur_sd, 2), 'gate': MAG_GATE_A}
-        cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
-        r = cov / math.sqrt(vx * vy)
-        return {
-            'state': 'ok',
-            'r': round(r, 3),
-            'n': n,
-            'span': round(self.buf[-1][0] - self.buf[0][0], 1),
-            'cur_sd': round(cur_sd, 2),
-            'B': round(my, 4),
-            'bad': abs(r) > MAG_THRESH,
-        }
 
 
 def _outdoor(d):
@@ -912,9 +823,6 @@ class State:
         # 조종자가 화면에서 고정한 경로. None 이면 자동(LINK_PRIORITY).
         self.pin = None
 
-        # 나침반 전류 간섭 추적기. 수신 스레드에서만 add() 한다.
-        self.magcorr = MagCorr()
-
         self.rec = None            # Recorder. main() 이 꽂는다
         self.player = None         # Player. main() 이 꽂는다
         # 🔴 기록기가 보는 arm 상태는 d['armed'] 와 **따로** 둔다. 재생 중에는
@@ -1229,26 +1137,6 @@ def handle(msg, st):
     elif t == 'VIBRATION':
         d['vibe'] = [round(msg.vibration_x, 2), round(msg.vibration_y, 2),
                      round(msg.vibration_z, 2)]
-
-    elif t == 'HIGHRES_IMU':
-        # 자력계 생값이 여기로 온다 — PX4 기본 스트림이라 요청하지 않아도 온다.
-        #
-        # 🔴 **USB 직결일 때만 쓸 만하다** (2026-09-21 실측). 이 메시지는
-        #    페이로드가 커서 ELRS 백팩의 좁은 대역에서 PX4 가 솎아낸다:
-        #      FC(USB)  41.9Hz     ← 계기가 돈다
-        #      ELRS     0.01~0.02Hz (43~91초에 1개)  ← 영영 n<30, 「대기」
-        #    같은 기록에서 ATTITUDE 는 ELRS 로도 4.1~4.4Hz 온다 — 링크가
-        #    죽은 것이 아니라 **이 메시지만** 밀린다.
-        #    그래서 이 계기는 야외 비행(백팩)이 아니라 **지상 시험(USB)** 용이다.
-        #
-        #    단위는 가우스(G). 이 기체 실측 |B| ≈ 0.45 G.
-        B = math.sqrt(msg.xmag ** 2 + msg.ymag ** 2 + msg.zmag ** 2)
-        d['magB'] = round(B, 4)
-        # 전류는 SYS_STATUS/BATTERY_STATUS 가 채운 마지막 값을 쓴다. 배터리를
-        # 빼면 None 이 되고 그러면 add() 가 알아서 버린다 — 실내 USB 직결에서
-        # 상관이 계산되는 일은 없다.
-        st.magcorr.add(time.monotonic(), d.get('cur'), B)
-        d['magcorr'] = st.magcorr.value()
 
     elif t == 'ESTIMATOR_STATUS':
         d['ekf'] = {k: bool(msg.flags & f) for k, f in EKF_FLAGS}
