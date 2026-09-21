@@ -50,6 +50,9 @@ PEER_TIMEOUT = 30.0
 # 시리얼이 사라졌을 때 다시 열어보는 간격.
 REOPEN_INTERVAL = 2.0
 
+# Tailscale 주소가 아직 없을 때 다시 찾아보는 간격 (부팅 직후 레이스).
+TAILSCALE_WAIT_INTERVAL = 3.0
+
 # 한 번에 읽는 최대 바이트. MAVLink v2 최대 프레임(280B)보다 넉넉하게.
 READ_CHUNK = 4096
 
@@ -91,24 +94,57 @@ def local_addr_for(target_ip):
         s.close()
 
 
-def pick_bind_addr(fixed):
-    """바인딩할 주소를 고른다. Tailscale 주소가 있으면 거기에만 연다."""
-    if BIND_ADDR:
-        return BIND_ADDR, "MAV_BIND 지정"
-
+def find_tailscale_addr(fixed):
+    """Tailscale 로컬 주소를 찾는다. 못 찾으면 None."""
     # 고정 대상 중 Tailscale 주소로 나가는 경로의 로컬 주소를 쓴다.
     for host, _ in fixed:
         if is_tailscale(host):
             local = local_addr_for(host)
             if local and is_tailscale(local):
-                return local, "Tailscale 자동탐지"
+                return local
 
     # 고정 대상이 없으면 Tailscale 의 MagicDNS 주소로 경로를 물어본다.
     local = local_addr_for("100.100.100.100")
     if local and is_tailscale(local):
-        return local, "Tailscale 자동탐지"
+        return local
 
-    return "0.0.0.0", "Tailscale 주소를 못 찾음"
+    return None
+
+
+def pick_bind_addr(fixed):
+    """바인딩할 주소를 고른다. Tailscale 주소가 있으면 거기에만 연다.
+
+    🔴 0.0.0.0 으로 폴백하지 않는다 (2026-09-21). 와일드카드로 열면 이 PC 의
+       **모든** 인터페이스를 먹는데, 거기에는 ELRS 백팩 AP 주소(10.0.0.x)도
+       들어간다. 그러면 라이브 트래커가 백팩 포트를 못 열어 ELRS 경로가
+       통째로 막힌다 — 2026-09-18 부팅 때 실제로 그랬고, 사흘 뒤 알아챘다.
+       그때 브리지는 멀쩡히 도는 것처럼 보였다. 조용히 넓게 여는 것보다
+       늦게라도 좁게 여는 편이 낫다.
+
+    부팅 직후에는 Tailscale 이 아직 안 올라와 탐지가 실패한다. 그래서 죽지
+    않고 기다린다 — 원인이 레이스였으니 죽이면 같은 창에서 영영 못 뜬다.
+    """
+    if BIND_ADDR:
+        return BIND_ADDR, "MAV_BIND 지정"
+
+    addr = find_tailscale_addr(fixed)
+    if addr:
+        return addr, "Tailscale 자동탐지"
+
+    log("mav_bridge: Tailscale 주소가 아직 없다 (부팅 직후인가?). 기다린다.")
+    log("mav_bridge: 0.0.0.0 으로는 안 연다 — ELRS 백팩 포트까지 먹는다.")
+    log("mav_bridge: 바로 열려면 MAV_BIND=<tailscale 주소> 를 줘라.")
+
+    waited = 0.0
+    while True:
+        time.sleep(TAILSCALE_WAIT_INTERVAL)
+        waited += TAILSCALE_WAIT_INTERVAL
+        addr = find_tailscale_addr(fixed)
+        if addr:
+            log("mav_bridge: Tailscale 주소를 찾았다 (%.0f초 기다림)" % waited)
+            return addr, "Tailscale 자동탐지"
+        if waited % 60 < TAILSCALE_WAIT_INTERVAL:
+            log("mav_bridge: 아직 Tailscale 주소가 없다 (%.0f초)" % waited)
 
 
 def open_serial():
@@ -174,6 +210,8 @@ def main():
     if bind_addr == "0.0.0.0":
         log("mav_bridge: ⚠️  모든 인터페이스에 열렸다. 이 호스트에 공인 IP 가 있으면")
         log("mav_bridge: ⚠️  인터넷에서 FC 로 MAVLink 를 주입할 수 있다.")
+        log("mav_bridge: ⚠️  ELRS 백팩 AP(10.0.0.x) 포트까지 먹어 라이브 트래커의")
+        log("mav_bridge: ⚠️  백팩 경로가 막힌다 — 2026-09-18 에 실제로 그랬다.")
         log("mav_bridge: ⚠️  MAV_BIND=<tailscale 주소> 로 좁혀라.")
 
     # 이미 거절을 알린 송신자. 로그가 넘치지 않게 IP 당 한 번만 찍는다.
