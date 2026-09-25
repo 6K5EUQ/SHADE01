@@ -1275,6 +1275,12 @@ def group_of(r, name, elapsed=0.0):
     return None
 
 
+def empty_group(g):
+    """읽을 것이 없이 끝난 묶음. 화면이 그 줄을 끝난 것으로 그리게 한다."""
+    return {'name': g, 'items': [], 'level': 'ok', 'verdict': 'GO',
+            'counts': {'blk': 0, 'warn': 0, 'ok': 0, 'info': 0}}
+
+
 def stream(m, secs, meta, out):
     """걷는 동안 묶음이 끝나는 대로 한 줄씩 흘린다 (NDJSON).
 
@@ -1318,8 +1324,7 @@ def stream(m, secs, meta, out):
                 # 판정거리가 아직 하나도 없는 묶음이다 (FC 가 경고를 안 뱉었다).
                 # 🔴 그래도 **끝난 것으로 내보낸다.** 안 그러면 화면이 100%
                 #    에 멈춘 채로 남아, 다 된 점검이 도는 중으로 보인다.
-                blob = {'name': g, 'items': [], 'level': 'ok', 'verdict': 'GO',
-                        'counts': {'blk': 0, 'warn': 0, 'ok': 0, 'info': 0}}
+                blob = empty_group(g)
             sent.add(g)
             line({'t': 'group', 'group': blob,
                   'elapsed': round(time.time() - t0, 2)})
@@ -1331,6 +1336,12 @@ def stream(m, secs, meta, out):
     # 늦게 도착한 값이 판정을 바꿨을 수 있다.
     r = judge(params, mission, tel, msgs, dropped)
     blob = as_json(r, meta, time.time() - t0)
+    # 🔴 gather 가 일찍 끝나면 until_end 묶음(FC 자신의 말)은 진행률이 1.0 에
+    #    못 닿아 위에서 안 나간다. 경고도 없으면 as_json 에도 빠진다 — 그러면
+    #    전부 GO 인 바로 그때 그 줄만 진행 중으로 멈춰 있다 (2026-09-25).
+    have = {g['name'] for g in blob['groups']}
+    blob['groups'] += [empty_group(g) for g in GROUP_ORDER
+                       if g in GROUP_NEEDS and g not in have]
     blob['t'] = 'done'
     line(blob)
     v = r.verdict()
