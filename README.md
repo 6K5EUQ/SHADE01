@@ -62,8 +62,6 @@
 
 ![비행 전 점검](docs/images/04-preflight.png)
 
-![비행 전 점검 — 웹](docs/images/06-preflight-web.png)
-
 GPS·배터리·failsafe 설정·센서 상태를 확인합니다.
 
 ---
