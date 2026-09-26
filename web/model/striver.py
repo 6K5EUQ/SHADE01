@@ -6,7 +6,7 @@
 README 제원)에서, 도색·표식은 실기 사진(2026-09-26)에서 뽑았다:
 익폭 2.10 m, 동체 1.20 m, 동체 높이 0.156 m, 로터암 x=±0.43 m (카본 원형 파이프),
 역T 꼬리, 기수 견인 모터. 전체 흰색이고 우익 윗면에 신고번호를 크게 쓴다.
-기체명 SHADE01 은 실기에 없는 표식이다 — 화면에서 알아보라고 수직꼬리에 넣었다.
+좌익 윗면에는 같은 글씨로 기체명 SHADE01 을 쓴다.
 
 좌표 (Blender): 기수 -Y, 위 +Z, 좌익 +X. glTF 로 내보내면 기수 +Z, 위 +Y.
 three.js 쪽이 이름으로 찾는 노드: rotor_LF/RF/LB/RB, prop_nose, gps.
@@ -378,7 +378,7 @@ for f in ('/usr/share/fonts/truetype/liberation/LiberationSansNarrow-Bold.ttf',
         FONT = bpy.data.fonts.load(f)
         break
 
-def lettering(name, body, length, place, m=INK):
+def lettering(name, body, length, place, m=INK, k=None):
     """body 를 폭 length 로 맞춘 평면 글자(+X 로 읽힘, 윗변 +Y)로 만들고
     place(tx, ty) → Vector 로 꼭짓점마다 옮긴다. 곡면을 따라가게 잘게 나눈다."""
     cu = bpy.data.curves.new(name, 'FONT')
@@ -397,7 +397,9 @@ def lettering(name, body, length, place, m=INK):
     o.select_set(False)
     me = o.data
     xs = [v.co.x for v in me.vertices]
-    k = length / (max(xs) - min(xs))
+    if k is None:
+        k = length / (max(xs) - min(xs))
+    half = (max(xs) - min(xs)) * k / 2
     bm = bmesh.new()
     bm.from_mesh(me)
     # 곡면을 따라가도록 1 cm 격자로 자른다 (글자 모양은 그대로 둔다)
@@ -412,7 +414,7 @@ def lettering(name, body, length, place, m=INK):
             t += step
     bmesh.ops.triangulate(bm, faces=bm.faces)
     for v in bm.verts:
-        v.co = place(v.co.x * k, v.co.y * k)
+        v.co = place(v.co.x * k, v.co.y * k, half)
     bm.normal_update()
     bm.to_mesh(me)
     bm.free()
@@ -420,17 +422,25 @@ def lettering(name, body, length, place, m=INK):
     for p in me.polygons:
         p.use_smooth = False
     o.parent = root
-    return o
+    return k
 
 # 신고번호 — 우익(-X) 윗면, 뿌리→끝으로 읽히고 글자 윗변이 앞전 쪽 (실기와 같다)
 REG = 'C2NV2850087'
 RX0, RX1 = 0.16, 0.88
-def reg_place(tx, ty):
+def reg_place(tx, ty, half):
     x = -((RX0 + RX1) / 2 + tx)       # 읽는 방향 = -X
     le, c, _, _ = wing_sec(x)
     y = le + 0.38 * c - ty            # 윗변 = 앞전(-Y)
     return Vector((x, y, wing_top(x, y) + 0.0009))
-lettering('registration', REG, RX1 - RX0, reg_place)
+REG_K = lettering('registration', REG, RX1 - RX0, reg_place)
+
+# 기체명 — 좌익(+X) 윗면, 신고번호와 같은 글자 크기·방향 (뒤에서 읽힘), 뿌리 쪽에서 시작
+def name_place(tx, ty, half):
+    x = RX0 + half - tx               # 읽는 방향 = -X (끝→뿌리)
+    le, c, _, _ = wing_sec(x)
+    y = le + 0.38 * c - ty
+    return Vector((x, y, wing_top(x, y) + 0.0009))
+lettering('name', 'SHADE01', None, name_place, k=REG_K)
 
 # ── 꼬리 ─────────────────────────────────────────────────────────────
 HT_LE, HT_C, HT_Z = 0.545, 0.14, 0.010
@@ -478,10 +488,6 @@ for sgn in (-1, 1):
     for k, zz in enumerate((0.07, 0.14, 0.21)):
         le, c = vt_at(zz)
         box(f'rudder_hinge_{sgn}{k}', (0.0015, 0.022, 0.004), vt_side(le + 0.66 * c, zz, sgn), BLACK)
-    # 기체명 — 수직꼬리 양면, 어느 쪽에서 봐도 바로 읽힌다
-    #   +X 면을 보면 오른쪽이 +Y, -X 면을 보면 오른쪽이 -Y
-    lettering(f'name_{"L" if sgn > 0 else "R"}', 'SHADE01', 0.10,
-              lambda tx, ty, sgn=sgn: vt_side(0.567 + tx * sgn, 0.105 + ty, sgn, 0.0009))
 
 # ── VTOL 로터암 (카본 원형 파이프) ─────────────────────────────────────
 ARM_Y0, ARM_Y1 = -0.585, 0.275
