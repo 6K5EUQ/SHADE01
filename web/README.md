@@ -24,7 +24,9 @@ Tesla Model 3/Y 라이트 모드 형식의 기체 상태 화면. `web/public/coc
 
 - **3D 모델은 `web/public/model/striver.glb`** 이고, 정본은 그것을 만드는
   Blender 스크립트 [`web/model/striver.py`](model/striver.py) 다. 치수는
-  제조사 평면도(`airframes/striver-mini-vtol/images/02-structure-*`)에서 뽑았다.
+  제조사 평면도(`airframes/striver-mini-vtol/images/02-structure-*`)에서, 도색·표식은
+  실기 사진(2026-09-26)에서 뽑았다 — 전체 흰색, 우익 윗면 신고번호 `C2NV2850087`.
+  수직꼬리의 `SHADE01` 은 실기에 없는 표식이다 (화면에서 알아보라고 넣었다).
   모델을 고치면 스크립트를 고치고 다시 구워라 (Blender 4.5, GUI 불필요):
 
   ```bash

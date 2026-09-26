@@ -1,10 +1,12 @@
-"""Striver Mini VTOL 4+1 — 콕핏 화면용 3D 모델 (.glb) 을 만든다.
+"""SHADE01 (Striver Mini VTOL 4+1, 신고번호 C2NV2850087) — 콕핏 화면용 3D 모델 (.glb).
 
     ~/tools/blender-4.5.9-linux-x64/blender -b -P web/model/striver.py -- web/public/model/striver.glb [preview.png]
 
 치수는 제조사 자료(airframes/striver-mini-vtol/images/02-structure 평면도,
-README 제원)에서 뽑았다: 익폭 2.10 m, 동체 1.20 m, 동체 높이 0.156 m,
-로터암 x=±0.43 m (744 mm 카본 각파이프), 역T 꼬리, 기수 견인 모터.
+README 제원)에서, 도색·표식은 실기 사진(2026-09-26)에서 뽑았다:
+익폭 2.10 m, 동체 1.20 m, 동체 높이 0.156 m, 로터암 x=±0.43 m (카본 원형 파이프),
+역T 꼬리, 기수 견인 모터. 전체 흰색이고 우익 윗면에 신고번호를 크게 쓴다.
+기체명 SHADE01 은 실기에 없는 표식이다 — 화면에서 알아보라고 수직꼬리에 넣었다.
 
 좌표 (Blender): 기수 -Y, 위 +Z, 좌익 +X. glTF 로 내보내면 기수 +Z, 위 +Y.
 three.js 쪽이 이름으로 찾는 노드: rotor_LF/RF/LB/RB, prop_nose, gps.
@@ -36,15 +38,14 @@ def srgb(h):
     c = [int(h[i:i + 2], 16) / 255 for i in (0, 2, 4)]
     return tuple(x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c)
 
-FOAM = mat('foam', srgb('#eef0f1'), 0.55)
-BLACK = mat('black', srgb('#1b1d20'), 0.45)
-CARBON = mat('carbon', srgb('#23262b'), 0.28, 0.35, 0.6)
-RED = mat('red', srgb('#c9302c'), 0.4)
+FOAM = mat('foam', srgb('#f1f2f3'), 0.6)
+PANEL = mat('panel', srgb('#f7f7f8'), 0.35)          # 날개 가운데 판 — 광택이 조금 다르다
+BLACK = mat('black', srgb('#17181b'), 0.5)
+INK = mat('ink', srgb('#111214'), 0.7)               # 표식 글씨
+CARBON = mat('carbon', srgb('#202226'), 0.3, 0.3, 0.6)
+GROOVE = mat('groove', srgb('#c9ccd0'), 0.6)         # 조종면 힌지 홈·판 이음새
 ALU = mat('alu', srgb('#c3c7cc'), 0.28, 0.95)
-BLUE = mat('blue', srgb('#1f6fe0'), 0.3, 0.85)
-PROPG = mat('prop_grey', srgb('#9aa1a8'), 0.4)
-STICK = mat('sticker', srgb('#e2a41f'), 0.5)
-GLASS = mat('dark_grey', srgb('#3a3f46'), 0.35, 0.2)
+GLASS = mat('dark_grey', srgb('#2e3238'), 0.35, 0.2)
 
 def obj(name, me, m=None, parent=None, smooth=True):
     o = bpy.data.objects.new(name, me)
@@ -181,28 +182,26 @@ def band(name, y, width, m, scale=1.004, parent=root):
     modifier_apply(o, 'SOLIDIFY', thickness=0.0008)
     return o
 
-for i, y in enumerate((-0.36, -0.235, 0.075, 0.20)):
-    band(f'seam{i}', y, 0.006, BLACK)
+# 꼬리붐 결합부 — 굵은 검정 링 하나와 가는 이음새
+band('boom_ring', 0.215, 0.022, BLACK, scale=1.03)
+band('boom_seam', 0.245, 0.004, BLACK, scale=1.02)
 
-# 윗면 해치 테두리 — 날개 앞뒤로 검은 가장자리
-def top_strip(name, y0, y1, xoff, m, wid=0.010, lift=0.0015):
+# 윗면 해치 이음새 — 가는 회색 선
+def top_strip(name, y0, y1, xoff, m, wid=0.004, lift=0.0008):
     rings = []
     n = 14
     for k in range(n + 1):
         y = y0 + (y1 - y0) * k / n
         _, w, zt, zb = fus_at(y)
-        # 윗면 곡선 위의 점 (초타원 근사)
         x = math.copysign(min(abs(xoff), w * 0.8), xoff)
         zc, h = (zt + zb) / 2, (zt - zb) / 2
         z = zc + h * max(0.0, 1 - (abs(x) / w) ** 2.4) ** (1 / 2.4) + lift
         rings.append([Vector((x - wid / 2, y, z)), Vector((x + wid / 2, y, z)),
-                      Vector((x + wid / 2, y, z - 0.003)), Vector((x - wid / 2, y, z - 0.003))])
+                      Vector((x + wid / 2, y, z - 0.002)), Vector((x - wid / 2, y, z - 0.002))])
     return loft(name, rings, m, parent=root, smooth=False)
 
-top_strip('hatch_l', -0.34, -0.245, 0.05, BLACK)
-top_strip('hatch_r', -0.34, -0.245, -0.05, BLACK)
-top_strip('hatch_l2', 0.085, 0.19, 0.035, BLACK)
-top_strip('hatch_r2', 0.085, 0.19, -0.035, BLACK)
+top_strip('hatch_l', -0.43, -0.25, 0.045, GROOVE)
+top_strip('hatch_r', -0.43, -0.25, -0.045, GROOVE)
 
 def box(name, size, loc, m, parent=root, rot=(0, 0, 0), bevel=0.0):
     me = bpy.data.meshes.new(name)
@@ -234,28 +233,16 @@ def surf_z(y, x=0.0):
     zc, h = (zt + zb) / 2, (zt - zb) / 2
     return zc + h * max(0.0, 1 - (abs(x) / w) ** 2.4) ** (1 / 2.4)
 
-# 윗면 스티커 3장 (주황)
-for i, y in enumerate((-0.30, -0.19, 0.12)):
-    box(f'sticker{i}', (0.028, 0.022, 0.001), (0.0 if i != 1 else 0.03, y, surf_z(y) + 0.0008), STICK)
-# ESC 통풍 덮개 — 기수 옆면 검은 격자판
-for sgn in (-1, 1):
-    y = -0.40
-    _, w, zt, zb = fus_at(y)
-    g = box(f'esc_cover{"L" if sgn > 0 else "R"}', (0.002, 0.05, 0.028), (sgn * w * 0.97, y, (zt + zb) / 2 - 0.004), BLACK,
-            rot=(0, 0, sgn * -0.25))
-    for k in range(4):
-        box(f'esc_slot{sgn}{k}', (0.0025, 0.04, 0.0025), (sgn * w * 0.975, y, (zt + zb) / 2 - 0.014 + k * 0.0065), GLASS,
-            rot=(0, 0, sgn * -0.25))
-# 배 스키드 — 검은 판
-belly = [fus_ring(y, w * 0.55, zb + 0.012, zb - 0.002) for y, w, zt, zb in
-         [fus_at(v) for v in (-0.43, -0.40, -0.30, -0.15, -0.02, 0.06, 0.09)]]
+# 배 — 검정 스키드
+belly = [fus_ring(y, w * 0.5, zb + 0.010, zb - 0.002) for y, w, zt, zb in
+         [fus_at(v) for v in (-0.40, -0.36, -0.28, -0.15, -0.04, 0.02)]]
 bo = loft('belly', belly, BLACK, parent=root)
 modifier_apply(bo, 'SUBSURF', levels=1)
 
-# ── 기수 모터·프롭 ────────────────────────────────────────────────────
-cyl('nose_mount', 0.030, 0.012, (0, -0.524, -0.001), BLACK, rot=(math.pi / 2, 0, 0))
-cyl('nose_motor', 0.027, 0.030, (0, -0.545, -0.001), BLUE, rot=(math.pi / 2, 0, 0))
-cyl('nose_motor_band', 0.0275, 0.008, (0, -0.537, -0.001), ALU, rot=(math.pi / 2, 0, 0))
+# ── 기수 모터·프롭 (검정) ─────────────────────────────────────────────
+cyl('nose_mount', 0.029, 0.010, (0, -0.522, -0.001), BLACK, rot=(math.pi / 2, 0, 0))
+cyl('nose_motor', 0.026, 0.030, (0, -0.542, -0.001), GLASS, rot=(math.pi / 2, 0, 0))
+cyl('nose_motor_band', 0.0265, 0.006, (0, -0.535, -0.001), ALU, rot=(math.pi / 2, 0, 0))
 
 def blade_mesh(name, R, root_c, tip_c, m, thick=0.004, pitch=0.25, n=14):
     """평면형 날 한 장 — 허브(원점)에서 +X 로 뻗는다. 뿌리에서 끝으로 비틀림이 준다."""
@@ -293,31 +280,37 @@ def propeller(name, R, root_c, tip_c, m, hub_m, loc, axis='Z'):
     hub = cyl(f'{name}_hub', 0.013, 0.012, (0, 0, 0), hub_m, parent=e)
     return e
 
-pn = propeller('prop_nose', 0.165, 0.030, 0.018, PROPG, BLUE, (0, -0.566, -0.001), axis='Y')
-sp = cyl('spinner', 0.016, 0.03, (0, 0, 0.018), BLUE, parent=pn, r2=0.002)
+pn = propeller('prop_nose', 0.18, 0.030, 0.016, CARBON, BLACK, (0, -0.563, -0.001), axis='Y')
+sp = cyl('spinner', 0.015, 0.032, (0, 0, 0.019), BLACK, parent=pn, r2=0.002)
 
 # ── 날개 ─────────────────────────────────────────────────────────────
 LE0, C0, Z0 = -0.245, 0.285, 0.080       # 뿌리 앞전·시위·높이
-DIH = 0.025                              # 상반각 (z/x)
+DIH = 0.022                              # 상반각 (z/x)
+TWK = 0.2                                # 비틀림 반영 비율
 def wing_sec(x):
+    """(앞전 y, 시위, 높이 z, 비틀림) — 끝 0.12 m 는 둥글게 줄며 위로 휜다 (실기 정면 사진)."""
     ax = abs(x)
-    # 끝 0.12 m 는 앞전이 둥글게 뒤로 말린다
     if ax <= 0.93:
-        c = C0 - (C0 - 0.25) * (ax / 0.93)
-        le = LE0 + 0.012 * ax / 0.93
+        c = C0 - (C0 - 0.255) * (ax / 0.93)
+        le = LE0 + 0.010 * ax / 0.93
+        zup = 0.0
     else:
         t = (ax - 0.93) / 0.12
-        c = 0.25 - 0.12 * t ** 1.8
-        le = LE0 + 0.012 + 0.10 * t ** 2.2
-    return le, c, Z0 + ax * DIH, -0.035 * ax / 1.05
+        c = 0.255 - 0.10 * t ** 2.2
+        le = LE0 + 0.010 + 0.05 * t ** 2.4
+        zup = 0.032 * t ** 2
+    return le, c, Z0 + ax * DIH + zup, -0.035 * ax / 1.05
 
-XS = [-1.05, -1.04, -1.02, -0.99, -0.96, -0.93, -0.85, -0.6, -0.3, -0.1, 0.0,
-      0.1, 0.3, 0.6, 0.85, 0.93, 0.96, 0.99, 1.02, 1.04, 1.05]
-rings = []
-for x in XS:
+XS = [-1.05, -1.045, -1.035, -1.02, -1.0, -0.975, -0.95, -0.93, -0.85, -0.6, -0.3, -0.1, 0.0,
+      0.1, 0.3, 0.6, 0.85, 0.93, 0.95, 0.975, 1.0, 1.02, 1.035, 1.045, 1.05]
+wing = loft('wing', [wing_ring(x, *wing_sec(x)[:3], twist=wing_sec(x)[3] * TWK) for x in XS], FOAM, parent=root)
+
+def wing_top(x, y):
+    """날개 윗면 높이 — 표식·선을 표면에 붙일 때 쓴다."""
     le, c, z, tw = wing_sec(x)
-    rings.append(wing_ring(x, le, c, z, twist=tw * 0.2))
-wing = loft('wing', rings, FOAM, parent=root)
+    u = min(1.0, max(0.0, (y - le) / c))
+    t = tw * TWK
+    return z + u * c * math.sin(t) + airfoil_top(u) * c * math.cos(t)
 
 def wing_band(name, x0, x1, m, grow=1.02, n=4):
     rs = []
@@ -325,72 +318,119 @@ def wing_band(name, x0, x1, m, grow=1.02, n=4):
         x = x0 + (x1 - x0) * k / n
         le, c, z, tw = wing_sec(x)
         cc = c * grow
-        rs.append(wing_ring(x, le - (cc - c) * 0.5, cc, z - 0.0005, thick=grow))
+        rs.append(wing_ring(x, le - (cc - c) * 0.5, cc, z - 0.0005, thick=grow, twist=tw * TWK))
     return loft(name, rs, m, parent=root)
 
-# 붉은 날개 끝 · 날개-동체 결합부 검은 띠 · 로터암 고정 띠
+def surface_line(name, x0, x1, u, m, wid=0.003, n=10):
+    """날개 윗면을 따라 스팬 방향으로 가는 선 (시위 비율 u, x0→x1)."""
+    rings = []
+    for k in range(n + 1):
+        x = x0 + (x1 - x0) * k / n
+        le, c, _, _ = wing_sec(x)
+        y = le + u * c
+        z = wing_top(x, y) + 0.0006
+        rings.append([Vector((x, y - wid / 2, z)), Vector((x, y + wid / 2, z)),
+                      Vector((x, y + wid / 2, z - 0.0015)), Vector((x, y - wid / 2, z - 0.0015))])
+    return loft(name, rings, m, parent=root, smooth=False)
+
+def chord_line(name, x, u0, u1, m, wid=0.003, n=12):
+    """날개 윗면 시위 방향의 가는 선 (판 이음새)."""
+    rings = []
+    for k in range(n + 1):
+        le, c, _, _ = wing_sec(x)
+        y = le + (u0 + (u1 - u0) * k / n) * c
+        z = wing_top(x, y) + 0.0006
+        rings.append([Vector((x - wid / 2, y, z)), Vector((x + wid / 2, y, z)),
+                      Vector((x + wid / 2, y, z - 0.0015)), Vector((x - wid / 2, y, z - 0.0015))])
+    return loft(name, rings, m, parent=root, smooth=False)
+
 for sgn in (-1, 1):
     s = 'L' if sgn > 0 else 'R'
-    xs = sorted((sgn * 0.995, sgn * 1.05))
-    wing_band(f'tip_{s}', xs[0], xs[1], RED, grow=1.015)
-    xs = sorted((sgn * 0.105, sgn * 0.125))
+    # 날개-동체 결합부 검정 띠
+    xs = sorted((sgn * 0.100, sgn * 0.116))
     wing_band(f'root_band_{s}', xs[0], xs[1], BLACK, grow=1.03, n=1)
-    xs = sorted((sgn * 0.40, sgn * 0.412))
-    wing_band(f'arm_band_{s}', xs[0], xs[1], BLACK, grow=1.025, n=1)
-    xs = sorted((sgn * 0.448, sgn * 0.46))
-    wing_band(f'arm_band2_{s}', xs[0], xs[1], BLACK, grow=1.025, n=1)
+    # 가운데 판(광택)과 바깥 판 이음새
+    xs = sorted((sgn * 0.116, sgn * 0.47))
+    wing_band(f'center_panel_{s}', xs[0], xs[1], PANEL, grow=1.004, n=6)
+    chord_line(f'panel_seam_{s}', sgn * 0.47, 0.02, 0.98, GROOVE)
+    # 에일러론 힌지 홈 · 힌지 세 개 · 서보 혼 덮개
+    surface_line(f'aileron_{s}', sgn * 0.50, sgn * 0.95, 0.72, GROOVE)
+    chord_line(f'aileron_in_{s}', sgn * 0.50, 0.72, 1.0, GROOVE)
+    for k, xx in enumerate((0.56, 0.72, 0.88)):
+        x = sgn * xx
+        le, c, _, _ = wing_sec(x)
+        y = le + 0.72 * c
+        box(f'hinge_{s}{k}', (0.004, 0.022, 0.0015), (x, y, wing_top(x, y) + 0.0007), BLACK)
+        box(f'hinge_{s}{k}a', (0.012, 0.003, 0.0015), (x, y - 0.011, wing_top(x, y - 0.011) + 0.0007), BLACK)
+        box(f'hinge_{s}{k}b', (0.012, 0.003, 0.0015), (x, y + 0.011, wing_top(x, y + 0.011) + 0.0007), BLACK)
+    x = sgn * 0.64
+    le, c, _, _ = wing_sec(x)
+    y = le + 0.84 * c
+    box(f'servo_{s}', (0.028, 0.022, 0.0015), (x, y, wing_top(x, y) + 0.0007), BLACK)
 
-# 에일러론 힌지선 · 끝 아랫면 검은 패치
-for sgn in (-1, 1):
-    s = 'L' if sgn > 0 else 'R'
-    for u, x0, x1 in ((0.74, 0.56, 0.95),):
-        pts = []
-        for k in range(9):
-            x = sgn * (x0 + (x1 - x0) * k / 8)
-            le, c, z, tw = wing_sec(x)
-            y = le + u * c
-            zz = z + airfoil_top(u) * c + 0.0006
-            pts.append((x, y, zz))
-        for (xa, ya, za), (xb, yb, zb_) in zip(pts, pts[1:]):
-            mid = Vector(((xa + xb) / 2, (ya + yb) / 2, (za + zb_) / 2))
-            box(f'hinge_{s}_{xa:.2f}', (abs(xb - xa) + 0.002, 0.003, 0.0012), mid, BLACK)
-    # 서보 덮개 (작은 검은 사각) + 혼
-    x = sgn * 0.62
-    le, c, z, tw = wing_sec(x)
-    box(f'servo_{s}', (0.03, 0.018, 0.0012), (x, le + 0.62 * c, z + airfoil_top(0.62) * c + 0.0006), BLACK)
+# ── 표식 — 글자를 메시로 만들어 표면에 눌러 붙인다 ─────────────────────
+FONT = None
+# 실기 신고번호는 Arial Narrow Bold 계열 — 같은 폭의 Liberation Sans Narrow Bold 를 쓴다
+import os
+for f in ('/usr/share/fonts/truetype/liberation/LiberationSansNarrow-Bold.ttf',
+          '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'):
+    if os.path.exists(f):
+        FONT = bpy.data.fonts.load(f)
+        break
 
-# 윙렛 모양 아랫면 검정 (날개 끝 뒤쪽)
-# STRIVER 데칼 — 날개 윗면·수평꼬리
-def decal(name, body, size, loc, rot_z, m=BLACK):
+def lettering(name, body, length, place, m=INK):
+    """body 를 폭 length 로 맞춘 평면 글자(+X 로 읽힘, 윗변 +Y)로 만들고
+    place(tx, ty) → Vector 로 꼭짓점마다 옮긴다. 곡면을 따라가게 잘게 나눈다."""
     cu = bpy.data.curves.new(name, 'FONT')
     cu.body = body
-    cu.size = size
+    if FONT:
+        cu.font = FONT
     cu.align_x = 'CENTER'
     cu.align_y = 'CENTER'
-    cu.extrude = 0.0004
+    cu.fill_mode = 'BOTH'
+    cu.resolution_u = 4
     o = bpy.data.objects.new(name, cu)
     scn.collection.objects.link(o)
-    o.location = loc
-    o.rotation_euler = (0, 0, rot_z)
     bpy.context.view_layer.objects.active = o
     o.select_set(True)
     bpy.ops.object.convert(target='MESH')
     o.select_set(False)
-    o.data.materials.append(m)
+    me = o.data
+    xs = [v.co.x for v in me.vertices]
+    k = length / (max(xs) - min(xs))
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    # 곡면을 따라가도록 1 cm 격자로 자른다 (글자 모양은 그대로 둔다)
+    lo = [min(v.co[i] for v in bm.verts) for i in (0, 1)]
+    hi = [max(v.co[i] for v in bm.verts) for i in (0, 1)]
+    step = 0.01 / k
+    for i, no in ((0, (1, 0, 0)), (1, (0, 1, 0))):
+        t = lo[i] + step
+        while t < hi[i]:
+            co = [0, 0, 0]; co[i] = t
+            bmesh.ops.bisect_plane(bm, geom=bm.verts[:] + bm.edges[:] + bm.faces[:], plane_co=co, plane_no=no)
+            t += step
+    bmesh.ops.triangulate(bm, faces=bm.faces)
+    for v in bm.verts:
+        v.co = place(v.co.x * k, v.co.y * k)
+    bm.normal_update()
+    bm.to_mesh(me)
+    bm.free()
+    me.materials.append(m)
+    for p in me.polygons:
+        p.use_smooth = False
     o.parent = root
     return o
 
-for sgn in (-1, 1):
-    x = sgn * 0.74
-    le, c, z, tw = wing_sec(x)
-    u = 0.33
-    decal(f'striver_{sgn}', 'STRIVER', 0.042, (x, le + u * c, z + airfoil_top(u) * c + 0.0012), math.pi if sgn > 0 else 0)
-    # 로고 옆 쉐브론
-    x = sgn * 0.30
-    le, c, z, tw = wing_sec(x)
-    for k in range(3):
-        u = 0.18 + k * 0.07
-        decal(f'chev_{sgn}_{k}', '›', 0.03, (x, le + u * c, z + airfoil_top(u) * c + 0.0012), -math.pi / 2)
+# 신고번호 — 우익(-X) 윗면, 뿌리→끝으로 읽히고 글자 윗변이 앞전 쪽 (실기와 같다)
+REG = 'C2NV2850087'
+RX0, RX1 = 0.16, 0.88
+def reg_place(tx, ty):
+    x = -((RX0 + RX1) / 2 + tx)       # 읽는 방향 = -X
+    le, c, _, _ = wing_sec(x)
+    y = le + 0.38 * c - ty            # 윗변 = 앞전(-Y)
+    return Vector((x, y, wing_top(x, y) + 0.0009))
+lettering('registration', REG, RX1 - RX0, reg_place)
 
 # ── 꼬리 ─────────────────────────────────────────────────────────────
 HT_LE, HT_C, HT_Z = 0.545, 0.14, 0.010
@@ -399,73 +439,89 @@ def ht_sec(x):
     if ax <= 0.28:
         return HT_LE + 0.01 * ax / 0.28, HT_C - 0.012 * ax / 0.28
     t = (ax - 0.28) / 0.055
-    return HT_LE + 0.01 + 0.045 * t ** 2, HT_C - 0.012 - 0.06 * t ** 1.6
-hx = [-0.335, -0.33, -0.32, -0.30, -0.28, -0.15, 0.0, 0.15, 0.28, 0.30, 0.32, 0.33, 0.335]
+    return HT_LE + 0.01 + 0.035 * t ** 2, HT_C - 0.012 - 0.05 * t ** 1.6
+hx = [-0.335, -0.332, -0.325, -0.31, -0.28, -0.15, 0.0, 0.15, 0.28, 0.31, 0.325, 0.332, 0.335]
 ht = loft('htail', [wing_ring(x, *ht_sec(x), HT_Z, prof=AFT) for x in hx], FOAM, parent=root)
 for sgn in (-1, 1):
-    xs = sorted((sgn * 0.30, sgn * 0.335))
+    # 뿌리 앞전 검정 띠 · 엘리베이터 힌지 홈
+    xs = sorted((sgn * 0.02, sgn * 0.075))
     rs = []
-    for x in [xs[0] + (xs[1] - xs[0]) * k / 4 for k in range(5)]:
+    for x in [xs[0] + (xs[1] - xs[0]) * k / 3 for k in range(4)]:
         le, c = ht_sec(x)
-        rs.append(wing_ring(x, le - c * 0.01, c * 1.02, HT_Z - 0.0003, prof=AFT, thick=1.02))
-    loft(f'ht_tip_{sgn}', rs, BLACK, parent=root)
-    x = sgn * 0.17
-    le, c = ht_sec(x)
-    decal(f'ht_striver_{sgn}', 'STRIVER', 0.026, (x, le + 0.4 * c, HT_Z + airfoil_top(0.4, AFT) * c + 0.001), math.pi if sgn > 0 else 0)
-    # 엘리베이터 힌지
-    le, c = ht_sec(sgn * 0.16)
-    box(f'elev_hinge_{sgn}', (0.26, 0.003, 0.0012), (sgn * 0.16, le + 0.68 * c, HT_Z + airfoil_top(0.68, AFT) * c + 0.0005), BLACK)
+        rs.append(wing_ring(x, le - 0.001, c * 0.30, HT_Z - 0.0003, prof=AFT, thick=3.6))
+    loft(f'ht_root_{sgn}', rs, BLACK, parent=root)
+    le, c = ht_sec(sgn * 0.17)
+    box(f'elev_hinge_{sgn}', (0.25, 0.003, 0.0012), (sgn * 0.175, le + 0.66 * c, HT_Z + airfoil_top(0.66, AFT) * c + 0.0005), GROOVE)
 
-# 수직꼬리 — 높고 약간 후퇴, 위 끝 검은 캡
+# 수직꼬리 — 앞전이 크게 후퇴하고 위 뒤쪽이 둥글다
 def vt_ring(z, le, c):
     return [Vector((v * c, le + u * c, z)) for u, v in AFT]
-VT = [(0.012, 0.470, 0.215), (0.06, 0.485, 0.205), (0.14, 0.515, 0.185), (0.22, 0.545, 0.160),
-      (0.275, 0.565, 0.140), (0.292, 0.575, 0.125), (0.298, 0.590, 0.100)]
+VT = [(0.012, 0.455, 0.235), (0.05, 0.475, 0.222), (0.12, 0.510, 0.195), (0.20, 0.548, 0.165),
+      (0.255, 0.572, 0.143), (0.285, 0.588, 0.122), (0.300, 0.603, 0.098), (0.306, 0.618, 0.07)]
 vt = loft('vtail', [vt_ring(*s) for s in VT], FOAM, parent=root)
-loft('vt_cap', [vt_ring(z, le - 0.002, c * 1.03) for z, le, c in VT[-3:]], BLACK, parent=root)
-# ── VTOL 로터암 ───────────────────────────────────────────────────────
+
+def vt_at(z):
+    for a, b in zip(VT, VT[1:]):
+        if a[0] <= z <= b[0]:
+            t = (z - a[0]) / (b[0] - a[0])
+            return a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t
+    return VT[-1][1], VT[-1][2]
+
+def vt_side(y, z, sgn, lift=0.0008):
+    le, c = vt_at(z)
+    u = min(1.0, max(0.0, (y - le) / c))
+    return Vector((sgn * (airfoil_top(u, AFT) * c + lift), y, z))
+
+for sgn in (-1, 1):
+    # 러더 서보 판 · 힌지 세 개
+    box(f'rudder_servo_{sgn}', (0.002, 0.036, 0.036), vt_side(0.64, 0.05, sgn, 0.0012), BLACK)
+    for k, zz in enumerate((0.07, 0.14, 0.21)):
+        le, c = vt_at(zz)
+        box(f'rudder_hinge_{sgn}{k}', (0.0015, 0.022, 0.004), vt_side(le + 0.66 * c, zz, sgn), BLACK)
+    # 기체명 — 수직꼬리 양면, 어느 쪽에서 봐도 바로 읽힌다
+    #   +X 면을 보면 오른쪽이 +Y, -X 면을 보면 오른쪽이 -Y
+    lettering(f'name_{"L" if sgn > 0 else "R"}', 'SHADE01', 0.10,
+              lambda tx, ty, sgn=sgn: vt_side(0.567 + tx * sgn, 0.105 + ty, sgn, 0.0009))
+
+# ── VTOL 로터암 (카본 원형 파이프) ─────────────────────────────────────
 ARM_Y0, ARM_Y1 = -0.585, 0.275
 FRONT_Y, BACK_Y = -0.56, 0.25
 for sgn in (-1, 1):
     x = sgn * 0.43
     le, c, z, tw = wing_sec(x)
-    zb = z - 0.012 * c / 0.28 * 0 + min(v for u, v in AF) * c   # 날개 아랫면
-    az = zb - 0.011
-    arm = box(f'arm_{"L" if sgn > 0 else "R"}', (0.020, ARM_Y1 - ARM_Y0, 0.020), (x, (ARM_Y0 + ARM_Y1) / 2, az), CARBON, bevel=0.002)
+    zb = z + min(v for u, v in AF) * c    # 날개 아랫면
+    az = zb - 0.013
+    cyl(f'arm_{"L" if sgn > 0 else "R"}', 0.011, ARM_Y1 - ARM_Y0, (x, (ARM_Y0 + ARM_Y1) / 2, az), CARBON,
+        rot=(math.pi / 2, 0, 0), verts=24)
     # 날개 고정 클램프
-    for yy in (le + 0.03, le + c - 0.04):
-        box(f'clamp_{sgn}_{yy:.2f}', (0.030, 0.024, 0.026), (x, yy, az + 0.004), BLACK, bevel=0.002)
+    for yy in (le + 0.035, le + c - 0.045):
+        box(f'clamp_{sgn}_{yy:.2f}', (0.032, 0.026, 0.030), (x, yy, az + 0.004), BLACK, bevel=0.003)
     for name_k, yy in (('F', FRONT_Y), ('B', BACK_Y)):
         s = ('L' if sgn > 0 else 'R') + name_k
         d = -1 if name_k == 'F' else 1
-        # 알루미늄 접이 관절 (끝 쪽)
-        box(f'fold_{s}', (0.028, 0.034, 0.026), (x, yy - d * 0.045, az), ALU, bevel=0.003)
-        cyl(f'fold_pin_{s}', 0.006, 0.034, (x, yy - d * 0.045, az), BLACK, rot=(0, math.pi / 2, 0), verts=16)
-        # 모터 마운트 판
-        box(f'mount_{s}', (0.05, 0.05, 0.004), (x, yy, az + 0.012), ALU, bevel=0.0015)
+        # 접이 관절 — 검정 슬리브
+        cyl(f'fold_{s}', 0.015, 0.05, (x, yy - d * 0.085, az), BLACK, rot=(math.pi / 2, 0, 0), verts=24)
+        cyl(f'fold_knob_{s}', 0.009, 0.036, (x, yy - d * 0.085, az), BLACK, rot=(0, math.pi / 2, 0), verts=16)
+        # 모터 받침 — 파이프 끝을 감싸는 검정 블록과 그 아래 원통(착지부)
+        box(f'mount_{s}', (0.034, 0.05, 0.03), (x, yy - d * 0.01, az), BLACK, bevel=0.004)
+        cyl(f'pod_{s}', 0.024, 0.055, (x, yy, az - 0.035), BLACK, verts=32)
+        cyl(f'pod_cap_{s}', 0.02, 0.004, (x, yy, az - 0.064), GLASS, verts=32)
         # 모터 (M4112 — 지름 46, 높이 ~28)
-        mz = az + 0.014
-        cyl(f'motor_base_{s}', 0.021, 0.006, (x, yy, mz + 0.003), BLACK)
+        mz = az + 0.015
+        cyl(f'motor_base_{s}', 0.022, 0.006, (x, yy, mz + 0.003), BLACK)
         cyl(f'motor_{s}', 0.023, 0.024, (x, yy, mz + 0.018), GLASS)
-        cyl(f'motor_ring_{s}', 0.0235, 0.004, (x, yy, mz + 0.026), ALU)
+        cyl(f'motor_label_{s}', 0.0233, 0.006, (x, yy, mz + 0.016), ALU)
         cyl(f'motor_cap_{s}', 0.016, 0.006, (x, yy, mz + 0.033), BLACK)
-        # 아래로 향한 착륙 다리
-        cyl(f'leg_{s}', 0.005, 0.07, (x, yy - d * 0.02, az - 0.042), BLACK, verts=12)
-        cyl(f'foot_{s}', 0.011, 0.006, (x, yy - d * 0.02, az - 0.078), BLACK, verts=16)
-        # 프롭 (카본 2엽, 지름 0.40)
-        p = propeller(f'rotor_{s}', 0.20, 0.036, 0.020, CARBON, BLACK, (x, yy, mz + 0.041))
+        # 프롭 (카본 2엽, 지름 ~0.43)
+        p = propeller(f'rotor_{s}', 0.215, 0.038, 0.020, CARBON, BLACK, (x, yy, mz + 0.041))
         p.rotation_euler = (0, 0, {'LF': 0.4, 'RF': 1.9, 'LB': 2.7, 'RB': 0.9}[s])
 
-# GPS 마스트 · 수신 안테나
-gy = 0.33
-g = cyl('gps_mast', 0.004, 0.07, (0, gy, surf_z(gy) + 0.035), BLACK, verts=12)
-gps = cyl('gps', 0.026, 0.012, (0, gy, surf_z(gy) + 0.074), GLASS)
-cyl('gps_top', 0.022, 0.003, (0, gy, surf_z(gy) + 0.0815), BLACK)
-ay = 0.02
-ant = cyl('antenna', 0.0035, 0.13, (0, ay, Z0 + 0.012 + 0.065), BLACK, verts=12, r2=0.0025)
-cyl('antenna_base', 0.008, 0.01, (0, ay, Z0 + 0.016), BLACK)
-# 피토관 — 좌익 앞전
-cyl('pitot', 0.003, 0.11, (0.62, LE0 + 0.012 * 0.62 / 0.93 - 0.03, Z0 + 0.62 * DIH - 0.004), ALU, rot=(math.pi / 2, 0, 0), verts=10)
+# GPS — 날개 앞 동체 윗면의 검정 모듈 · 흰 안테나 받침
+gy = -0.285
+gps = box('gps', (0.042, 0.036, 0.012), (0, gy, surf_z(gy) + 0.004), BLACK, bevel=0.003)
+box('gps_bracket', (0.05, 0.008, 0.01), (0, gy + 0.03, surf_z(gy + 0.03) + 0.003), BLACK, bevel=0.002)
+cyl('top_stub', 0.004, 0.016, (0, gy + 0.075, surf_z(gy + 0.075) + 0.008), FOAM, verts=12)
+box('top_stub_t', (0.018, 0.004, 0.004), (0, gy + 0.075, surf_z(gy + 0.075) + 0.016), FOAM)
 
 # ── 내보내기 ─────────────────────────────────────────────────────────
 bpy.ops.object.select_all(action='SELECT')
@@ -477,7 +533,7 @@ if PREVIEW:
     cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam'))
     scn.collection.objects.link(cam)
     cam.data.lens = 55
-    cam.location = (2.6, 2.4, 1.6)
+    cam.location = (-2.3, 2.2, 1.7)
     d = Vector((0, 0, 0.05)) - cam.location
     cam.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
     scn.camera = cam

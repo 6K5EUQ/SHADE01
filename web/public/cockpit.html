@@ -29,6 +29,9 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 /* ── 좌: 기체 상태 패널 ── */
 .pane { background: var(--bg); border-right: 1px solid var(--line); padding: 18px 22px 16px; display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow-y: auto; scrollbar-width: none; }
 .pane::-webkit-scrollbar { display: none; }
+.ident { display: flex; align-items: baseline; gap: 10px; }
+.ident b { font-size: 20px; font-weight: 700; letter-spacing: .02em; }
+.ident span { font-size: 13px; font-weight: 600; letter-spacing: .06em; color: var(--dim); font-variant-numeric: tabular-nums; }
 .gear { display: flex; align-items: center; gap: 14px; font-size: 13px; letter-spacing: .14em; color: var(--muted); font-weight: 500; }
 .gear b { font-weight: 500; }
 .gear b.on { color: var(--ink); font-weight: 700; }
@@ -165,6 +168,7 @@ a.card:hover { border-color: var(--track); }
 
 <div class="scr">
   <aside class="pane">
+    <div class="ident"><b>SHADE01</b><span>C2NV2850087</span></div>
     <div class="gear">
       <b id="gMC">MC</b><b id="gTR">TR</b><b id="gFW">FW</b>
       <span class="grow"></span>
@@ -360,11 +364,11 @@ new GLTFLoader().load('/model/striver.glb', (g) => {
 
 // ── 조작 — 끌면 기체가 돈다, 휠·두 손가락은 거리, 두 번 누르면 제자리 ──
 const VIEWS = {
-  sum: { yaw: -2.45, tilt: 0.36, dist: 3.7 },
+  sum: { yaw: -2.6, tilt: 0.6, dist: 3.9 },
   pwr: { yaw: -2.75, tilt: 0.78, dist: 4.1 },
   nav: { yaw: 0.65, tilt: 0.45, dist: 3.3 },
   bat: { yaw: -1.9, tilt: 0.5, dist: 3.3 },
-  rec: { yaw: -2.45, tilt: 0.36, dist: 3.7 },
+  rec: { yaw: -2.6, tilt: 0.6, dist: 3.9 },
 };
 const cam = { ...VIEWS.sum, vYaw: 0, vTilt: 0 };
 const goal = { ...VIEWS.sum, on: false };
@@ -415,8 +419,7 @@ new ResizeObserver(resize).observe(canvas);
 
 // ── 부위 표시 ────────────────────────────────────────────────────────
 const CALLS = {
-  sum: (d) => [['gps', 'GPS', d.sats != null ? `${d.sats}기` : '—', lvl(d.sats, 8, 5)],
-               ['bat', 'BATTERY', d.batt_pct != null ? `${d.batt_pct}%` : '—', lvl(d.batt_pct, 35, 20)]],
+  sum: (d) => [['bat', 'BATTERY', d.batt_pct != null ? `${d.batt_pct}%` : '—', lvl(d.batt_pct, 35, 20)]],
   pwr: (d) => { const m = d.motors || {}; const f = (k) => m[k] != null ? `${Math.round(m[k])}%` : '—';
     return [['LF', 'LF', f('LF')], ['RF', 'RF', f('RF')], ['LB', 'LB', f('LB')], ['RB', 'RB', f('RB')],
             ['nose', 'CRUISE', d.vtol === 'FW' ? 'ON' : '—']]; },
