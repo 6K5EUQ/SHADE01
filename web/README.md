@@ -12,8 +12,31 @@
 실시간    https://shade01.bewe.co.kr/live              지금 뜬 기체 (아래)
 소개      https://shade01.bewe.co.kr/intro             체계 소개 — 기체·페이로드·LOB→FIX (anime.js, 2026-09-10)
 점검      https://shade01.bewe.co.kr/preflight         비행 전 점검 — FC 를 읽어 GO/NO-GO (암호, 2026-09-20)
+콕핏      https://shade01.bewe.co.kr/cockpit           차량 센터 디스플레이 형식 — 3D 기체 + 실시간·기록 (2026-09-26)
 상태      https://shade01.bewe.co.kr/api/health
 ```
+
+## 콕핏 `/cockpit` (2026-09-26)
+
+Tesla Model 3/Y 라이트 모드 형식의 기체 상태 화면. `web/public/cockpit.html`
+한 장이고, 값은 `/api/live/state`(실시간)와 `/api/logs`(기록 요약)에서만
+읽는다 — 새 API 는 없다. 기체가 안 붙어 있으면 실시간 칸은 `—` 이다.
+
+- **3D 모델은 `web/public/model/striver.glb`** 이고, 정본은 그것을 만드는
+  Blender 스크립트 [`web/model/striver.py`](model/striver.py) 다. 치수는
+  제조사 평면도(`airframes/striver-mini-vtol/images/02-structure-*`)에서 뽑았다.
+  모델을 고치면 스크립트를 고치고 다시 구워라 (Blender 4.5, GUI 불필요):
+
+  ```bash
+  ~/tools/blender-4.5.9-linux-x64/blender -b -P web/model/striver.py -- web/public/model/striver.glb [/tmp/preview.png]
+  ```
+
+  페이지는 노드 이름으로 부품을 찾는다 — `rotor_LF/RF/LB/RB`, `prop_nose`,
+  `gps`. 이름을 바꾸면 로터 회전·부위 표시가 조용히 빠진다.
+- three.js **0.186.1** (`vendor/three/`, GLTFLoader 포함)과 Inter 글꼴
+  (`vendor/inter/`)을 벤더링한다. CDN 을 쓰지 않는다 (anime.js 와 같은 규칙).
+- 기체를 끌면 돌고, 휠·두 손가락으로 거리, 두 번 누르면 탭의 기본 시점.
+  실시간이면 자세(roll/pitch)를 따라 기울고, ARM 중엔 모터 출력대로 로터가 돈다.
 
 ## 비행 전 점검 `/preflight` (2026-09-20)
 

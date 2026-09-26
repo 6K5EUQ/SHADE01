@@ -65,6 +65,8 @@ const TYPES = {
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
+  '.glb': 'model/gltf-binary',
+  '.woff2': 'font/woff2',
 };
 
 // ── 캐시 지문 ────────────────────────────────────────────────────────
@@ -979,6 +981,8 @@ async function route(req, res) {
   if (p === '/intro' || p === '/intro/') return serveStatic(req, res, '/intro.html');
   // /preflight 는 비행 전 점검 페이지.
   if (p === '/preflight' || p === '/preflight/') return serveStatic(req, res, '/preflight.html');
+  // /cockpit 은 차량 센터 디스플레이 형식의 기체 상태 화면 (3D 기체 + 실시간·기록).
+  if (p === '/cockpit' || p === '/cockpit/') return serveStatic(req, res, '/cockpit.html');
   return serveStatic(req, res, p);
 }
 
