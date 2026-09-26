@@ -302,17 +302,24 @@ function bayLook(k) {
 const CALLS = {
   sum: (d) => [['bat', 'BATTERY', d.batt_pct != null ? `${d.batt_pct}%` : '—', lvl(d.batt_pct, 35, 20)]],
   pwr: (d) => { const m = d.motors || {}; const f = (k) => m[k] != null ? `${Math.round(m[k])}%` : '—';
-    return [['LF', 'LF', f('LF')], ['RF', 'RF', f('RF')], ['LB', 'LB', f('LB')], ['RB', 'RB', f('RB')],
-            ['nose', 'CRUISE', d.cruise != null ? `${Math.round(d.cruise)}%` : '—']]; },
+    return [['LF', 'LF', f('LF'), thr(m.LF)], ['RF', 'RF', f('RF'), thr(m.RF)], ['LB', 'LB', f('LB'), thr(m.LB)], ['RB', 'RB', f('RB'), thr(m.RB)],
+            ['nose', 'CRUISE', d.cruise != null ? `${Math.round(d.cruise)}%` : '—', thr(d.cruise)]]; },
   nav: (d) => [['gps', 'GPS', d.sats != null ? `${d.sats}기 · ${num(d.eph, 1)}m` : '—', lvl(d.sats, 8, 5)],
                ['nose', 'HEADING', d.hdg != null ? `${Math.round(d.hdg)}°` : '—']],
   bat: (d) => [['bat', 'BATTERY', d.volt != null ? `${d.volt.toFixed(1)}V · ${num(d.cur, 1)}A` : '—', lvl(d.batt_pct, 35, 20)]],
   rec: () => [],
   pf: () => [],
 };
+// 스로틀 여유 — 85% 를 넘으면 추력 여유가 얼마 안 남았다 (live.js sc-mavg 와 같은 기준)
+const thr = (v) => v == null ? '' : v > 90 ? 'bad' : v > 85 ? 'warn' : '';
+const THR_COLOR = { '': 0x5a5d63, warn: 0xd99a06, bad: 0xdc2626 };
 const callEls = new Map();
 function renderCalls() {
-  const want = sel || mode !== '3d' ? [] : CALLS[tab](D());
+  let want = sel || mode !== '3d' ? [] : CALLS[tab](D());
+  if (!sel && mode === '3d' && tab !== 'pwr') {
+    const m = D().motors || {};
+    for (const k of ['LF', 'RF', 'LB', 'RB']) if (thr(m[k])) want.push([k, k, `${Math.round(m[k])}%`, thr(m[k])]);
+  }
   const keep = new Set();
   for (const [a, k, v, c] of want) {
     keep.add(a);
@@ -352,6 +359,83 @@ const SURF_SRC = { AL: 'AL', AR: 'AR', EL: 'E1', ER: 'E2', R: 'R' };
 const qTmp = new THREE.Quaternion(), yAxis = new THREE.Vector3(0, 1, 0);
 const lookGoal = new THREE.Vector3();
 
+// ── 예측 경로 ────────────────────────────────────────────────────────
+// 대지 속도 벡터(vx 북·vy 동)의 방향 χ 와 그 변화율 ω(선회율)로, 지금처럼
+// 계속 가면 어디로 가는지를 기수 앞에 그린다. 기수 방향과 χ 가 다르면(옆바람·
+// 호버 중 옆걸음) 선이 그만큼 비스듬히 나간다. 예측이지 계획 경로가 아니다.
+const pred = { on: 0, v: 0, chi: 0, rel: 0, omega: 0, climb: 0, prev: null };
+const PRED_N = 48, PRED_W = 0.11;
+const unwrap = (a) => ((a + 540) % 360) - 180;
+function updatePred() {
+  const d = D();
+  const t = pb.on ? S.pos : performance.now() / 1000;
+  const v = d.vx != null && d.vy != null ? Math.hypot(d.vx, d.vy) : d.groundspeed;
+  const yaw = d.yaw != null ? d.yaw : d.hdg;
+  pred.v = v || 0;
+  // 느리면 방향이 잡음이다 — 호버 제자리에서 선이 춤추지 않게 끈다
+  pred.show = v != null && v > 0.8 && yaw != null && (!!d.armed || pb.on);
+  if (!pred.show) { pred.prev = null; return; }
+  const chi = d.vx != null ? (Math.atan2(d.vy, d.vx) * 180 / Math.PI + 360) % 360 : yaw;
+  if (pred.prev && t > pred.prev.t && t - pred.prev.t < 3) {
+    const w = unwrap(chi - pred.prev.chi) / (t - pred.prev.t);
+    pred.omega += (Math.max(-40, Math.min(40, w)) - pred.omega) * 0.35;   // 선회율(°/s) 평활
+  } else if (!pred.prev || t < pred.prev.t) pred.omega = 0;              // 되감기·첫 표본
+  pred.prev = { t, chi };
+  pred.chi = chi;
+  pred.rel = unwrap(chi - yaw);
+  pred.climb = d.climb || 0;
+}
+// 리본 — 기수 높이의 길과 바닥에 비친 옅은 길. u(길이 방향)로 흐려진다.
+function predTexture() {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 8;
+  const x = c.getContext('2d'), g = x.createLinearGradient(0, 0, 256, 0);
+  g.addColorStop(0, 'rgba(62,106,225,0.95)'); g.addColorStop(0.55, 'rgba(62,106,225,0.55)'); g.addColorStop(1, 'rgba(62,106,225,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 256, 8);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function ribbon(opacity) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(new Float32Array((PRED_N + 1) * 2 * 3), 3));
+  const uv = new Float32Array((PRED_N + 1) * 4), idx = [];
+  for (let i = 0; i <= PRED_N; i++) {
+    uv.set([i / PRED_N, 0, i / PRED_N, 1], i * 4);
+    if (i < PRED_N) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(idx);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: predTexture(), transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide }));
+  m.frustumCulled = false; m.renderOrder = 4; craft.add(m);
+  return m;
+}
+const predAir = ribbon(1), predGround = ribbon(0.35);
+function drawPred(k) {
+  pred.on += ((pred.show ? 1 : 0) - pred.on) * k;
+  predAir.visible = predGround.visible = pred.on > 0.01;
+  if (!predAir.visible) return;
+  predAir.material.opacity = pred.on; predGround.material.opacity = 0.35 * pred.on;
+  // 화면 길이는 속도에 비례하되 무대 안에 들어오게 자른다 — 무대 1 m ≈ 실제 10 m
+  const L = Math.max(0.5, Math.min(2.2, 0.3 + pred.v * 0.12));
+  const turn = THREE.MathUtils.degToRad(Math.max(-200, Math.min(200, pred.omega * L * 10 / Math.max(pred.v, 0.5))));
+  const rel = THREE.MathUtils.degToRad(pred.rel);
+  const gamma = Math.atan2(pred.climb, Math.max(pred.v, 0.5));
+  // 기수 앞(+z)에서 출발. 오른쪽 선회 = -x (좌익이 +x).
+  let x = 0, y = 0, z = 0.6;
+  const pa = predAir.geometry.attributes.position.array, pg = predGround.geometry.attributes.position.array;
+  for (let i = 0; i <= PRED_N; i++) {
+    const s = i / PRED_N;
+    // 처음 1/4 은 곧게, 그다음부터 휜다 — 기수에서 일자로 나가 휘어지는 모양
+    const bend = s < 0.25 ? 0 : (s - 0.25) / 0.75;
+    const th = rel + turn * bend * bend;
+    const dx = -Math.sin(th), dz = Math.cos(th);
+    const w = PRED_W * (1 - 0.4 * s) / 2;
+    pa.set([x + dz * w, y, z - dx * w, x - dz * w, y, z + dx * w], i * 6);
+    pg.set([x + dz * w * 1.4, FLOOR + 0.003, z - dx * w * 1.4, x - dz * w * 1.4, FLOOR + 0.003, z + dx * w * 1.4], i * 6);
+    const step = L / PRED_N;
+    x += dx * step; z += dz * step; y += Math.tan(gamma) * step;
+  }
+  predAir.geometry.attributes.position.needsUpdate = true;
+  predGround.geometry.attributes.position.needsUpdate = true;
+}
+
 const timer = new THREE.Timer();
 function frame() {
   requestAnimationFrame(frame);
@@ -390,7 +474,9 @@ function frame() {
     const pct = d.armed ? (mt[k] ?? 0) : 0;
     r.v += ((pct > 0 ? 10 + pct * 0.6 : 0) - r.v) * ease(2);
     r.node.rotateY(r.dir * r.v * dt);
-    r.disc.material.opacity = Math.min(0.09, Math.max(0, (r.v - 12) / 200));
+    const w = thr(mt[k]);
+    r.disc.material.color.setHex(THR_COLOR[w]);
+    r.disc.material.opacity = Math.min(w ? 0.28 : 0.09, Math.max(0, (r.v - 12) / (w ? 80 : 200)));
   }
   if (nose) {
     // 크루즈 출력(MAIN8)이 오면 그 값대로, 아니면 FW·천이일 때만
@@ -427,6 +513,7 @@ function frame() {
     b.fill.color.setHex(L.color); b.edges.color.setHex(L.color);
     b.fill.opacity = 0.24 * b.a; b.edges.opacity = 0.9 * b.a;
   }
+  drawPred(ease(4));
   renderer.render(scene, camera);
   placeCalls();
 }
@@ -467,12 +554,7 @@ const TILES = {
     ['climb', '상승률', num(d.climb, 1), 'm/s'],
     ['hdg', '헤딩', num(d.hdg), '°'],
   ],
-  pwr: (d) => {
-    const m = d.motors || {};
-    return [['LF', '좌전'], ['RF', '우전'], ['LB', '좌후'], ['RB', '우후']]
-      .map(([k, l]) => ['rotor', l, num(m[k]), '%', '', d.armed && m[k] > 0])
-      .concat([['air', '크루즈', num(d.cruise), '%', '', d.armed && d.cruise > 0]]);
-  },
+  pwr: () => [],
   nav: (d) => [
     ['sat', '위성', num(d.sats), '기', lvl(d.sats, 8, 5)],
     ['pin', '수평 오차', num(d.eph, 1), 'm', lvl(d.eph, 3, 6, false)],
@@ -508,6 +590,7 @@ $('tabs').addEventListener('click', (e) => {
 });
 
 // ── 기체 / 지도 ──────────────────────────────────────────────────────
+let predLine = null;
 let lmap = null, trackLine = null, acMarker = null, homeMarker = null;
 let track = [], trkHave = 0, followAt = 0;
 const AC_SVG = '<svg viewBox="0 0 32 32" width="34" height="34"><path d="M16 3l3 11 9 3v3l-9-1-1 7 3 2v2l-5-1-5 1v-2l3-2-1-7-9 1v-3l9-3z" fill="#3e6ae1" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></svg>';
@@ -522,6 +605,7 @@ async function ensureMap() {
   L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     { maxZoom: 20, maxNativeZoom: 18, attribution: 'Esri World Imagery' }).addTo(lmap);
   trackLine = L.polyline([], { color: '#3e6ae1', weight: 3, opacity: 0.95 }).addTo(lmap);
+  predLine = L.polyline([], { color: '#8fb0ff', weight: 5, opacity: 0.9, dashArray: '2 8', lineCap: 'round' }).addTo(lmap);
   acMarker = L.marker([0, 0], { icon: L.divIcon({ className: 'ac', html: AC_SVG, iconSize: [34, 34], iconAnchor: [17, 17] }), interactive: false });
   homeMarker = L.circleMarker([0, 0], { radius: 6, color: '#fff', weight: 2, fillColor: '#171a20', fillOpacity: 1 });
   lmap.on('dragstart', () => { followAt = Date.now(); });
@@ -530,6 +614,18 @@ function renderMap() {
   if (!lmap) return;
   const d = D();
   trackLine.setLatLngs(track.map((p) => [p[0], p[1]]));
+  const dd = D(), pts = [];
+  if (pred.show && dd.lat != null) {
+    let la = dd.lat, lo = dd.lon, chi = pred.chi;
+    pts.push([la, lo]);
+    for (let i = 0; i < 20; i++) {   // 10초를 0.5초씩
+      chi += pred.omega * 0.5;
+      const r = THREE.MathUtils.degToRad(chi), ds = pred.v * 0.5;
+      la += ds * Math.cos(r) / 111320; lo += ds * Math.sin(r) / (111320 * Math.cos(la * Math.PI / 180));
+      pts.push([la, lo]);
+    }
+  }
+  predLine.setLatLngs(pts);
   const hm = Array.isArray(S.home) ? { lat: S.home[0], lon: S.home[1] } : S.home;
   if (hm && hm.lat != null) homeMarker.setLatLng([hm.lat, hm.lon]).addTo(lmap);
   if (d.lat != null && d.lon != null) {
@@ -782,9 +878,36 @@ $('pbX').onclick = () => pbStop();
 $('pbSeek').addEventListener('input', (e) => { pb.seeking = true; pb.t = pb.dur * e.target.value / 1000; pbSync(); });
 $('pbSeek').addEventListener('change', () => { pb.seeking = false; pb.last = performance.now(); });
 
+// ── HUD ──────────────────────────────────────────────────────────────
+const CARD = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+function renderHud(d) {
+  const r = d.roll || 0, p = Math.max(-40, Math.min(40, d.pitch || 0));
+  // 지평선 — 1° 가 1.6px. 기체가 오른쪽으로 기울면 지평선은 반대로 돈다
+  $('hudHz').style.transform = `rotate(${(-r).toFixed(1)}deg) translateY(${(p * 1.6).toFixed(1)}px)`;
+  $('hudRoll').style.transform = `rotate(${(-r).toFixed(1)}deg)`;
+  const h = d.yaw != null ? d.yaw : d.hdg;
+  txt('hudHdg', h != null ? `${String(Math.round(h) % 360).padStart(3, '0')}°` : '—');
+  txt('hudCard', h != null ? CARD[Math.round(h / 45) % 8] : '');
+  txt('hudR', d.roll != null ? `${d.roll.toFixed(0)}°` : '—');
+  txt('hudP', d.pitch != null ? `${d.pitch.toFixed(0)}°` : '—');
+  $('hudTape').style.transform = `translateX(${(-(h || 0) * 1.2).toFixed(1)}px)`;
+}
+{ // 헤딩 테이프 눈금 — 10° 마다, 30° 마다 숫자 (방위는 글자)
+  const NAME = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' };
+  let t = '';
+  for (let a = -360; a <= 720; a += 10) {
+    const x = (a * 1.2).toFixed(1), n = ((a % 360) + 360) % 360;
+    t += `<line x1="${x}" y1="0" x2="${x}" y2="${a % 30 ? 4 : 7}"/>`;
+    if (a % 30 === 0) t += `<text x="${x}" y="18"${NAME[n] != null ? ' class="c"' : ''}>${NAME[n] ?? n}</text>`;
+  }
+  $('hudTape').innerHTML = t;
+}
+
 // ── 상태 반영 ────────────────────────────────────────────────────────
 function render() {
   const on = !!S.live, d = D();
+  updatePred();
+  renderHud(d);
   txt('spd', d.groundspeed != null ? d.groundspeed.toFixed(0) : '—');
   $('spd').classList.toggle('off', d.groundspeed == null);
   txt('mode', d.mode || '—');
