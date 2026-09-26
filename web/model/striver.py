@@ -46,6 +46,13 @@ CARBON = mat('carbon', srgb('#202226'), 0.3, 0.3, 0.6)
 GROOVE = mat('groove', srgb('#c9ccd0'), 0.6)         # 조종면 힌지 홈·판 이음새
 ALU = mat('alu', srgb('#c3c7cc'), 0.28, 0.95)
 GLASS = mat('dark_grey', srgb('#2e3238'), 0.35, 0.2)
+BATT = mat('battery', srgb('#2a2e36'), 0.45)
+LABEL = mat('label_red', srgb('#c8302d'), 0.5)
+PCB = mat('pcb', srgb('#1f2a24'), 0.5)
+GOLD = mat('gold', srgb('#c9a24a'), 0.3, 0.9)
+PMBLUE = mat('pm_blue', srgb('#2b4c7e'), 0.4)
+XT = mat('xt_yellow', srgb('#e0b51f'), 0.5)
+BAYVOL = mat('bayvol', srgb('#3e6ae1'), 0.5)     # 탑재칸 클릭 영역 — 화면에서는 안 그린다
 
 def obj(name, me, m=None, parent=None, smooth=True):
     o = bpy.data.objects.new(name, me)
@@ -122,6 +129,36 @@ def airfoil_top(u, prof=AF):
         if u0 <= u <= u1:
             return v0 + (v1 - v0) * (u - u0) / max(1e-9, u1 - u0)
     return 0.0
+
+def split_prof(prof, uc, rear):
+    """단면을 시위 uc 에서 자른다. rear=False 면 앞부분(0..uc), True 면 조종면(uc..1).
+    둘 다 닫힌 고리이고 잘린 면은 평평하다. uc 가 같으면 고리 점 개수도 같다."""
+    n = len(prof) // 2
+    up = prof[:n + 1]                     # TE→LE (u 1→0)
+    lo = prof[n + 1:]                     # LE→TE (u 0→1), 양 끝 제외
+    lo_full = [prof[n]] + lo + [prof[0]]
+    def at(seq, u):
+        for (u0, v0), (u1, v1) in zip(seq, seq[1:]):
+            if min(u0, u1) <= u <= max(u0, u1):
+                return (u, v0 + (v1 - v0) * (u - u0) / ((u1 - u0) or 1e-9))
+        return (u, 0.0)
+    cu, cl = at(up, uc), at(lo_full, uc)
+    if not rear:
+        return [cu] + [q for q in up if q[0] < uc] + [q for q in lo if q[0] < uc] + [cl]
+    return [q for q in up if q[0] > uc] + [cu, cl] + [q for q in lo if q[0] > uc]
+
+def surface(name, rings, h0, h1, m=None):
+    """조종면 — 힌지 h0→h1 을 로컬 Z 축으로 둔 객체로 만든다.
+    화면(three.js)은 이 노드를 로컬 Y(= Blender 로컬 Z) 둘레로 돌린다."""
+    axis = (h1 - h0).normalized()
+    q = axis.to_track_quat('Z', 'Y')
+    inv = q.inverted()
+    piv = (h0 + h1) / 2
+    o = loft(name, [[inv @ (v - piv) for v in r] for r in rings], m or FOAM, parent=root)
+    o.location = piv
+    o.rotation_mode = 'QUATERNION'
+    o.rotation_quaternion = q
+    return o
 
 # ── 동체 ─────────────────────────────────────────────────────────────
 # (y, 반폭, 윗면 z, 아랫면 z) — 기수(-Y)에서 꼬리로.
@@ -303,7 +340,21 @@ def wing_sec(x):
 
 XS = [-1.05, -1.045, -1.035, -1.02, -1.0, -0.975, -0.95, -0.93, -0.85, -0.6, -0.3, -0.1, 0.0,
       0.1, 0.3, 0.6, 0.85, 0.93, 0.95, 0.975, 1.0, 1.02, 1.035, 1.045, 1.05]
-wing = loft('wing', [wing_ring(x, *wing_sec(x)[:3], twist=wing_sec(x)[3] * TWK) for x in XS], FOAM, parent=root)
+UA, AX0, AX1 = 0.72, 0.50, 0.95        # 에일러론 힌지 시위 비율, 스팬 구간
+def wring(x, prof=AF):
+    le, c, z, tw = wing_sec(x)
+    return wing_ring(x, le, c, z, prof=prof, twist=tw * TWK)
+def whinge(x):
+    le, c, z, tw = wing_sec(x)
+    return wring(x, [(UA, (airfoil_top(UA) + min(v for u, v in AF if abs(u - UA) < 0.05)) / 2)])[0]
+loft('wing', [wring(x) for x in (-0.5, -0.3, -0.1, 0.0, 0.1, 0.3, 0.5)], FOAM, parent=root)
+for sgn in (-1, 1):
+    s = 'L' if sgn > 0 else 'R'
+    mid = sorted(sgn * x for x in (0.5, 0.6, 0.7, 0.85, 0.93, 0.95))
+    tip = sorted(sgn * x for x in (0.95, 0.975, 1.0, 1.02, 1.035, 1.045, 1.05))
+    loft(f'wing_mid_{s}', [wring(x, split_prof(AF, UA, False)) for x in mid], FOAM, parent=root)
+    loft(f'wing_tip_{s}', [wring(x) for x in tip], FOAM, parent=root)
+    surface(f'aileron_{s}', [wring(x, split_prof(AF, UA, True)) for x in mid], whinge(mid[0]), whinge(mid[-1]))
 
 def wing_top(x, y):
     """날개 윗면 높이 — 표식·선을 표면에 붙일 때 쓴다."""
@@ -354,8 +405,6 @@ for sgn in (-1, 1):
     wing_band(f'center_panel_{s}', xs[0], xs[1], PANEL, grow=1.004, n=6)
     chord_line(f'panel_seam_{s}', sgn * 0.47, 0.02, 0.98, GROOVE)
     # 에일러론 힌지 홈 · 힌지 세 개 · 서보 혼 덮개
-    surface_line(f'aileron_{s}', sgn * 0.50, sgn * 0.95, 0.72, GROOVE)
-    chord_line(f'aileron_in_{s}', sgn * 0.50, 0.72, 1.0, GROOVE)
     for k, xx in enumerate((0.56, 0.72, 0.88)):
         x = sgn * xx
         le, c, _, _ = wing_sec(x)
@@ -451,7 +500,19 @@ def ht_sec(x):
     t = (ax - 0.28) / 0.055
     return HT_LE + 0.01 + 0.035 * t ** 2, HT_C - 0.012 - 0.05 * t ** 1.6
 hx = [-0.335, -0.332, -0.325, -0.31, -0.28, -0.15, 0.0, 0.15, 0.28, 0.31, 0.325, 0.332, 0.335]
-ht = loft('htail', [wing_ring(x, *ht_sec(x), HT_Z, prof=AFT) for x in hx], FOAM, parent=root)
+UE = 0.66
+hring = lambda x, prof=AFT: wing_ring(x, *ht_sec(x), HT_Z, prof=prof)
+def hhinge(x):
+    le, c = ht_sec(x)
+    return Vector((x, le + UE * c, HT_Z))
+loft('htail', [hring(x) for x in (-0.03, 0.0, 0.03)], FOAM, parent=root)
+for sgn in (-1, 1):
+    s = 'L' if sgn > 0 else 'R'
+    mid = sorted(sgn * x for x in (0.03, 0.1, 0.2, 0.28, 0.30))
+    tip = sorted(sgn * x for x in (0.30, 0.31, 0.325, 0.332, 0.335))
+    loft(f'htail_mid_{s}', [hring(x, split_prof(AFT, UE, False)) for x in mid], FOAM, parent=root)
+    loft(f'htail_tip_{s}', [hring(x) for x in tip], FOAM, parent=root)
+    surface(f'elevator_{s}', [hring(x, split_prof(AFT, UE, True)) for x in mid], hhinge(mid[0]), hhinge(mid[-1]))
 for sgn in (-1, 1):
     # 뿌리 앞전 검정 띠 · 엘리베이터 힌지 홈
     xs = sorted((sgn * 0.02, sgn * 0.075))
@@ -460,15 +521,20 @@ for sgn in (-1, 1):
         le, c = ht_sec(x)
         rs.append(wing_ring(x, le - 0.001, c * 0.30, HT_Z - 0.0003, prof=AFT, thick=3.6))
     loft(f'ht_root_{sgn}', rs, BLACK, parent=root)
-    le, c = ht_sec(sgn * 0.17)
-    box(f'elev_hinge_{sgn}', (0.25, 0.003, 0.0012), (sgn * 0.175, le + 0.66 * c, HT_Z + airfoil_top(0.66, AFT) * c + 0.0005), GROOVE)
 
 # 수직꼬리 — 앞전이 크게 후퇴하고 위 뒤쪽이 둥글다
 def vt_ring(z, le, c):
     return [Vector((v * c, le + u * c, z)) for u, v in AFT]
 VT = [(0.012, 0.455, 0.235), (0.05, 0.475, 0.222), (0.12, 0.510, 0.195), (0.20, 0.548, 0.165),
       (0.255, 0.572, 0.143), (0.285, 0.588, 0.122), (0.300, 0.603, 0.098), (0.306, 0.618, 0.07)]
-vt = loft('vtail', [vt_ring(*s) for s in VT], FOAM, parent=root)
+UR = 0.66
+def vt_ring_p(z, le, c, prof):
+    return [Vector((v * c, le + u * c, z)) for u, v in prof]
+VT_R = [q for q in VT if q[0] <= 0.285]
+loft('vtail', [vt_ring_p(*q, split_prof(AFT, UR, False)) for q in VT_R], FOAM, parent=root)
+loft('vtail_top', [vt_ring(*q) for q in VT if q[0] >= 0.285], FOAM, parent=root)
+rh = lambda q: Vector((0, q[1] + UR * q[2], q[0]))
+surface('rudder', [vt_ring_p(*q, split_prof(AFT, UR, True)) for q in VT_R], rh(VT_R[0]), rh(VT_R[-1]))
 
 def vt_at(z):
     for a, b in zip(VT, VT[1:]):
@@ -529,6 +595,70 @@ box('gps_bracket', (0.05, 0.008, 0.01), (0, gy + 0.03, surf_z(gy + 0.03) + 0.003
 cyl('top_stub', 0.004, 0.016, (0, gy + 0.075, surf_z(gy + 0.075) + 0.008), FOAM, verts=12)
 box('top_stub_t', (0.018, 0.004, 0.004), (0, gy + 0.075, surf_z(gy + 0.075) + 0.016), FOAM)
 
+# ── 탑재칸 · 해치 · 내부 부품 ─────────────────────────────────────────
+# 칸 구획은 제조사 캐빈 구성(airframes/striver-mini-vtol/README.md 「구조/캐빈별 사양」)
+# 순서를 따르고, 부품은 components/*/README.md 의 치수다. 화면이 칸을 누르면
+# 해치를 들고 동체를 반투명하게 해 이것들이 보인다.
+def fus_arc(y, a0, a1, scale, n=20):
+    _, w, zt, zb = fus_at(y)
+    zc, h = (zt + zb) / 2, (zt - zb) / 2
+    e = 2.4
+    out = []
+    for k in range(n + 1):
+        a = a0 + (a1 - a0) * k / n
+        c, s_ = math.cos(a), math.sin(a)
+        out.append(Vector((w * scale * math.copysign(abs(c) ** (2 / e), c), y,
+                           zc + h * scale * math.copysign(abs(s_) ** (2 / e), s_))))
+    return out
+
+def hatch(name, y0, y1, n=10):
+    rings = []
+    for k in range(n + 1):
+        y = y0 + (y1 - y0) * k / n
+        outer = fus_arc(y, math.radians(22), math.radians(158), 1.014)
+        inner = fus_arc(y, math.radians(22), math.radians(158), 1.002)
+        rings.append(outer + inner[::-1])
+    o = loft(name, rings, FOAM, parent=root)
+    return o
+
+hatch('hatch_F', -0.44, -0.255)
+hatch('hatch_R', 0.055, 0.19)
+
+BAYS = {'head': (-0.525, -0.40), 'battery': (-0.40, -0.155), 'power': (-0.155, -0.05),
+        'payload': (-0.05, 0.11), 'fc': (0.11, 0.20)}
+# 칸 영역은 동체 곡면을 그대로 따른다 — 그 구간의 동체 단면을 조금 키워 잇는다.
+# 화면은 양 끝 단면의 테두리만 선으로 긋고 안을 옅게 칠한다.
+for k, (y0, y1) in BAYS.items():
+    ys = [y0 + (y1 - y0) * i / 8 for i in range(9)]
+    loft(f'bay_{k}', [fus_ring(*fus_at(y), scale=1.03) for y in ys], BAYVOL, parent=root)
+# GPS — 모듈 모양(둥근 판)에 맞춘다
+cyl('bay_gps', 0.034, 0.03, (0, gy, surf_z(gy) + 0.006), BAYVOL, verts=32)
+
+# 기수 — 크루즈 ESC (MFE ESC 6100, 74×37×16)
+box('in_head_esc', (0.037, 0.074, 0.016), (0, -0.455, -0.012), BLACK, bevel=0.002)
+for k in range(4):
+    box(f'in_head_esc_fin{k}', (0.03, 0.004, 0.003), (0, -0.48 + k * 0.016, -0.003), GLASS)
+# 배터리 — Fullymax 6S 16000mAh (196.5×89×59), XT90
+box('in_battery', (0.089, 0.1965, 0.059), (0, -0.285, -0.012), BATT, bevel=0.004)
+box('in_battery_label', (0.0905, 0.03, 0.0605), (0, -0.25, -0.012), LABEL, bevel=0.004)
+box('in_battery_xt90', (0.021, 0.02, 0.011), (0.015, -0.392, -0.004), XT, bevel=0.002)
+# 배전 — PDB 300A · PM08-CAN · UBEC
+box('in_power_pdb', (0.06, 0.075, 0.004), (0, -0.10, -0.05), PCB)
+for k in range(5):
+    box(f'in_power_xt{k}', (0.011, 0.009, 0.008), (-0.024 + k * 0.012, -0.132, -0.044), XT)
+box('in_power_pm08', (0.036, 0.045, 0.016), (0.02, -0.095, -0.036), PMBLUE, bevel=0.002)
+box('in_power_ubec', (0.033, 0.055, 0.013), (-0.022, -0.095, -0.037), BLACK, bevel=0.002)
+# 탑재 — SDR 페이로드 (탑재칸 220×150×110)
+box('in_payload_sdr', (0.09, 0.13, 0.045), (0, 0.03, -0.022), ALU, bevel=0.004)
+for k in range(3):
+    cyl(f'in_payload_port{k}', 0.004, 0.008, (-0.025 + k * 0.025, -0.036, -0.018), GOLD, rot=(math.pi / 2, 0, 0), verts=12)
+# FC — Pixhawk 6C Mini (54×39×18) · RP4TD-M 수신기
+box('in_fc_fmu', (0.039, 0.054, 0.016), (0, 0.15, -0.012), GLASS, bevel=0.003)
+box('in_fc_cap', (0.037, 0.052, 0.002), (0, 0.15, -0.003), ALU, bevel=0.001)
+box('in_fc_rx', (0.018, 0.03, 0.007), (0.03, 0.15, -0.014), BLACK)
+for sgn in (-1, 1):
+    cyl(f'in_fc_rx_ant{sgn}', 0.0015, 0.05, (0.03 + sgn * 0.006, 0.18, -0.008), BLACK, rot=(math.pi / 2 - 0.3, 0, 0), verts=8)
+
 # ── 내보내기 ─────────────────────────────────────────────────────────
 bpy.ops.object.select_all(action='SELECT')
 bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', use_selection=False,
@@ -536,6 +666,9 @@ bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', use_selection=False
 print('wrote', OUT)
 
 if PREVIEW:
+    for o in scn.objects:
+        if o.name.startswith('bay_'):
+            o.hide_render = True
     cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam'))
     scn.collection.objects.link(cam)
     cam.data.lens = 55

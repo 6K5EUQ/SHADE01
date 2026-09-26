@@ -1173,14 +1173,34 @@ def handle(msg, st):
         #       와 MAIN5(UBEC) 를 추력으로 그린다 — 조용히 틀린 화면이 된다.
         #    MAIN1/2 는 에일러론 서보(100Hz), MAIN8 은 크루즈, MAIN5 는 UBEC —
         #    서보를 추력으로 그리면 거짓말이 된다.
-        # PWM 1000~2000us 를 0~100% 로 편다. 안 도는 채널(<900)은 None.
-        out = {}
-        for name, i in (('RB', 3), ('RF', 4), ('LB', 6), ('LF', 7)):
-            v = getattr(msg, 'servo%d_raw' % i, 0)
-            out[name] = None if (v is None or v < 900) else \
+        #
+        # 🔴 `port` 를 가른다. port 0 = MAIN1~8, port 1 = AUX1~8. PX4 는 지금
+        #    port 0 만 보내지만, AUX 가 오기 시작하면 AUX1 을 MAIN1 로 읽어
+        #    엘리베이터를 모터로 그리게 된다.
+        raw = lambda i: getattr(msg, 'servo%d_raw' % i, 0)
+        # 조종면: PWM 을 중립 1500 기준 -1~+1 로 편다. 안 나오는 채널(<900)은 None.
+        # 방향(+ 가 올라가나 내려가나)은 여기서 정하지 않는다 — 기체마다 반전이
+        # 다르고 (엘리베이터 반전, OPERATIONS.md 2026-09-01) 화면이 정한다.
+        surf = lambda v: None if (v is None or v < 900) else \
+            round(max(-1.0, min(1.0, (v - 1500.0) / 500.0)), 3)
+        port = getattr(msg, 'port', 0) or 0
+        if port == 1:
+            # AUX1/AUX3 = 엘리베이터 ×2, AUX2 = 러더 (OPERATIONS.md 「출력 배치」)
+            sv = dict(d.get('servos') or {})
+            sv.update({'E1': surf(raw(1)), 'R': surf(raw(2)), 'E2': surf(raw(3))})
+            d['servos'] = sv
+        else:
+            # PWM 1000~2000us 를 0~100% 로 편다. 안 도는 채널(<900)은 None.
+            pct = lambda v: None if (v is None or v < 900) else \
                 round(max(0.0, min(100.0, (v - 1000.0) / 10.0)), 1)
-        if any(v is not None for v in out.values()):
-            d['motors'] = out
+            out = {name: pct(raw(i)) for name, i in (('RB', 3), ('RF', 4), ('LB', 6), ('LF', 7))}
+            if any(v is not None for v in out.values()):
+                d['motors'] = out
+            # MAIN8 크루즈 모터 (%), MAIN1/2 우/좌 에일러론
+            d['cruise'] = pct(raw(8))
+            sv = dict(d.get('servos') or {})
+            sv.update({'AR': surf(raw(1)), 'AL': surf(raw(2))})
+            d['servos'] = sv
 
     elif t == 'RC_CHANNELS':
         d['rssi'] = msg.rssi if msg.rssi != 255 else None

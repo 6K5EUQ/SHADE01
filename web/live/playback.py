@@ -95,10 +95,13 @@ class _Track:
         return 0 if self.t else None
 
 
-def _track(ulog, name, fields, t0):
-    """토픽 하나를 _Track 으로. 없으면 None."""
+def _track(ulog, name, fields, t0, multi_id=None):
+    """토픽 하나를 _Track 으로. 없으면 None. multi_id 를 주면 그 인스턴스만."""
     import qgclog as Q
-    ds = Q.get(ulog, name)
+    if multi_id is None:
+        ds = Q.get(ulog, name)
+    else:
+        ds = next((x for x in ulog.data_list if x.name == name and x.multi_id == multi_id), None)
     if ds is None:
         return None
     data = ds.data
@@ -202,7 +205,13 @@ def load_flight(path):
     #    서보를 추력으로 그리면 거짓말이 된다.
     mot = _track(ulog, 'actuator_outputs',
                  {'RB': 'output[2]', 'RF': 'output[3]',
-                  'LB': 'output[5]', 'LF': 'output[6]'}, t0)
+                  'LB': 'output[5]', 'LF': 'output[6]',
+                  'CR': 'output[7]', 'AR': 'output[0]', 'AL': 'output[1]'}, t0)
+    # AUX — actuator_outputs 두 번째 인스턴스. AUX1/AUX3 엘리베이터, AUX2 러더
+    # (OPERATIONS.md 「출력 배치」). 9/5 로그 실측: multi_id 1 의 output[0..2] 가
+    # 1500 중립이고 나머지는 0 — 이 셋만 서보다.
+    aux = _track(ulog, 'actuator_outputs',
+                 {'E1': 'output[0]', 'R': 'output[1]', 'E2': 'output[2]'}, t0, multi_id=1)
 
     # 진동. 라이브는 MAVLink `VIBRATION`(x/y/z) 을 받지만 로그에는 그 토픽이
     # 없고 **`vehicle_imu_status`** 에 들어 있다 — `accel_vibration_metric`
@@ -410,6 +419,21 @@ def load_flight(path):
                     round(max(0.0, min(100.0, (v - 1000.0) / 10.0)), 1)
             if any(v is not None for v in out.values()):
                 d['motors'] = out
+            # 크루즈(MAIN8) % 와 에일러론(MAIN1/2) -1~+1 — mav_live.py 와 같은 식
+            v = _val(mot, i, 'CR')
+            d['cruise'] = None if (v is None or v < 900) else \
+                round(max(0.0, min(100.0, (v - 1000.0) / 10.0)), 1)
+            sv = {}
+            for name in ('AR', 'AL'):
+                v = _val(mot, i, name)
+                sv[name] = None if (v is None or v < 900) else \
+                    round(max(-1.0, min(1.0, (v - 1500.0) / 500.0)), 3)
+            j = aux.at(ts) if aux else None
+            for name in ('E1', 'R', 'E2'):
+                v = _val(aux, j, name)
+                sv[name] = None if (v is None or v < 900 or v > 2500) else \
+                    round(max(-1.0, min(1.0, (v - 1500.0) / 500.0)), 3)
+            d['servos'] = sv
 
         frames.append({'t': round(ts, 2), 'd': d})
 
