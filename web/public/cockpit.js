@@ -99,12 +99,34 @@ const fill = new THREE.DirectionalLight(0xf2f4ff, 0.9); fill.position.set(-2.5, 
 const front = new THREE.DirectionalLight(0xffffff, 0.5); front.position.set(0, 0.6, 3); scene.add(front);
 
 const FLOOR = -0.125;
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShadowMaterial({ opacity: 0.16 }));
+{ // 격자 무대 — 25 cm 칸, 1 m 마다 진하게, 가장자리로 흐려진다
+  const N = 1024, c = document.createElement('canvas'); c.width = c.height = N;
+  const x = c.getContext('2d'), R = 2.4, px = N / (2 * R);
+  const g0 = x.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
+  g0.addColorStop(0, 'rgba(196,197,206,1)'); g0.addColorStop(0.55, 'rgba(212,213,220,.85)'); g0.addColorStop(1, 'rgba(230,230,234,0)');
+  x.fillStyle = g0; x.fillRect(0, 0, N, N);
+  for (let m = -R; m <= R + 1e-6; m += 0.25) {
+    const major = Math.abs(m - Math.round(m)) < 1e-6;
+    x.strokeStyle = major ? 'rgba(96,98,112,.50)' : 'rgba(110,112,126,.24)';
+    x.lineWidth = major ? 2 : 1.2;
+    const v = N / 2 + m * px;
+    x.beginPath(); x.moveTo(v, 0); x.lineTo(v, N); x.moveTo(0, v); x.lineTo(N, v); x.stroke();
+  }
+  // 바깥으로 사라지게 원형 마스크
+  x.globalCompositeOperation = 'destination-in';
+  const g1 = x.createRadialGradient(N / 2, N / 2, N * 0.22, N / 2, N / 2, N * 0.49);
+  g1.addColorStop(0, 'rgba(0,0,0,1)'); g1.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g1; x.fillRect(0, 0, N, N);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * R, 2 * R), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+  floor.rotation.x = -Math.PI / 2; floor.position.y = -0.126; floor.renderOrder = -1; scene.add(floor);
+}
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShadowMaterial({ opacity: 0.24 }));
 ground.rotation.x = -Math.PI / 2; ground.position.y = FLOOR; ground.receiveShadow = true; scene.add(ground);
 { // 접지 그림자 — 기체 밑이 가장 진하고 바깥으로 사라진다
   const c = document.createElement('canvas'); c.width = c.height = 256;
   const x = c.getContext('2d'), gr = x.createRadialGradient(128, 128, 0, 128, 128, 128);
-  gr.addColorStop(0, 'rgba(40,40,48,.30)'); gr.addColorStop(.5, 'rgba(40,40,48,.10)'); gr.addColorStop(1, 'rgba(40,40,48,0)');
+  gr.addColorStop(0, 'rgba(30,30,40,.42)'); gr.addColorStop(.5, 'rgba(30,30,40,.14)'); gr.addColorStop(1, 'rgba(30,30,40,0)');
   x.fillStyle = gr; x.fillRect(0, 0, 256, 256);
   const blob = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.8), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
   blob.rotation.x = -Math.PI / 2; blob.position.y = FLOOR + 0.001; craft.add(blob);
@@ -199,11 +221,11 @@ new GLTFLoader().load('/model/striver.glb', (g) => {
 
 // ── 조작 — 끌면 기체가 돈다, 휠·두 손가락은 거리, 두 번 누르면 제자리, 눌러서 칸 선택 ──
 const VIEWS = {
-  sum: { yaw: -2.6, tilt: 0.6, dist: 3.9 },
+  sum: { yaw: 2.55, tilt: 0.55, dist: 3.9 },
   pwr: { yaw: -2.75, tilt: 0.78, dist: 4.1 },
   nav: { yaw: 0.65, tilt: 0.45, dist: 3.3 },
   bat: { yaw: -1.9, tilt: 0.5, dist: 3.3 },
-  rec: { yaw: -2.6, tilt: 0.6, dist: 3.9 },
+  rec: { yaw: 2.55, tilt: 0.55, dist: 3.9 },
   pf: { yaw: -2.1, tilt: 0.75, dist: 3.4 },
   bay: { yaw: -1.25, tilt: 0.62, dist: 2.3 },
 };
@@ -364,7 +386,7 @@ const lookGoal = new THREE.Vector3();
 // 계속 가면 어디로 가는지를 기수 앞에 그린다. 기수 방향과 χ 가 다르면(옆바람·
 // 호버 중 옆걸음) 선이 그만큼 비스듬히 나간다. 예측이지 계획 경로가 아니다.
 const pred = { on: 0, v: 0, chi: 0, rel: 0, omega: 0, climb: 0, prev: null };
-const PRED_N = 48, PRED_W = 0.11;
+const PRED_N = 48;
 const unwrap = (a) => ((a + 540) % 360) - 180;
 function updatePred() {
   const d = D();
@@ -385,15 +407,21 @@ function updatePred() {
   pred.rel = unwrap(chi - yaw);
   pred.climb = d.climb || 0;
 }
-// 리본 — 기수 높이의 길과 바닥에 비친 옅은 길. u(길이 방향)로 흐려진다.
+// 바닥 위의 길 — Tesla 처럼 가장자리 선이 또렷하고 속은 옅다. 기체 밑에서
+// 스며 나와 앞으로 흐려진다. 기체와 같이 돈다 (craft 안에 둔다).
+const PRED_W = 0.34;
 function predTexture() {
-  const c = document.createElement('canvas'); c.width = 256; c.height = 8;
-  const x = c.getContext('2d'), g = x.createLinearGradient(0, 0, 256, 0);
-  g.addColorStop(0, 'rgba(62,106,225,0.95)'); g.addColorStop(0.55, 'rgba(62,106,225,0.55)'); g.addColorStop(1, 'rgba(62,106,225,0)');
-  x.fillStyle = g; x.fillRect(0, 0, 256, 8);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  const W = 512, H = 64, c = document.createElement('canvas'); c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  x.fillStyle = 'rgba(62,106,225,.32)'; x.fillRect(0, 0, W, H);          // 속
+  x.fillStyle = 'rgba(62,106,225,.95)'; x.fillRect(0, 0, W, 5); x.fillRect(0, H - 5, W, 5);   // 가장자리
+  x.globalCompositeOperation = 'destination-in';                          // 길이 방향으로 스며 나와 흐려진다
+  const g = x.createLinearGradient(0, 0, W, 0);
+  g.addColorStop(0, 'rgba(0,0,0,.35)'); g.addColorStop(0.08, 'rgba(0,0,0,1)'); g.addColorStop(0.6, 'rgba(0,0,0,.8)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  x.fillStyle = g; x.fillRect(0, 0, W, H);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
 }
-function ribbon(opacity) {
+function ribbon() {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(new Float32Array((PRED_N + 1) * 2 * 3), 3));
   const uv = new Float32Array((PRED_N + 1) * 4), idx = [];
@@ -402,38 +430,32 @@ function ribbon(opacity) {
     if (i < PRED_N) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
   }
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2)); g.setIndex(idx);
-  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: predTexture(), transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide }));
-  m.frustumCulled = false; m.renderOrder = 4; craft.add(m);
+  const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ map: predTexture(), transparent: true, depthWrite: false, side: THREE.DoubleSide }));
+  m.frustumCulled = false; m.renderOrder = 1; craft.add(m);
   return m;
 }
-const predAir = ribbon(1), predGround = ribbon(0.35);
+const predPath = ribbon();
 function drawPred(k) {
   pred.on += ((pred.show ? 1 : 0) - pred.on) * k;
-  predAir.visible = predGround.visible = pred.on > 0.01;
-  if (!predAir.visible) return;
-  predAir.material.opacity = pred.on; predGround.material.opacity = 0.35 * pred.on;
-  // 화면 길이는 속도에 비례하되 무대 안에 들어오게 자른다 — 무대 1 m ≈ 실제 10 m
-  const L = Math.max(0.5, Math.min(2.2, 0.3 + pred.v * 0.12));
-  const turn = THREE.MathUtils.degToRad(Math.max(-200, Math.min(200, pred.omega * L * 10 / Math.max(pred.v, 0.5))));
+  predPath.visible = pred.on > 0.01;
+  if (!predPath.visible) return;
+  predPath.material.opacity = pred.on;
+  // 길이는 속도에 비례 — 무대 1 m ≈ 실제 10 m, 무대 밖으로 나가지 않게 자른다
+  const L = Math.max(0.7, Math.min(2.0, 0.5 + pred.v * 0.11));
+  const turn = THREE.MathUtils.degToRad(Math.max(-160, Math.min(160, pred.omega * L * 10 / Math.max(pred.v, 0.5))));
   const rel = THREE.MathUtils.degToRad(pred.rel);
-  const gamma = Math.atan2(pred.climb, Math.max(pred.v, 0.5));
-  // 기수 앞(+z)에서 출발. 오른쪽 선회 = -x (좌익이 +x).
-  let x = 0, y = 0, z = 0.6;
-  const pa = predAir.geometry.attributes.position.array, pg = predGround.geometry.attributes.position.array;
+  // 기수 앞에서 출발해 앞으로. 오른쪽 선회 = -x (좌익이 +x).
+  // 기수 방향과 진행 방향이 다르면(옆바람·옆걸음) 처음부터 그만큼 틀어져 나간다.
+  let x = 0, z = 0.62;   // 기수 바로 앞 바닥
+  const pa = predPath.geometry.attributes.position.array, y = FLOOR + 0.004;
   for (let i = 0; i <= PRED_N; i++) {
     const s = i / PRED_N;
-    // 처음 1/4 은 곧게, 그다음부터 휜다 — 기수에서 일자로 나가 휘어지는 모양
-    const bend = s < 0.25 ? 0 : (s - 0.25) / 0.75;
-    const th = rel + turn * bend * bend;
-    const dx = -Math.sin(th), dz = Math.cos(th);
-    const w = PRED_W * (1 - 0.4 * s) / 2;
+    const th = rel * Math.min(1, s * 4) + turn * s * s;   // 곧게 나가다 점점 휜다
+    const dx = -Math.sin(th), dz = Math.cos(th), w = PRED_W / 2;
     pa.set([x + dz * w, y, z - dx * w, x - dz * w, y, z + dx * w], i * 6);
-    pg.set([x + dz * w * 1.4, FLOOR + 0.003, z - dx * w * 1.4, x - dz * w * 1.4, FLOOR + 0.003, z + dx * w * 1.4], i * 6);
-    const step = L / PRED_N;
-    x += dx * step; z += dz * step; y += Math.tan(gamma) * step;
+    x += dx * L / PRED_N; z += dz * L / PRED_N;
   }
-  predAir.geometry.attributes.position.needsUpdate = true;
-  predGround.geometry.attributes.position.needsUpdate = true;
+  predPath.geometry.attributes.position.needsUpdate = true;
 }
 
 const timer = new THREE.Timer();
