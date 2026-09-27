@@ -239,7 +239,7 @@ const goal = { ...cam, on: false };
 const look = new THREE.Vector3(0, 0.02, 0);
 const ptrs = new Map();
 let pinch0 = 0, dist0 = 0, down = null;
-const clampTilt = (t) => Math.max(-1.4, Math.min(1.4, t));   // 음수면 바닥 밑 — 하부가 보인다
+const clampTilt = (t) => Math.max(-Math.PI / 2, Math.min(Math.PI / 2, t));   // ±90° — 음수면 바닥 밑에서 올려다본다
 const clampDist = (d) => Math.max(1.4, Math.min(8, d));
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function pickBay(e) {
@@ -473,21 +473,23 @@ function drawPred(k) {
 // ── 첫 화면 → 대시보드 — 기체가 기수 방향으로 날아가 사라지면 대시보드가 열리고,
 // 같은 방향으로 뒤에서 다시 들어와, 선회하며 대시보드 시점에 선다.
 // 돌려 둔 시점에서 출발하므로 돌린 만큼 선회가 커진다. 좌표는 기체 기준(+z 기수).
-const fly = { t: -1, from: null, to: null };
+const fly = { t: -1, p: 0, from: null, to: null };
 const FLY_OUT = 0.8, FLY_IN = 1.2, FLY_Z = 7;
 function launch() {
   if (fly.t >= 0) return;
   fly.t = 0;
+  fly.p = -cam.tilt * 0.9;   // 밑에서 보면 올라가고 위에서 보면 내려간다 — 보는 각도대로 멀어진다
   goal.on = false; cam.vYaw = cam.vTilt = 0;
   canvas.style.cursor = '';
 }
 function flyStep(dt) {
   if (fly.t < 0) return;
   fly.t += dt;
-  if (fly.t < FLY_OUT) {                      // 가속하며 기수를 들고 나간다
-    const s = fly.t / FLY_OUT;
-    flyG.position.set(0, 0.3 * s * s, FLY_Z * s * s * s);
-    flyG.rotation.x = -0.2 * s;
+  const p = fly.p;
+  if (fly.t < FLY_OUT) {                      // 기수를 보는 각도로 틀며 가속해 나간다
+    const s = fly.t / FLY_OUT, a = p * Math.min(1, s * 2.5), r = FLY_Z * s * s * s;
+    flyG.position.set(0, 0.3 * s * s + r * Math.sin(a), r * Math.cos(a));
+    flyG.rotation.x = -a - 0.2 * s;
     return;
   }
   if (intro) {                                // 화면 밖 — 이때 대시보드를 연다
@@ -501,14 +503,15 @@ function flyStep(dt) {
   const s = Math.min(1, (fly.t - FLY_OUT) / FLY_IN), e = 1 - (1 - s) ** 3;   // 감속하며 들어온다
   const f = fly.from, g = fly.to, turn = g.yaw - f.yaw;
   cam.yaw = f.yaw + turn * e; cam.tilt = f.tilt + (g.tilt - f.tilt) * e; cam.dist = f.dist + (g.dist - f.dist) * e;
-  flyG.position.set(0, 0.3 * (1 - e), -FLY_Z * (1 - e));
-  flyG.rotation.x = -0.12 * (1 - e);
+  const r = FLY_Z * (1 - e);                  // 나간 각도 그대로 뒤에서 들어와 수평으로 편다
+  flyG.position.set(0, 0.3 * (1 - e) - r * Math.sin(p), -r * Math.cos(p));
+  flyG.rotation.x = -(p + 0.12) * (1 - e);
   flyG.rotation.z = -Math.max(-0.6, Math.min(0.6, turn * 0.4)) * Math.sin(Math.PI * s);   // 선회 쪽으로 기운다 (+x 좌익)
   if (s >= 1) { fly.t = -1; flyG.rotation.z = 0; }
 }
 function flyShadow() {   // 그림자는 바닥에 남아 따라가고, 뜬 만큼 옅어진다
   blob.position.z = flyG.position.z;
-  blob.material.opacity = Math.max(0, 1 - flyG.position.y * 3);
+  blob.material.opacity = Math.max(0, 1 - Math.abs(flyG.position.y) * 3);
 }
 
 const timer = new THREE.Timer();
@@ -534,6 +537,7 @@ function frame() {
   look.lerp(lookGoal, ease(4));
   const dist = cam.dist * (camera.userData.k || 1);
   camera.position.set(look.x, look.y + Math.sin(cam.tilt) * dist, look.z + Math.cos(cam.tilt) * dist);
+  camera.up.set(0, Math.cos(cam.tilt), -Math.sin(cam.tilt));   // 궤도 접선 — 90° 에서도 안 뒤집힌다
   camera.lookAt(look);
 
   // 실시간 자세 — 기체가 붙어 있을 때만, 없으면 수평으로 돌아온다
