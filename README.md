@@ -66,6 +66,22 @@ GPS·배터리·failsafe 설정·센서 상태를 확인합니다.
 
 ---
 
+## 5. 기체를 3D 로 보며 상태를 확인합니다
+
+**→ [shade01.bewe.co.kr/cockpit](https://shade01.bewe.co.kr/cockpit)**
+
+![콕핏 시작 화면](docs/images/06-cockpit-start.jpg)
+
+실시간이나 지난 비행 재생에서 기체 자세·모터 부하·예측 경로·홈 위치를 위성 지도 위에 그립니다.
+
+![콕핏 비행 재생](docs/images/07-cockpit-replay.jpg)
+
+부위를 누르면 동체가 비치며 안쪽 부품과 제원이 보입니다.
+
+![콕핏 탑재칸](docs/images/08-cockpit-bay.jpg)
+
+---
+
 ## 저장소 구성
 
 | 폴더 | 내용 |
