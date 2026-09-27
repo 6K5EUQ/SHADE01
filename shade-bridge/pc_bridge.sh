@@ -39,18 +39,21 @@ fi
 # FC 시리얼 — 이 기체의 FC(Pixhawk 6C)만 잡는다. USB id 로 고른다.
 # 🔴 ttyACM0 을 그대로 잡지 마라 — 무엇이 꽂히든 잡아 그 텔레메트리가 이 기체의
 #    라이브·기록·웹으로 섞인다.
+# by-id 링크 그대로 넘긴다 — 브리지가 다시 열 때도 이 FC 만 열린다.
+# ttyACM0 으로 풀어 넘기면 뽑고 다른 FC 를 꽂았을 때 그것이 열린다.
+# 없으면 꽂힐 때까지 조용히 기다린다 (서비스가 재시작 루프를 돌지 않게).
 PORT="${MAV_SERIAL:-}"
-if [[ -z "$PORT" ]]; then
+waited=0
+while [[ -z "$PORT" ]]; do
   for p in /dev/serial/by-id/usb-Auterion*v6C*-if00; do
-    [[ -e "$p" ]] && PORT="$(readlink -f "$p")" && break
+    [[ -e "$p" ]] && PORT="$p" && break
   done
-fi
-
-if [[ -z "$PORT" ]]; then
-  echo "FC(Pixhawk 6C)를 못 찾았다. USB 가 꽂혀 있나?" >&2
-  echo "  ls /dev/serial/by-id/" >&2
-  exit 1
-fi
+  if [[ -z "$PORT" ]]; then
+    [[ $waited -eq 0 ]] && echo "FC(Pixhawk 6C) 기다리는 중 — ls /dev/serial/by-id/" >&2
+    waited=1
+    sleep 3
+  fi
+done
 
 if ! [[ -r "$PORT" && -w "$PORT" ]]; then
   echo "$PORT 에 접근 권한이 없다. dialout 그룹에 들어가야 한다:" >&2
