@@ -36,17 +36,19 @@ if [[ ! -f "$BRIDGE" ]]; then
   exit 1
 fi
 
-# FC 시리얼 자동 탐지. PX4 는 보통 ttyACM0.
+# FC 시리얼 — 이 기체의 FC(Pixhawk 6C)만 잡는다. USB id 로 고른다.
+# 🔴 ttyACM0 을 그대로 잡지 마라 — 무엇이 꽂히든 잡아 그 텔레메트리가 이 기체의
+#    라이브·기록·웹으로 섞인다.
 PORT="${MAV_SERIAL:-}"
 if [[ -z "$PORT" ]]; then
-  for p in /dev/ttyACM0 /dev/ttyACM1 /dev/ttyUSB0; do
-    [[ -e "$p" ]] && PORT="$p" && break
+  for p in /dev/serial/by-id/usb-Auterion*v6C*-if00; do
+    [[ -e "$p" ]] && PORT="$(readlink -f "$p")" && break
   done
 fi
 
 if [[ -z "$PORT" ]]; then
-  echo "FC 시리얼을 못 찾았다. USB 가 꽂혀 있나?" >&2
-  echo "  ls /dev/ttyACM* /dev/ttyUSB*" >&2
+  echo "FC(Pixhawk 6C)를 못 찾았다. USB 가 꽂혀 있나?" >&2
+  echo "  ls /dev/serial/by-id/" >&2
   exit 1
 fi
 

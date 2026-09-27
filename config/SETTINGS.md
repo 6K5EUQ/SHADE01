@@ -519,10 +519,6 @@ S3 를 CH9 에 뒀을 때 USB 로 아무리 돌려도 안 잡혔던 원인이 �
 > ⚠️ 위 `QGroundControl/…` 셋은 **리포에 없다** — `.gitignore` 된 QGC 앱 데이터라 그 파일을
 > 만든 PC(gram)에만 있다. 이 PC 에는 폴더가 비어 있다 (2026-09-10 확인).
 
-> ⚠️ `QGroundControl/Parameters/CHANGELOG.md` 와
-> `NEWVEHICLE_baseline.params` 는 **SHADE01 이 아니다.** ArduCopter 3.6.12 / Pixhawk PX4v3
-> Quad X 의 기록이다. 이 기체 값과 섞지 마라.
-
 ---
 
 ## 9. 다음 비행 전 확인할 것

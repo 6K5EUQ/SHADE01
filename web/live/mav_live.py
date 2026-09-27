@@ -1006,7 +1006,6 @@ def handle(msg, st):
             st._rec_armed = armed
         d['armed'] = armed
         d['mode'] = decode_px4_mode(msg.custom_mode, msg.base_mode)
-        d['mav_type'] = msg.type
         d['system_status'] = msg.system_status
 
     elif t == 'GLOBAL_POSITION_INT':

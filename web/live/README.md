@@ -822,50 +822,6 @@ QGC 와 이 페이지가 서로 프레임을 훔쳐 간다 (`mav_bridge.py` 와 
 것과 데이터가 들어오는 것은 다른 말이다.** `./qgc live status` 의 `링크:` 줄로
 확인한다. 브리지 쪽을 고쳤으면 `systemctl --user restart shade-bridge`.
 
-### 다른 쿼드를 `rim3` 웹뷰어로 볼 때 (2026-09-21)
-
-SHADE01 말고 다른 기체를 `rim3` 에 USB 로 직결해 이 페이지로 보는 일이 있다.
-**그때 SHADE01 은 연결하지 않는다** — 그래서 `/dev/ttyACM*` 다툼은 없다.
-
-🔴 **진짜 위험은 시리얼이 아니라 기록이다.** `shade-bridge` 가 그대로 돌면
-브리지는 **꽂힌 것이 무엇이든** `/dev/ttyACM0` 을 읽어 중계한다. 기체를
-가리지 않는다. 그 상태로 두면 **타기체 텔레메트리가 SHADE01 것으로 섞인다**:
-
-| 섞이는 곳 | 결과 |
-|---|---|
-| `logs/live/*.tlog` | 타기체 비행이 SHADE01 기록으로 남는다 |
-| `shade-livepush` | `shade01.bewe.co.kr` 에 타기체 값이 올라간다 |
-| 다른 PC 의 QGC | `TARGETS` 대로 ku·rim·gram 에 타기체가 SHADE01 인 척 뜬다 |
-
-`.ulg` 와 달리 `.tlog` 와 웹 카탈로그는 **기체를 구분하지 않는다.** 한 번
-섞이면 나중에 갈라내기 어렵다.
-
-**절차 — 타기체 붙이기 전:**
-
-```bash
-systemctl --user stop shade-bridge shade-livepush   # 중계·웹등록을 끊는다
-./qgc live on 14551                                  # 트래커는 그대로 본다
-```
-
-`shade-live` 는 끄지 않는다 — 화면은 그대로 쓰고 중계만 막는 것이다.
-다만 `.tlog` 는 계속 쌓이므로, 끝난 뒤 그날 파일을 확인해 타기체 것을 뺀다:
-
-```bash
-ls -lt ~/SHADE01/logs/live/ | head
-```
-
-**절차 — SHADE01 로 돌아올 때:**
-
-```bash
-systemctl --user start shade-bridge shade-livepush
-journalctl --user -u shade-bridge | grep "udp=" | tail -1   # 100.117.47.105:14550 인가
-./qgc live status                                            # 링크: 수신 중 인가
-```
-
-⚠️ **`stop` 은 재부팅하면 풀린다** (`enabled` 는 그대로다). 타기체 작업이
-재부팅을 건너뛰면 브리지가 저절로 돌아와 다시 섞인다 — 돌아올 때 위 확인을
-반드시 거쳐라.
-
 ### 다른 세션에서 코드를 고칠 때 (2026-09-21)
 
 `mav_live.py`·`mav_bridge.py` 를 고치며 **손으로 띄우면** systemd 유닛과
