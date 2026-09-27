@@ -530,9 +530,22 @@ async function serveStatic(req, res, urlPath) {
   let buf;
   try { buf = await fsp.readFile(file); }
   catch { return send(req, res, 404, '없다', 'text/plain; charset=utf-8'); }
+  const isHtml = file.endsWith('.html');
+  if (isHtml) {
+    // serveLiveAsset 와 같은 이유 — CDN 이 ETag 를 떼고 js 를 4시간 쥐고 있어
+    // 새 HTML 이 옛 js 와 붙는다 (2026-09-27 /cockpit 실측). 자산 URL 에 지문을 박는다.
+    let html = buf.toString('utf8');
+    for (const ref of new Set(html.match(/"\/[\w-]+\.(?:js|css)"/g) || [])) {
+      try {
+        const v = assetTag(await fsp.readFile(path.join(PUBLIC, ref.slice(2, -1))));
+        html = html.split(ref).join(`${ref.slice(0, -1)}?v=${v}"`);
+      } catch { /* 그 파일은 그대로 둔다 */ }
+    }
+    buf = Buffer.from(html, 'utf8');
+  }
   const type = TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream';
-  const cache = file.includes(path.sep + 'vendor' + path.sep)
-    ? 'public, max-age=604800' : 'no-cache';
+  const cache = isHtml ? 'no-store, no-cache, must-revalidate'
+    : file.includes(path.sep + 'vendor' + path.sep) ? 'public, max-age=604800' : 'no-cache';
   send(req, res, 200, buf, type, { 'Cache-Control': cache });
 }
 
