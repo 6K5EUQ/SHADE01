@@ -43,3 +43,6 @@ web/node_modules/
 firmware/*.px4
 firmware/*.bin
 firmware/*.elf
+
+# 3D 출력 파일 — 원본 스크립트로 다시 만든다
+print3d/out/

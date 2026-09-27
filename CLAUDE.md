@@ -42,6 +42,7 @@ ARM·모드변경·미션업로드가 실기에 들어간다 — 그래서 기�
 | [`missions/`](missions/README.md) | **미션 `.plan` 정본** — 번호로 관리. 올리는 법·금지 명령 |
 | [`config/SETTINGS.md`](config/SETTINGS.md) | 9/2 스냅샷의 **구조** 정리본 — 값은 낡았다, 인용 금지 |
 | [`gcs/ACCESS.md`](gcs/ACCESS.md) | PC 별 Tailscale 주소·계정·제약 |
+| [`print3d/`](print3d/README.md) | **3D 프린터 출력 모형** — `web/model/striver.py` 형상을 출력용으로 가공 (준비 단계) |
 | [`flights/`](flights/) | 비행별 분석 — `.ulg` 가 사라져도 남는 정본 |
 
 ## 🔴 값을 뽑을 때 — 실내 조회값과 실비행값을 섞지 마라
@@ -75,6 +76,9 @@ ARM·모드변경·미션업로드가 실기에 들어간다 — 그래서 기�
 
 ## 알아 둘 것
 
+- 🔴 **FC 에 붙는 도구는 [`tools/fc/fcport.py`](tools/fc/fcport.py) 로 연다.** USB id(Pixhawk 6C)로 고르고
+  첫 하트비트가 PX4(12)·VTOL(22) 가 아니면 멈춘다 — `/dev/ttyACM0` 을 그대로 열지 마라.
+  펌웨어를 새로 올려 `MAV_TYPE` 이 초기화되면 전부 거부되므로 QGC 직결로 먼저 복원한다.
 - **`.ulg` 는 git 에 안 들어간다** (`.gitignore`). 수치를 문서로 남기는 것이 유일한
   영구 기록이다. 정본 보관소는 [shade01.bewe.co.kr](https://shade01.bewe.co.kr).
 - **로그는 `logs/` 에 평면으로 쌓는다.** 날짜 하위폴더를 만들지 마라 —
