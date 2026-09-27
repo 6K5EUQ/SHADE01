@@ -500,7 +500,10 @@ const FLY_HOLD = 0.9, FLY_SETTLE = 1.1;   // 들어온 자세를 쥐고 있는 �
 function launch() {
   if (fly.t >= 0) return;
   fly.t = 0;
-  fly.p = -cam.tilt * 0.9;   // 밑에서 보면 올라가고 위에서 보면 내려간다 — 보는 각도대로 멀어진다
+  // 기본 시점에서 누르면 살짝 들며 수평으로 나간다. 사용자가 위·아래로 돌린 만큼만
+  // 그쪽으로 기운다 — 기본 시점이 위에서 내려다보므로 카메라 각도를 그대로 쓰면
+  // 늘 기수를 숙이고 내려간다.
+  fly.p = 0.12 - (cam.tilt - VIEWS.intro.tilt) * 0.9;
   goal.on = false; cam.vYaw = cam.vTilt = 0;
   canvas.style.cursor = '';
 }
