@@ -100,28 +100,50 @@ const fill = new THREE.DirectionalLight(0xf2f4ff, 0.9); fill.position.set(-2.5, 
 const front = new THREE.DirectionalLight(0xffffff, 0.5); front.position.set(0, 0.6, 3); scene.add(front);
 
 const FLOOR = -0.125;
-let grid;
-{ // 격자 무대 — 25 cm 칸, 1 m 마다 진하게, 가장자리로 흐려진다
-  const N = 1024, c = document.createElement('canvas'); c.width = c.height = N;
-  const x = c.getContext('2d'), R = 2.4, px = N / (2 * R);
-  const g0 = x.createRadialGradient(N / 2, N / 2, 0, N / 2, N / 2, N / 2);
-  g0.addColorStop(0, 'rgba(196,197,206,1)'); g0.addColorStop(0.55, 'rgba(212,213,220,.85)'); g0.addColorStop(1, 'rgba(230,230,234,0)');
-  x.fillStyle = g0; x.fillRect(0, 0, N, N);
-  for (let m = -R; m <= R + 1e-6; m += 0.25) {
-    const major = Math.abs(m - Math.round(m)) < 1e-6;
-    x.strokeStyle = major ? 'rgba(96,98,112,.50)' : 'rgba(110,112,126,.24)';
-    x.lineWidth = major ? 2 : 1.2;
-    const v = N / 2 + m * px;
-    x.beginPath(); x.moveTo(v, 0); x.lineTo(v, N); x.moveTo(0, v); x.lineTo(N, v); x.stroke();
+// ── 땅 — 홈(이륙한 자리)에 고정된 바닥 ─────────────────────────────────
+// 기체는 화면 가운데 그대로 있고, 땅이 고도만큼 내려가고 이동한 만큼 뒤로 흐른다.
+// 무대 1 = 실제 10 m (예측 경로와 같다). 높이·먼 거리는 로그로 줄여 화면에 남긴다.
+// world 는 craft 안에 있어 사용자가 돌린 시점을 따르고, 기수 방향만큼 돈다 —
+// world 좌표는 +z 북, -x 동.
+const world = new THREE.Group(); craft.add(world);
+const M2U = 0.1, GRID = 4.8;
+const depthOf = (alt) => 1.15 * Math.log1p(Math.max(0, alt) / 7);   // 고도 → 바닥이 내려간 깊이
+const farOf = (r) => 3 * Math.log1p(r * M2U / 3);                   // 수평 거리 → 가까우면 1:10, 멀면 줄인다
+let grid, floorY = FLOOR;
+{ // 격자 — 25 cm 칸, 1 m 마다 진하게. 무늬는 땅을 따라 흐르고(map), 흐려지는 테두리는 기체 밑에 남는다(alphaMap)
+  const T = 256, c = document.createElement('canvas'); c.width = c.height = T;
+  const x = c.getContext('2d');
+  x.fillStyle = 'rgb(204,205,213)'; x.fillRect(0, 0, T, T);
+  for (let k = 0; k < 4; k++) {
+    x.strokeStyle = k ? 'rgba(110,112,126,.24)' : 'rgba(96,98,112,.50)';
+    x.lineWidth = k ? 1.5 : 2.4;
+    const v = k * T / 4 + (k ? 0 : 1.2);
+    x.beginPath(); x.moveTo(v, 0); x.lineTo(v, T); x.moveTo(0, v); x.lineTo(T, v); x.stroke();
   }
-  // 바깥으로 사라지게 원형 마스크
-  x.globalCompositeOperation = 'destination-in';
-  const g1 = x.createRadialGradient(N / 2, N / 2, N * 0.22, N / 2, N / 2, N * 0.49);
-  g1.addColorStop(0, 'rgba(0,0,0,1)'); g1.addColorStop(1, 'rgba(0,0,0,0)');
-  x.fillStyle = g1; x.fillRect(0, 0, N, N);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-  grid = new THREE.Mesh(new THREE.PlaneGeometry(2 * R, 2 * R), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
-  grid.rotation.x = -Math.PI / 2; grid.position.y = -0.126; grid.renderOrder = -1; scene.add(grid);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  const N = 512, a = document.createElement('canvas'); a.width = a.height = N;
+  const y = a.getContext('2d'), g = y.createRadialGradient(N / 2, N / 2, N * 0.22, N / 2, N / 2, N * 0.49);
+  g.addColorStop(0, '#fff'); g.addColorStop(1, '#000');
+  y.fillStyle = g; y.fillRect(0, 0, N, N);
+  grid = new THREE.Mesh(new THREE.PlaneGeometry(GRID, GRID),
+    new THREE.MeshBasicMaterial({ map: tex, alphaMap: new THREE.CanvasTexture(a), transparent: true, depthWrite: false }));
+  grid.rotation.x = -Math.PI / 2; grid.position.y = FLOOR - 0.001; grid.renderOrder = -1; world.add(grid);
+}
+// 홈 — 바닥의 H 패드와, 기체 높이까지 서는 가는 선 (멀리서도 보이게)
+const homeG = new THREE.Group(); homeG.visible = false; world.add(homeG);
+{
+  const N = 256, c = document.createElement('canvas'); c.width = c.height = N;
+  const x = c.getContext('2d');
+  x.fillStyle = 'rgba(255,255,255,.92)'; x.beginPath(); x.arc(N / 2, N / 2, N / 2 - 4, 0, Math.PI * 2); x.fill();
+  x.strokeStyle = '#3e6ae1'; x.lineWidth = 12; x.beginPath(); x.arc(N / 2, N / 2, N / 2 - 12, 0, Math.PI * 2); x.stroke();
+  x.fillStyle = '#171a20'; x.font = '800 150px Inter, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+  x.fillText('H', N / 2, N / 2 + 8);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const pad = new THREE.Mesh(new THREE.CircleGeometry(0.18, 48), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false }));
+  pad.rotation.x = -Math.PI / 2; pad.position.y = FLOOR + 0.002; pad.renderOrder = 0; homeG.add(pad);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 1, 8), new THREE.MeshBasicMaterial({ color: 0x3e6ae1, transparent: true, opacity: 0.45, depthWrite: false }));
+  pole.name = 'pole'; homeG.add(pole);
 }
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShadowMaterial({ opacity: 0.24 }));
 ground.rotation.x = -Math.PI / 2; ground.position.y = FLOOR; ground.receiveShadow = true; scene.add(ground);
@@ -459,7 +481,7 @@ function drawPred(k) {
   // 기수 앞에서 출발해 앞으로. 오른쪽 선회 = -x (좌익이 +x).
   // 기수 방향과 진행 방향이 다르면(옆바람·옆걸음) 처음부터 그만큼 틀어져 나간다.
   let x = 0, z = 0.62;   // 기수 바로 앞 바닥
-  const pa = predPath.geometry.attributes.position.array, y = FLOOR + 0.004;
+  const pa = predPath.geometry.attributes.position.array, y = floorY + 0.004;
   for (let i = 0; i <= PRED_N; i++) {
     const s = i / PRED_N;
     const th = rel * Math.min(1, s * 4) + turn * s * s;   // 곧게 나가다 점점 휜다
@@ -521,7 +543,50 @@ function flyFloor(k) {
   grid.material.opacity = fly.floor;
   ground.material.opacity = 0.24 * fly.floor;
   blob.position.z = flyG.position.z;   // 그림자는 바닥에 남아 따라가고, 뜬 만큼 옅어진다
-  blob.material.opacity = Math.max(0, 1 - Math.abs(flyG.position.y) * 3) * fly.floor;
+  blob.material.opacity = Math.max(0, 1 - Math.abs(flyG.position.y) * 3 - (FLOOR - floorY) * 2) * fly.floor;
+}
+
+// 위치는 1초마다 온다 — 사이는 속도로 이어 가다 받은 값으로 당긴다.
+// 홈은 FC 의 HOME_POSITION(ARM 때 잡힌다), 없으면 ARM 한 순간의 위치.
+const geo = { n: 0, e: 0, alt: 0, psi: 0, armHome: null, armed: false };
+function groundStep(dt, ease) {
+  const d = D();
+  if (d.armed && !geo.armed && d.lat != null) geo.armHome = [d.lat, d.lon];
+  geo.armed = !!d.armed;
+  const hs = Array.isArray(S.home) ? S.home : S.home && S.home.lat != null ? [S.home.lat, S.home.lon] : geo.armHome;
+  const on = !!S.live && hs && d.lat != null;
+  let rn = 0, re = 0;
+  if (on) {
+    rn = (d.lat - hs[0]) * 111320;
+    re = (d.lon - hs[1]) * 111320 * Math.cos(hs[0] * Math.PI / 180);
+    if (Math.hypot(rn - geo.n, re - geo.e) > 300) { geo.n = rn; geo.e = re; }   // 홈이 바뀌었다 — 따라가지 말고 옮긴다
+    geo.n += (d.vx || 0) * dt; geo.e += (d.vy || 0) * dt;
+  }
+  geo.n += (rn - geo.n) * ease(1.5); geo.e += (re - geo.e) * ease(1.5);
+  geo.alt += ((on && d.alt != null ? d.alt : 0) - geo.alt) * ease(3);
+  const yaw = d.yaw != null ? d.yaw : d.hdg;
+  geo.psi += unwrap((on && yaw != null ? yaw : 0) - geo.psi) * ease(4);
+  // 바닥 — 내려가고, 기수만큼 돌고, 무늬가 흐른다. 멀어질수록 넓게 깔아 화면에 남긴다.
+  const depth = depthOf(geo.alt);
+  floorY = FLOOR - depth;
+  world.position.y = -depth;
+  world.rotation.y = THREE.MathUtils.degToRad(geo.psi);
+  const sc = 1 + depth * 2, rp = GRID * sc;
+  grid.scale.set(sc, sc, 1);
+  const m = grid.material.map, fr = (v) => ((v % 1) + 1) % 1;
+  m.repeat.set(rp, rp);
+  m.offset.set(fr(-geo.e * M2U - rp / 2), fr(-geo.n * M2U - rp / 2));
+  ground.position.y = floorY;
+  blob.position.y = floorY + 0.001;
+  // 홈 — 가까우면 실제 거리, 멀면 줄여서
+  homeG.visible = !!on;
+  if (on) {
+    const r = Math.hypot(geo.n, geo.e), f = r > 0.01 ? farOf(r) / r : 0;
+    homeG.position.set(geo.e * f, 0, -geo.n * f);
+    const pole = homeG.getObjectByName('pole');
+    pole.scale.y = depth; pole.position.y = FLOOR + depth / 2;
+    pole.visible = depth > 0.05;
+  }
 }
 
 const timer = new THREE.Timer();
@@ -532,7 +597,7 @@ function frame() {
   timer.update();
   const dt = Math.min(timer.getDelta(), 0.05);
   const ease = (r) => 1 - Math.exp(-dt * r);
-  flyStep(dt); flyFloor(ease(4));
+  flyStep(dt); flyFloor(ease(4)); groundStep(dt, ease);
   if (goal.on) {
     const k = ease(3.2);
     cam.yaw += (goal.yaw - cam.yaw) * k; cam.tilt += (goal.tilt - cam.tilt) * k; cam.dist += (goal.dist - cam.dist) * k;
@@ -544,7 +609,7 @@ function frame() {
   craft.rotation.y = cam.yaw;
   craft.updateMatrixWorld();
   // 고른 칸을 가운데로
-  if (sel && bays[sel]) bays[sel].mesh.getWorldPosition(lookGoal); else lookGoal.set(0, 0.02, 0);
+  if (sel && bays[sel]) bays[sel].mesh.getWorldPosition(lookGoal); else lookGoal.set(0, 0.02 - (FLOOR - floorY) * 0.3, 0);   // 높으면 시선을 내려 땅을 화면에 남긴다
   look.lerp(lookGoal, ease(4));
   // 정보 카드가 기체를 덮을 때만 — 카드 오른쪽 빈 곳으로 화면 중심을 옮기고,
   // 거기에 안 들어가면 물러선다. 기체 반폭 ≈ 1.8·높이/거리 (개요 시점에서 잰 값).
