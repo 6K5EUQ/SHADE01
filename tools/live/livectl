@@ -57,14 +57,15 @@ install_unit() {
   [[ $changed -eq 1 ]] && systemctl --user daemon-reload || true
 }
 
-# FC 가 이 PC 에 꽂혀 있나 — 시리얼 장치 파일이 하나라도 있으면 그렇다.
+# 이 기체 FC 가 이 PC 에 꽂혀 있나 — 6C 의 by-id 링크가 있으면 그렇다.
 #
-# 🔴 `ls /dev/ttyACM* /dev/ttyUSB*` 로 쓰지 마라. 둘 중 **한쪽 글롭만 안 맞아도**
-#    ls 가 exit 2 를 낸다 — ttyACM0 이 멀쩡히 있는데도 "없다" 가 된다
+# 🔴 ttyACM*/ttyUSB* 를 세지 마라 — 다른 기체 FC 가 꽂혀 있어도 "꽂힘" 이 된다.
+#    by-id 글롭만 본다 (정본 tools/fc/fcport.py 의 BY_ID).
+# 🔴 `ls <글롭>` 로 쓰지 마라. 글롭이 안 맞으면 ls 가 exit 2 를 낸다
 #    (실측 rim3 2026-09-06). 셸에게 글롭을 직접 물어야 한다.
 fc_usb_present() {
   local f
-  for f in /dev/ttyACM* /dev/ttyUSB*; do
+  for f in /dev/serial/by-id/usb-Auterion*v6C*-if00; do
     [[ -e "$f" ]] && return 0
   done
   return 1

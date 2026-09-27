@@ -25,7 +25,7 @@ pymavlink 갭 처리(`gaps_left=0`), pymavlink 공용 임시파일(`0xAA` 오염
 FC 가 USB 로 붙은 PC 에서 돌린다. **브리지를 먼저 멈춰야 한다** (시리얼 하나뿐).
 
     ssh rim3@rim3 'systemctl --user stop shade-bridge.service'
-    scp tools/qgclog/ftpdiag.py tools/qgclog/fcfetch.py rim3@rim3:/tmp/
+    scp tools/qgclog/ftpdiag.py tools/qgclog/fcfetch.py tools/fc/fcport.py rim3@rim3:/tmp/
     ssh rim3@rim3 'cd /tmp && ~/.venv-mav/bin/python ftpdiag.py <경로> 6'
     ssh rim3@rim3 'systemctl --user start shade-bridge.service'
 
@@ -52,6 +52,8 @@ def connect_retry(device, baud, burst, tries=12):
             if burst:
                 ftp.ftp_settings.burst_read_size = burst
             return m, ftp
+        except fcfetch.fcport.NotThisFC:
+            raise                    # 🔴 다른 기체 FC — 재시도하지 않는다
         except (TypeError, SystemExit):
             time.sleep(1.5)
     raise SystemExit("connect failed")
@@ -64,7 +66,7 @@ def main():
     remote = sys.argv[1]
     n      = int(sys.argv[2]) if len(sys.argv) > 2 else 6
     burst  = int(sys.argv[3]) if len(sys.argv) > 3 else 239
-    device = os.environ.get("FC_DEVICE", "/dev/ttyACM0")
+    device = os.environ.get("FC_DEVICE")          # 없으면 fcfetch 가 by-id 로 찾는다
 
     print("remote : %s\nrounds : %d\nburst  : %d\n" % (remote, n, burst), flush=True)
 

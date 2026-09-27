@@ -120,7 +120,8 @@ def main():
         el = now - t0
 
         armed = 128 if P == 'armed' else 0
-        send(mav.MAVLink_heartbeat_message(2, 12, 81 | armed, 393216, 3, 3))
+        # type 22(VTOL) — preflight 가 이 기체 FC 인지 하트비트로 본다 (fcport)
+        send(mav.MAVLink_heartbeat_message(22, 12, 81 | armed, 393216, 3, 3))
         fix, sats, eph = (1, 3, 900) if P == 'nogps' else (4, 27, 19)
         send(mav.MAVLink_gps_raw_int_message(
             int(el * 1e6), fix, 375000000, 1270000000, 50000, eph, 20, 0, 0, sats,

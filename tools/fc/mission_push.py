@@ -23,6 +23,7 @@ import sys
 import time
 
 from pymavlink import mavutil
+from fcport import NO_PORT, find_port, wait_fc_heartbeat
 
 # 🔴 pymavlink 우회. mavutil.add_message() 는 인스턴스 필드가 있는 메시지를
 #    저장할 때 messages[mtype]._instances 가 None 이면 터진다:
@@ -119,9 +120,14 @@ def describe(items):
 
 
 def connect(dev, baud):
+    # 🔴 by-id 로 이 기체 FC 만 연다. --dev 를 줘도 하트비트는 본다 —
+    #    다른 기체 FC 면 여기서 끝난다 (NotThisFC).
+    dev = dev or find_port()
+    if dev is None:
+        sys.exit(NO_PORT)
     m = mavutil.mavlink_connection(dev, baud=baud)
     print('하트비트 대기...', flush=True)
-    if not m.wait_heartbeat(timeout=30):
+    if not wait_fc_heartbeat(m, 30):
         sys.exit('하트비트 없음 — FC 가 안 붙었거나 포트를 다른 게 쥐고 있다')
     print('연결: sys %d comp %d' % (m.target_system, m.target_component), flush=True)
     # 🔴 ARM 이면 아무것도 안 한다.
@@ -248,7 +254,7 @@ def compare(sent, got):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('mode', choices=('backup', 'verify', 'push'))
-    ap.add_argument('--dev', default='/dev/ttyACM0')
+    ap.add_argument('--dev', default=None, help='기본: 이 기체 FC 의 by-id 링크')
     ap.add_argument('--baud', type=int, default=115200)
     ap.add_argument('--backup', default=None, help='백업을 쓸 .plan 경로')
     ap.add_argument('--new', default=None, help='올릴 .plan')

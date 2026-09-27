@@ -200,11 +200,14 @@ def serial_busy(dev):
         return None
 
 
+# 🔴 ttyACM0 을 훑지 마라 — 다른 기체 FC 가 꽂혀 있으면 그것을 점검해 GO 를 낸다.
+#    이 기체 FC 의 by-id 링크만 본다. 정본은 tools/fc/fcport.py.
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'fc'))
+import fcport                                              # noqa: E402
+
+
 def find_serial():
-    for d in ('/dev/ttyACM0', '/dev/ttyACM1'):
-        if os.path.exists(d):
-            return d
-    return None
+    return fcport.find_port()
 
 
 def connect(explicit, verbose):
@@ -267,9 +270,20 @@ def connect(explicit, verbose):
             except Exception:
                 pass
             hb = m.wait_heartbeat(timeout=0.45)
-            if hb:
+            if hb and fcport.is_vehicle(hb):
                 break
+            hb = None                 # GCS·주변기기 하트비트는 FC 가 아니다
         if hb:
+            # 🔴 다른 기체 FC 면 점검하지 않는다. 다음 후보로도 넘어가지 않는다 —
+            #    붙은 것이 무엇인지 사람이 봐야 한다.
+            err = fcport.check_heartbeat(hb)
+            if err:
+                notes.append('%s: %s' % (why, err))
+                try:
+                    m.close()
+                except Exception:
+                    pass
+                return None, err, 0, notes
             return m, why, time.time() - t0, notes
         notes.append('%s: 하트비트 없음' % why)
         try:
@@ -1479,6 +1493,8 @@ def main():
     verbose = a.verbose or machine
     m, how, hb_s, notes = connect(a.conn, verbose)
     if m is None:
+        # how 에 사유가 있으면 다른 기체 FC 에 붙었던 것이다.
+        error = how or 'FC 에 붙지 못했다'
         if machine:
             # 🔴 붙지 못한 것을 "이상 없음" 으로 내지 않는다. 판정 자리에
             #    붙지 못했다는 사실을 그대로 넣는다 — 화면이 GO 를 그리면 안 된다.
@@ -1488,10 +1504,10 @@ def main():
                 'verdict': 'NO-GO',
                 'exit': 1,
                 'elapsed': round(time.time() - t0, 2),
-                'error': 'FC 에 붙지 못했다',
+                'error': error,
                 'notes': notes,
-                'hints': ['FC USB 가 그 PC 에 꽂혀 있나 (ls /dev/ttyACM*)',
-                          '누가 포트를 쥐고 있나 (fuser -v /dev/ttyACM0)',
+                'hints': ['FC USB 가 그 PC 에 꽂혀 있나 (ls /dev/serial/by-id/)',
+                          '누가 포트를 쥐고 있나 (fuser -v %s)' % fcport.BY_ID,
                           '브리지가 떠 있나 (pgrep -af mav_bridge)'],
                 'groups': [], 'standing': [],
                 'counts': {'blk': 1, 'warn': 0, 'ok': 0, 'info': 0},
@@ -1501,13 +1517,13 @@ def main():
             sys.stdout.write('\n')
             return 1
         print()
-        print('%sFC 에 붙지 못했다.%s' % (C['r'] + C['b'], C['0']))
+        print('%s%s.%s' % (C['r'] + C['b'], error, C['0']))
         for n in notes:
             print('  · %s' % n)
         print()
         print('%s확인할 것:%s' % (C['b'], C['0']))
-        print('  · FC USB 가 이 PC 에 꽂혀 있나  (ls /dev/ttyACM*)')
-        print('  · 누가 포트를 쥐고 있나          (fuser -v /dev/ttyACM0)')
+        print('  · FC USB 가 이 PC 에 꽂혀 있나  (ls /dev/serial/by-id/)')
+        print('  · 누가 포트를 쥐고 있나          (fuser -v %s)' % fcport.BY_ID)
         print('  · 브리지가 떠 있나               (pgrep -af mav_bridge)')
         return 1
 

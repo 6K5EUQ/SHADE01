@@ -16,28 +16,33 @@ import time
 
 from pymavlink import mavftp, mavutil
 
+# fcport 는 tools/fc 에 있다. /tmp 로 복사해 쓸 때는 같은 폴더에 같이 둔다
+# (스크립트 폴더는 이미 sys.path 에 있다).
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fc"))
+import fcport                                              # noqa: E402
+
 logging.basicConfig(level=logging.WARNING)
 
 LOG_ROOT = "/fs/microsd/log"
 
 
 def connect(device, baud):
+    # 🔴 기본은 이 기체 FC 의 by-id 링크다. 지정해도 하트비트는 본다 —
+    #    다른 기체 FC 면 fcport.NotThisFC 로 끝난다 (재시도하지 마라).
+    device = device or fcport.find_port()
+    if device is None:
+        sys.exit(fcport.NO_PORT)
     m = mavutil.mavlink_connection(device, baud=baud)
-    t0 = time.time()
-    while time.time() - t0 < 20:
-        try:
-            hb = m.recv_match(type="HEARTBEAT", blocking=True, timeout=2)
-        except TypeError:
-            # pymavlink 2.4.49 의 인스턴스 필드 버그. 다음 패킷으로 넘어간다.
-            continue
-        if hb:
-            h = hb.get_header()
-            m.target_system, m.target_component = h.srcSystem, h.srcComponent
-            ftp = mavftp.MAVFTP(m, target_system=h.srcSystem,
-                                target_component=h.srcComponent)
-            ftp.ftp_settings.debug = 0
-            ftp.ftp_settings.burst_read_size = 239   # 최대 버스트
-            return m, ftp
+    # pymavlink 2.4.49 의 인스턴스 필드 버그(TypeError)는 안에서 넘긴다.
+    hb = fcport.wait_fc_heartbeat(m, 20)
+    if hb:
+        h = hb.get_header()
+        m.target_system, m.target_component = h.srcSystem, h.srcComponent
+        ftp = mavftp.MAVFTP(m, target_system=h.srcSystem,
+                            target_component=h.srcComponent)
+        ftp.ftp_settings.debug = 0
+        ftp.ftp_settings.burst_read_size = 239   # 최대 버스트
+        return m, ftp
     sys.exit("HEARTBEAT 없음 — FC 연결/포트 점유 확인")
 
 
@@ -72,7 +77,7 @@ def main():
     ap = argparse.ArgumentParser(prog="fcfetch")
     ap.add_argument("mode", choices=["ls", "get", "fetch"])
     ap.add_argument("args", nargs="*")
-    ap.add_argument("--device", default="/dev/ttyACM0")
+    ap.add_argument("--device", default=None, help="기본: 이 기체 FC 의 by-id 링크")
     ap.add_argument("--baud", type=int, default=115200)
     a = ap.parse_args()
 

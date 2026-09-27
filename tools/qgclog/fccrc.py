@@ -41,7 +41,7 @@ FC 가 USB 로 붙어 있는 PC 에서 돌린다. **브리지를 먼저 멈춰�
 시리얼 포트가 하나뿐이다.
 
     ssh rim3@rim3 'systemctl --user stop shade-bridge.service'
-    scp tools/qgclog/fccrc.py tools/qgclog/fcfetch.py rim3@rim3:/tmp/
+    scp tools/qgclog/fccrc.py tools/qgclog/fcfetch.py tools/fc/fcport.py rim3@rim3:/tmp/
     ssh rim3@rim3 'cd /tmp && ~/.venv-mav/bin/python fccrc.py <경로> 5'
     ssh rim3@rim3 'systemctl --user start shade-bridge.service'
 
@@ -92,7 +92,7 @@ def main():
         sys.exit(__doc__.strip().splitlines()[2].strip())
     target = sys.argv[1]
     n = int(sys.argv[2]) if len(sys.argv) > 2 else 5
-    device = os.environ.get("FC_DEVICE", "/dev/ttyACM0")
+    device = os.environ.get("FC_DEVICE")          # 없으면 fcfetch 가 by-id 로 찾는다
 
     m, ftp = connect(device, 115200)
     vals = []

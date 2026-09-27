@@ -83,7 +83,7 @@ rm -f /tmp/get-pip.py
 **QGC 가 떠 있으면 MAVFTP 가 붙지 못한다.** 먼저 확인한다.
 
 ```bash
-fuser -v /dev/ttyACM0        # 점유 프로세스
+fuser -v /dev/serial/by-id/usb-Auterion*v6C*-if00   # 점유 프로세스
 ps -eo pid,cmd | grep -i qground | grep -v grep
 ```
 

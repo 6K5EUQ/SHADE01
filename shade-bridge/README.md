@@ -31,12 +31,16 @@ cd SHADE01
 ./shade-bridge/pc_bridge.sh
 ```
 
-시리얼 포트를 자동으로 찾는다 (`ttyACM0` → `ttyACM1` → `ttyUSB0`).
-다른 포트면 지정한다:
+이 기체 FC(Pixhawk 6C)의 by-id 링크만 잡는다 (`/dev/serial/by-id/usb-Auterion*v6C*-if00`).
+`ttyACM*` 는 훑지 않는다 — 다른 기체 FC 가 꽂혀 있어도 그것은 안 연다.
+지정할 때도 by-id 링크를 준다 (`ttyACMn` 은 다시 꽂으면 다른 FC 가 받을 수 있다):
 
 ```bash
-MAV_SERIAL=/dev/ttyACM1 ./shade-bridge/pc_bridge.sh
+MAV_SERIAL=/dev/serial/by-id/usb-Auterion_PX4_FMU_v6C.x_0-if00 ./shade-bridge/pc_bridge.sh
 ```
+
+🔴 열고 나서 첫 FC 하트비트가 PX4 · VTOL(autopilot=12 type=22) 이 아니면 중계하지
+않고 포트를 닫는다 (30초마다 다시 본다). 확인 전에는 GCS 명령도 FC 로 안 보낸다.
 
 이 PC 를 포함해 네 대 전부에 UDP 14550 으로 중계한다. 각 PC 에서 QGC 를 켜면
 기체가 뜬다. 종료는 Ctrl-C.

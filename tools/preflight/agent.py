@@ -43,6 +43,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(HERE))
 PREFLIGHT = os.path.join(HERE, 'preflight.py')
 
+sys.path.insert(1, os.path.join(HERE, '..', 'fc'))
+import fcport                                              # noqa: E402
+
 PORT = int(os.environ.get('SHADE_PREFLIGHT_PORT', '4402'))
 BIND = os.environ.get('SHADE_PREFLIGHT_BIND', '')
 KEY = os.environ.get('SHADE_PREFLIGHT_KEY', '')
@@ -104,7 +107,7 @@ def run_preflight(secs):
         return 504, {'ok': False, 'verdict': 'NO-GO',
                      'error': '점검이 %.0f초 안에 안 끝났다' % TIMEOUT,
                      'notes': ['FC 시리얼을 누가 쥐고 있는지 확인하라 '
-                               '(fuser -v /dev/ttyACM0)'],
+                               '(fuser -v %s)' % fcport.BY_ID],
                      'groups': [], 'standing': []}
     try:
         return 200, json.loads(p.stdout)
@@ -178,8 +181,8 @@ class Handler(BaseHTTPRequestHandler):
         path = self.path.split('?')[0]
         if path == '/health':
             return self._json(200, {'ok': True, 'host': os.uname().nodename,
-                                    'serial': [d for d in ('/dev/ttyACM0', '/dev/ttyACM1')
-                                               if os.path.exists(d)],
+                                    # 이 기체 FC 의 by-id 링크만 — 다른 FC 는 안 센다.
+                                    'serial': [d for d in (fcport.find_port(),) if d],
                                     'running': State.running})
         if path not in ('/preflight', '/preflight/stream'):
             return self._json(404, {'error': '없는 경로'})

@@ -2,25 +2,20 @@
 """FC 재부팅 — extras.txt 는 부팅 때만 읽힌다. DISARM 확인 후에만 보낸다."""
 import sys, time
 from pymavlink import mavutil
+from fcport import NO_PORT, find_port, wait_fc_heartbeat
 
-m = mavutil.mavlink_connection('/dev/ttyACM0', baud=115200)
-def hb_wait(conn, timeout=30):
-    """HEARTBEAT 하나를 받는다.
-
-    ⚠️ pymavlink 2.4.49 는 인스턴스 필드가 있는 메시지에서 산발적으로
-       `TypeError: 'NoneType' object does not support item assignment` 로 죽는다
-       (mavutil.py:98). 다음 패킷으로 넘어가면 된다 — FETCHING.md 의 알려진 버그다.
-       2026-09-11 재부팅 때 실제로 여기서 걸렸다.
-    """
-    t0 = time.time()
-    while time.time() - t0 < timeout:
-        try:
-            m2 = conn.recv_match(type='HEARTBEAT', blocking=True, timeout=2)
-        except TypeError:
-            continue
-        if m2 is not None:
-            return m2
-    return None
+# 🔴 ttyACM0 을 박지 마라 — 다른 기체 FC 가 꽂혀 있으면 그것이 재부팅된다.
+#    by-id 링크를 쓰고, 하트비트로 이 기체인지 한 번 더 본다.
+PORT = sys.argv[1] if len(sys.argv) > 1 else find_port()
+if PORT is None:
+    sys.exit(NO_PORT)
+m = mavutil.mavlink_connection(PORT, baud=115200)
+# HEARTBEAT 하나를 받는다 — 다른 FC 면 NotThisFC 로 여기서 끝난다.
+# ⚠️ pymavlink 2.4.49 는 인스턴스 필드가 있는 메시지에서 산발적으로
+#    `TypeError: 'NoneType' object does not support item assignment` 로 죽는다
+#    (mavutil.py:98). wait_fc_heartbeat 가 다음 패킷으로 넘긴다 — FETCHING.md 의
+#    알려진 버그다. 2026-09-11 재부팅 때 실제로 여기서 걸렸다.
+hb_wait = wait_fc_heartbeat
 
 
 print('하트비트 대기...', flush=True)
@@ -45,7 +40,7 @@ m.close()
 time.sleep(8)
 for attempt in range(1, 13):
     try:
-        m2 = mavutil.mavlink_connection('/dev/ttyACM0', baud=115200)
+        m2 = mavutil.mavlink_connection(PORT, baud=115200)
         if hb_wait(m2, 10) is not None:
             print('✅ 돌아왔다 (%d차) sys %d' % (attempt, m2.target_system))
             sys.exit(0)

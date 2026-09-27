@@ -11,7 +11,7 @@
 인자 없이 띄우면 먼저 말을 걸어온 GCS 에게만 보낸다.
 
 환경변수:
-    MAV_SERIAL   시리얼 포트 (기본 /dev/ttyACM0 — FC USB 직결)
+    MAV_SERIAL   시리얼 포트 (기본 이 기체 FC 의 by-id 링크 — FC USB 직결)
     MAV_BAUD     보레이트   (기본 921600)
     MAV_UDP_PORT UDP 리슨 포트 (기본 14550)
 
@@ -27,7 +27,12 @@ import time
 
 import serial
 
-SERIAL_PORT = os.environ.get("MAV_SERIAL", "/dev/ttyACM0")
+# 🔴 ttyACM0 을 기본으로 두지 마라 — 다른 기체 FC 가 꽂히면 그것을 중계한다.
+#    by-id 링크 그 자체를 연다 (다시 열 때도 이 FC 만 열린다). 정본은 fcport.
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "tools", "fc"))
+import fcport                                              # noqa: E402
+
+SERIAL_PORT = os.environ.get("MAV_SERIAL") or fcport.BY_ID   # 글롭이면 열 때마다 찾는다
 BAUD = int(os.environ.get("MAV_BAUD", "921600"))
 UDP_PORT = int(os.environ.get("MAV_UDP_PORT", "14550"))
 
@@ -147,6 +152,67 @@ def pick_bind_addr(fixed):
             log("mav_bridge: 아직 Tailscale 주소가 없다 (%.0f초)" % waited)
 
 
+# 🔴 열고 나서 첫 FC 하트비트가 이 기체인지 보기 전에는 **양방향 다 막는다.**
+#    지정한 포트여도 같다 — 같은 6C 를 쓰는 다른 기체일 수 있다. 아니면 포트를
+#    닫고 이만큼 쉬었다가 다시 본다 (그 사이 포트를 쥐지 않는다).
+WRONG_FC_HOLDOFF = 30.0
+
+# MAVLink HEARTBEAT (msgid 0) 의 CRC_EXTRA.
+_HB_CRC_EXTRA = 50
+
+
+def _x25(data, crc=0xFFFF):
+    for b in data:
+        t = (b ^ crc) & 0xFF
+        t = (t ^ (t << 4)) & 0xFF
+        crc = ((crc >> 8) ^ (t << 8) ^ (t << 3) ^ (t >> 4)) & 0xFFFF
+    return crc
+
+
+class _Hb:
+    def __init__(self, typ, autopilot):
+        self.type, self.autopilot = typ, autopilot
+
+
+def find_heartbeat(buf):
+    """버퍼에서 FC 하트비트 하나를 찾는다 → (_Hb, 소비한 바이트) 또는 (None, 버릴 수 있는 바이트).
+
+    CRC 까지 맞는 프레임만 믿는다. 다른 메시지 안의 0xFD/0xFE 를 헤더로
+    오인해 "다른 FC" 로 판정하면 안 된다. GCS·주변기기 하트비트는 건너뛴다.
+    """
+    i, n = 0, len(buf)
+    while i < n:
+        stx = buf[i]
+        if stx == 0xFE:                      # v1: len seq sys comp msgid
+            hl = 6
+            if i + hl > n:
+                break
+            plen, msgid = buf[i + 1], buf[i + 5]
+        elif stx == 0xFD:                    # v2: len incf cmpf seq sys comp msgid(3)
+            hl = 10
+            if i + hl > n:
+                break
+            plen = buf[i + 1]
+            msgid = buf[i + 7] | (buf[i + 8] << 8) | (buf[i + 9] << 16)
+        else:
+            i += 1
+            continue
+        end = i + hl + plen + 2
+        if end > n:
+            break
+        if msgid == 0 and plen <= 9:
+            crc = _x25(bytes(buf[i + 1:i + hl + plen]) + bytes([_HB_CRC_EXTRA]))
+            if crc == (buf[end - 2] | (buf[end - 1] << 8)):
+                p = bytes(buf[i + hl:i + hl + plen]) + bytes(9 - plen)   # v2 뒤 0 잘림
+                hb = _Hb(p[4], p[5])
+                if fcport.is_vehicle(hb):
+                    return hb, end
+                i = end
+                continue
+        i += 1
+    return None, i
+
+
 def open_serial():
     """시리얼을 연다. 실패하면 None — 호출자가 재시도한다.
 
@@ -155,7 +221,10 @@ def open_serial():
     도는 좀비가 된다 — 다른 PC 에서는 기체가 그냥 사라진 것처럼 보인다.
     """
     try:
-        ser = serial.Serial(SERIAL_PORT, BAUD, timeout=0, exclusive=True)
+        port = fcport.find_port() if SERIAL_PORT == fcport.BY_ID else SERIAL_PORT
+        if port is None:
+            return None, fcport.NO_PORT
+        ser = serial.Serial(port, BAUD, timeout=0, exclusive=True)
     except (serial.SerialException, OSError) as e:
         return None, e
     return ser, None
@@ -227,13 +296,19 @@ def main():
     last_open_try = 0.0
     warned_open = False
 
+    # 이 기체 FC 인지 하트비트로 확인했나. 확인 전에는 아무것도 안 흘린다.
+    verified = False
+    hb_buf = bytearray()
+    hold_until = 0.0          # 다른 FC 였으면 이때까지 포트를 안 연다
+    warned_wrong = False
+
     while True:
         now = time.monotonic()
 
         # 시리얼이 없으면 주기적으로 다시 연다. FC 전원이 나중에 들어와도,
         # USB-시리얼이 뽑혔다 꽂혀도 여기서 회복한다.
         if ser is None:
-            if now - last_open_try < REOPEN_INTERVAL:
+            if now - last_open_try < REOPEN_INTERVAL or now < hold_until:
                 time.sleep(0.1)
                 continue
             last_open_try = now
@@ -257,6 +332,8 @@ def main():
                 log("mav_bridge: 밀려 있던 GCS 패킷 %d 개 버림" % flushed)
             dropped_while_down = False
             warned_open = False
+            verified = False
+            hb_buf.clear()
 
         try:
             rlist, _, _ = select.select([ser, sock], [], [], 0.2)
@@ -284,6 +361,38 @@ def main():
                 except Exception:
                     pass
                 ser = None
+                continue
+
+            if data and not verified:
+                # 🔴 첫 FC 하트비트를 보기 전에는 중계하지 않는다.
+                hb_buf += data
+                hb, used = find_heartbeat(hb_buf)
+                del hb_buf[:used]
+                del hb_buf[:-1024]           # 헤더만 걸린 쓰레기가 쌓이지 않게
+                if hb is not None:
+                    err = fcport.check_heartbeat(hb)
+                    if err:
+                        if not warned_wrong:
+                            log("mav_bridge: 🔴 %s: %s - 중계 안 함, 포트를 닫는다 (%.0f초마다 다시 본다)"
+                                % (SERIAL_PORT, err, WRONG_FC_HOLDOFF))
+                            warned_wrong = True
+                        try:
+                            ser.close()
+                        except Exception:
+                            pass
+                        ser = None
+                        hold_until = now + WRONG_FC_HOLDOFF
+                        continue
+                    verified = True
+                    warned_wrong = False
+                    log("mav_bridge: FC 확인 (autopilot=%d type=%d) - 중계 시작"
+                        % (hb.autopilot, hb.type))
+                    # 확인 전에 쌓인 GCS 명령은 버린다 (열 때와 같은 이유).
+                    while True:
+                        try:
+                            sock.recvfrom(READ_CHUNK)
+                        except (BlockingIOError, OSError):
+                            break
                 continue
 
             if data:
@@ -330,12 +439,13 @@ def main():
                 if addr not in peers:
                     log("GCS connected: %s" % (addr,))
                 peers[addr] = now
-                if ser is None:
+                if ser is None or not verified:
                     # 시리얼이 끊긴 동안 들어온 명령은 버린다. 소켓 버퍼에
                     # 쌓아 두면 복구 순간 밀린 명령이 한꺼번에 FC 로 쏟아진다
                     # — 조종자가 이미 지나갔다고 생각한 모드 변경까지 포함해서.
+                    # 🔴 이 기체 FC 인지 확인하기 전에도 버린다.
                     if not dropped_while_down:
-                        log("mav_bridge: 시리얼이 없다 - 그동안 들어온 GCS 명령은 버린다")
+                        log("mav_bridge: 시리얼이 없거나 FC 확인 전 - 그동안 들어온 GCS 명령은 버린다")
                         dropped_while_down = True
                     continue
                 if True:

@@ -38,7 +38,7 @@ FC 가 SD 를 읽을 때마다 **다른 바이트**를 낸다. 같은 파일을 
 FC 가 USB 로 붙어 있는 PC 에서 돌린다. **브리지를 먼저 멈춰야 한다.**
 
     ssh rim3@rim3 'systemctl --user stop shade-bridge.service'
-    scp tools/qgclog/{fcvote.py,fcfetch.py} rim3@rim3:/tmp/
+    scp tools/qgclog/{fcvote.py,fcfetch.py} tools/fc/fcport.py rim3@rim3:/tmp/
     ssh rim3@rim3 'cd /tmp && ~/.venv-mav/bin/python fcvote.py <원격> <로컬> 5'
     ssh rim3@rim3 'systemctl --user start shade-bridge.service'
 """
@@ -67,7 +67,7 @@ def px4_crc32(data):
     return zlib.crc32(data, 0xFFFFFFFF) ^ 0xFFFFFFFF
 
 
-def fetch_many(remote, n, device="/dev/ttyACM0", baud=115200, tmpdir="/tmp"):
+def fetch_many(remote, n, device=None, baud=115200, tmpdir="/tmp"):
     """n 회 받아 바이트열 리스트를 낸다. 크기가 다른 판본은 버린다."""
     out = []
     for i in range(1, n + 1):

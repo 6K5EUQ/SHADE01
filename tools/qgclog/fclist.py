@@ -44,6 +44,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+sys.path.insert(1, os.path.join(HERE, '..', 'fc'))   # fcport (/tmp 로 복사하면 같은 폴더)
 
 KST = datetime.timezone(datetime.timedelta(hours=9))
 
@@ -59,19 +60,19 @@ def fetch_entries(device, baud=115200, timeout=30):
     🔴 `LOG_REQUEST_LIST` 하나만 보낸다. 상태를 바꾸는 메시지는 없다.
     """
     from pymavlink import mavutil
+    import fcport
 
+    # 🔴 기본은 이 기체 FC 의 by-id 링크. 지정해도 하트비트는 본다 —
+    #    다른 기체 FC 면 fcport.NotThisFC 로 끝난다.
+    device = device or fcport.find_port()
+    if device is None:
+        raise RuntimeError(fcport.NO_PORT)
     m = mavutil.mavlink_connection(device, baud=baud)
-    t0 = time.time()
     tgt = None
-    while time.time() - t0 < 20:
-        try:
-            hb = m.recv_match(type='HEARTBEAT', blocking=True, timeout=2)
-        except TypeError:
-            continue          # pymavlink 2.4.49 인스턴스 필드 버그
-        if hb:
-            h = hb.get_header()
-            tgt = (h.srcSystem, h.srcComponent)
-            break
+    hb = fcport.wait_fc_heartbeat(m, 20)   # TypeError(2.4.49 버그)는 안에서 넘긴다
+    if hb:
+        h = hb.get_header()
+        tgt = (h.srcSystem, h.srcComponent)
     if tgt is None:
         raise RuntimeError('HEARTBEAT 없음 — FC 연결/포트 점유 확인')
 
@@ -167,8 +168,8 @@ def match(entries, facts, log_dir=None):
 def main():
     ap = argparse.ArgumentParser(
         description='FC 에게 로그 엔트리 번호를 물어 파일명에 붙인다')
-    ap.add_argument('--device', default=os.environ.get('FC_DEVICE', '/dev/ttyACM0'),
-                    help='FC 시리얼 (기본 /dev/ttyACM0). udp:127.0.0.1:14550 도 된다')
+    ap.add_argument('--device', default=os.environ.get('FC_DEVICE'),
+                    help='FC 시리얼 (기본 이 기체 FC 의 by-id 링크). udp:127.0.0.1:14550 도 된다')
     ap.add_argument('--baud', type=int, default=115200)
     ap.add_argument('--map', metavar='DIR', default=None,
                     help='이 디렉토리의 로그에 번호를 맞춘다')
@@ -186,7 +187,7 @@ def main():
             entries = json.load(fh)
         print('저장해 둔 목록 %d개 (%s)' % (len(entries), a.load))
     else:
-        print('FC 에 붙는다: %s' % a.device, flush=True)
+        print('FC 에 붙는다: %s' % (a.device or '이 기체 by-id'), flush=True)
         entries = fetch_entries(a.device, a.baud)
         if a.save:
             import json

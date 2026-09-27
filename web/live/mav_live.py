@@ -46,6 +46,8 @@ from urllib.parse import unquote
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..'))
 # playback.py 는 이 폴더에 있다. systemd 는 임의의 cwd 로 띄우므로 경로를 박는다.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(1, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'tools', 'fc'))
+import fcport                                              # noqa: E402
 
 try:
     from pymavlink import mavutil
@@ -990,6 +992,10 @@ def handle(msg, st):
         # 컴패니언(Pi)·GCS 도 하트비트를 낸다. 기체(autopilot != INVALID)만 본다.
         if msg.autopilot == mavlink2.MAV_AUTOPILOT_INVALID:
             return
+        # 🔴 이 기체(PX4 · VTOL)만 받는다. 다른 기체도 sysid 1 이다 —
+        #    sysid 로는 못 가른다 (QGC tlog 실측: ArduPilot 쿼드 3/2).
+        if fcport.check_heartbeat(msg):
+            return
         st.sysid = msg.get_srcSystem()
         st.compid = msg.get_srcComponent()
         # 마지막 조각을 놓친 STATUSTEXT 를 여기서 털어낸다. 하트비트는 1Hz 로
@@ -1393,17 +1399,19 @@ def receiver(sock, st, alive=None):
         if not data:
             continue
         kind = _link_kind(addr)
-        st.touch(addr, len(data), kind)
 
         now = time.monotonic()
         ent = parsers.get(addr)
         if ent is None:
             mav = mavlink2.MAVLink(None)
             mav.robust_parsing = True
-            ent = parsers[addr] = [mav, now]
+            ent = parsers[addr] = [mav, now, False]   # [파서, 마지막 수신, 다른 기체]
         else:
             ent[1] = now
         mav = ent[0]
+        # 다른 기체로 판정된 송신자는 링크로도 안 친다 — 중재가 그쪽으로 넘어가면 안 된다.
+        if not ent[2]:
+            st.touch(addr, len(data), kind)
 
         # 5분 넘게 조용한 송신자의 파서는 버린다.
         if now - last_sweep > 60.0:
@@ -1413,6 +1421,17 @@ def receiver(sock, st, alive=None):
         try:
             msgs = mav.parse_buffer(data) or []
         except Exception:
+            continue
+        # 🔴 송신자 단위로 가른다. 기체 하트비트가 이 기체(PX4 · VTOL)가 아니면
+        #    그 주소의 프레임은 화면에도 기록에도 안 넣는다 — 다른 기체 스트림이다.
+        for m in msgs:
+            if m.get_type() == 'HEARTBEAT' and fcport.is_vehicle(m):
+                foreign = fcport.check_heartbeat(m)
+                if foreign and not ent[2]:
+                    print('mav_live: %s:%d 무시 — %s' % (addr[0], addr[1], foreign),
+                          file=sys.stderr, flush=True)
+                ent[2] = bool(foreign)
+        if ent[2]:
             continue
         with st.lock:
             # 🔴 재생 중에는 들어오는 프레임을 화면에 반영하지 않는다. 섞으면
@@ -1442,6 +1461,8 @@ def receiver(sock, st, alive=None):
                         continue
                     if m.autopilot == mavlink2.MAV_AUTOPILOT_INVALID:
                         continue
+                    if fcport.check_heartbeat(m):
+                        continue          # 다른 기체
                     a = bool(m.base_mode & mavlink2.MAV_MODE_FLAG_SAFETY_ARMED)
                     if st.rec is not None and a != st._rec_armed:
                         st.rec.on_arm(a)

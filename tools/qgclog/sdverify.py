@@ -32,7 +32,7 @@ FC 가 USB 로 붙어 있는 PC 에서 돌린다. **브리지를 먼저 멈춰�
 시리얼 포트가 하나뿐이다.
 
     ssh rim3@rim3 'systemctl --user stop shade-bridge.service'
-    scp tools/qgclog/sdverify.py tools/qgclog/fcfetch.py rim3@rim3:/tmp/
+    scp tools/qgclog/sdverify.py tools/qgclog/fcfetch.py tools/fc/fcport.py rim3@rim3:/tmp/
     ssh rim3@rim3 'cd /tmp && ~/.venv-mav/bin/python sdverify.py <경로> 4'
     ssh rim3@rim3 'systemctl --user start shade-bridge.service'
 
@@ -55,6 +55,8 @@ def connect_retry(device, baud, tries=10):
     for _ in range(tries):
         try:
             return fcfetch.connect(device, baud)
+        except fcfetch.fcport.NotThisFC:
+            raise                    # 🔴 다른 기체 FC — 재시도하지 않는다
         except (TypeError, SystemExit):
             time.sleep(1.5)
     raise SystemExit("connect failed")
@@ -67,7 +69,7 @@ def px4_crc32(path):
 def main():
     target = sys.argv[1]
     n = int(sys.argv[2]) if len(sys.argv) > 2 else 3
-    device = os.environ.get("FC_DEVICE", "/dev/ttyACM0")
+    device = os.environ.get("FC_DEVICE")          # 없으면 fcfetch 가 by-id 로 찾는다
     print("target: %s\nrounds: %d\n" % (target, n), flush=True)
 
     md5s, crcs, locs, sizes = [], [], [], []

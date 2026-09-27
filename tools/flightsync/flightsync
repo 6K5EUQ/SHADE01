@@ -163,9 +163,11 @@ bridge() {
 }
 
 # 브리지가 포트를 놓을 때까지 기다린다. 상한 15초.
-# 장치 경로는 fcfetch.py 의 기본값(`--device /dev/ttyACM0`)과 같은 것을 본다 —
+# 장치 경로는 fcfetch.py 의 기본값(이 기체 FC 의 by-id 링크)과 같은 것을 본다 —
 # flightsync 는 그 인자를 넘기지 않으므로 둘이 갈릴 일이 없다.
-FC_DEV="${FC_DEV:-/dev/ttyACM0}"
+# 🔴 ttyACM0 으로 두지 마라 — 다른 기체 FC 가 꽂혀 있으면 그쪽 점유를 기다린다.
+#    글롭은 원격 셸이 푼다 (fuser 는 링크를 따라간다). 따옴표로 막지 마라.
+FC_DEV="${FC_DEV:-/dev/serial/by-id/usb-Auterion*v6C*-if00}"
 wait_port_free() {
   local waited=0 holder
   while [ "$waited" -lt 15 ]; do
@@ -240,6 +242,7 @@ fi
 scp -q -o BatchMode=yes -o ConnectTimeout=60 \
     "$REPO/tools/qgclog/fcfetch.py" "$REPO/tools/qgclog/fcvote.py" \
     "$REPO/tools/qgclog/fclist.py" "$REPO/tools/qgclog/lognum.py" \
+    "$REPO/tools/fc/fcport.py" \
     "$FC_HOST:/tmp/" || { fail "도구 전송 실패"; exit 1; }
 
 # ═══ 2. FC 목록 ↔ 랩서버 대조 ═══════════════════════════════════════
