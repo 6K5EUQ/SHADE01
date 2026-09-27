@@ -86,8 +86,9 @@ try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(26, 1, 0.05, 50);
 const craft = new THREE.Group();      // 사용자가 끌어 돌리는 것
+const flyG = new THREE.Group();       // 첫 화면에서 날아가는 것
 const attitude = new THREE.Group();   // 실시간 자세
-craft.add(attitude); scene.add(craft);
+flyG.add(attitude); craft.add(flyG); scene.add(craft);
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0xdedee3, 1.5));
 const sun = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -123,12 +124,13 @@ const FLOOR = -0.125;
 }
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShadowMaterial({ opacity: 0.24 }));
 ground.rotation.x = -Math.PI / 2; ground.position.y = FLOOR; ground.receiveShadow = true; scene.add(ground);
+let blob;
 { // 접지 그림자 — 기체 밑이 가장 진하고 바깥으로 사라진다
   const c = document.createElement('canvas'); c.width = c.height = 256;
   const x = c.getContext('2d'), gr = x.createRadialGradient(128, 128, 0, 128, 128, 128);
   gr.addColorStop(0, 'rgba(30,30,40,.42)'); gr.addColorStop(.5, 'rgba(30,30,40,.14)'); gr.addColorStop(1, 'rgba(30,30,40,0)');
   x.fillStyle = gr; x.fillRect(0, 0, 256, 256);
-  const blob = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.8), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+  blob = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.8), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
   blob.rotation.x = -Math.PI / 2; blob.position.y = FLOOR + 0.001; craft.add(blob);
 }
 
@@ -221,6 +223,7 @@ new GLTFLoader().load('/model/striver.glb', (g) => {
 
 // ── 조작 — 끌면 기체가 돈다, 휠·두 손가락은 거리, 두 번 누르면 제자리, 눌러서 칸 선택 ──
 const VIEWS = {
+  intro: { yaw: 2.55, tilt: 0.38, dist: 3.1 },
   sum: { yaw: 2.55, tilt: 0.55, dist: 3.9 },
   pwr: { yaw: -2.75, tilt: 0.78, dist: 4.1 },
   nav: { yaw: 0.65, tilt: 0.45, dist: 3.3 },
@@ -229,8 +232,10 @@ const VIEWS = {
   pf: { yaw: -2.1, tilt: 0.75, dist: 3.4 },
   bay: { yaw: -1.25, tilt: 0.62, dist: 2.3 },
 };
-const cam = { ...VIEWS.sum, vYaw: 0, vTilt: 0 };
-const goal = { ...VIEWS.sum, on: false };
+let intro = document.body.classList.contains('intro');
+if (intro && !renderer) { intro = false; document.body.classList.remove('intro'); }
+const cam = { ...VIEWS[intro ? 'intro' : 'sum'], vYaw: 0, vTilt: 0 };
+const goal = { ...cam, on: false };
 const look = new THREE.Vector3(0, 0.02, 0);
 const ptrs = new Map();
 let pinch0 = 0, dist0 = 0, down = null;
@@ -244,6 +249,12 @@ function pickBay(e) {
   const hit = ray.intersectObjects(Object.values(bays).map((b) => b.mesh), false)[0];
   return hit ? Object.keys(bays).find((k) => bays[k].mesh === hit.object) : null;
 }
+function hitCraft(e) {
+  const r = canvas.getBoundingClientRect();
+  ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  return ray.intersectObject(attitude, true).length > 0;
+}
 let hover = null;
 canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]);
@@ -254,8 +265,9 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   const p = ptrs.get(e.pointerId);
   if (!p) {   // 끌지 않는 중 — 칸 위면 손 모양
-    hover = e.pointerType === 'mouse' ? pickBay(e) : null;
-    canvas.style.cursor = hover ? 'pointer' : '';
+    const mouse = e.pointerType === 'mouse';
+    hover = mouse && !intro ? pickBay(e) : null;
+    canvas.style.cursor = (intro ? mouse && fly.t < 0 && hitCraft(e) : hover) ? 'pointer' : '';
     return;
   }
   if (ptrs.size === 1) {
@@ -274,8 +286,8 @@ const up = (e) => {
   if (!ptrs.size) canvas.classList.remove('drag');
   // 거의 안 움직였으면 누른 것이다
   if (down && e.type === 'pointerup' && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6) {
-    const k = pickBay(e);
-    if (k) selectBay(k === sel ? null : k);
+    if (intro) { if (hitCraft(e)) launch(); }
+    else { const k = pickBay(e); if (k) selectBay(k === sel ? null : k); }
   }
   down = null;
 };
@@ -285,7 +297,7 @@ canvas.addEventListener('wheel', (e) => { e.preventDefault(); goal.on = false; c
 canvas.addEventListener('dblclick', () => setView());
 
 function setView() {
-  const v = VIEWS[sel ? 'bay' : tab], twoPi = Math.PI * 2;
+  const v = VIEWS[intro ? 'intro' : sel ? 'bay' : tab], twoPi = Math.PI * 2;
   goal.yaw = v.yaw + Math.round((cam.yaw - v.yaw) / twoPi) * twoPi;   // 가까운 쪽으로 돈다
   goal.tilt = v.tilt; goal.dist = v.dist; goal.on = true; cam.vYaw = cam.vTilt = 0;
 }
@@ -458,6 +470,40 @@ function drawPred(k) {
   predPath.geometry.attributes.position.needsUpdate = true;
 }
 
+// ── 첫 화면 → 대시보드 — 기체가 앞으로 날아가 사라지면 대시보드가 열리고,
+// 뒤에서 다시 날아 들어와 제자리에 선다. 좌표는 기체 기준(+z 기수).
+const fly = { t: -1 };
+const FLY_OUT = 0.8, FLY_IN = 1.2, FLY_Z = 7;
+function launch() {
+  if (fly.t >= 0) return;
+  fly.t = 0;
+  canvas.style.cursor = '';
+}
+function flyStep(dt) {
+  if (fly.t < 0) return;
+  fly.t += dt;
+  if (fly.t < FLY_OUT) {                      // 가속하며 기수를 들고 나간다
+    const s = fly.t / FLY_OUT;
+    flyG.position.set(0, 0.3 * s * s, FLY_Z * s * s * s);
+    flyG.rotation.x = -0.2 * s;
+    return;
+  }
+  if (intro) {                                // 화면 밖 — 이때 대시보드를 연다
+    intro = false;
+    document.body.classList.remove('intro');
+    document.body.classList.add('opened');
+    setView();
+  }
+  const s = Math.min(1, (fly.t - FLY_OUT) / FLY_IN), e = 1 - (1 - s) ** 3;   // 감속하며 들어온다
+  flyG.position.set(0, 0.3 * (1 - e), -FLY_Z * (1 - e));
+  flyG.rotation.x = -0.12 * (1 - e);
+  if (s >= 1) fly.t = -1;
+}
+function flyShadow() {   // 그림자는 바닥에 남아 따라가고, 뜬 만큼 옅어진다
+  blob.position.z = flyG.position.z;
+  blob.material.opacity = Math.max(0, 1 - flyG.position.y * 3);
+}
+
 const timer = new THREE.Timer();
 function frame() {
   requestAnimationFrame(frame);
@@ -465,6 +511,7 @@ function frame() {
   timer.update();
   const dt = Math.min(timer.getDelta(), 0.05);
   const ease = (r) => 1 - Math.exp(-dt * r);
+  flyStep(dt); flyShadow();
   if (goal.on) {
     const k = ease(3.2);
     cam.yaw += (goal.yaw - cam.yaw) * k; cam.tilt += (goal.tilt - cam.tilt) * k; cam.dist += (goal.dist - cam.dist) * k;
@@ -502,7 +549,7 @@ function frame() {
   }
   if (nose) {
     // 크루즈 출력(MAIN8)이 오면 그 값대로, 아니면 FW·천이일 때만
-    const pct = !d.armed ? 0 : d.cruise != null ? d.cruise
+    const pct = fly.t >= 0 ? 80 : !d.armed ? 0 : d.cruise != null ? d.cruise
       : (d.vtol === 'FW' || /TRANSITION/.test(d.vtol || '')) ? 70 : 0;
     nose.v += ((pct > 0 ? 10 + pct * 0.6 : 0) - nose.v) * ease(2);
     nose.node.rotateY(nose.v * dt);

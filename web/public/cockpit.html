@@ -220,6 +220,17 @@ body.replay .ident .replay { display: inline-block; }
 .main.pbmode .maplink { bottom: 86px; }
 .main.pbmode #info { max-height: calc(100% - 300px); }
 
+/* 첫 화면 — 기체만 크게. 기체를 누르면 앞으로 날아가며 대시보드가 열린다 */
+body.intro .main { position: fixed; inset: 0; z-index: 10; padding-top: 0; }
+body.intro #view { height: 100% !important; }
+body.intro .bar, body.intro .tabs, body.intro .tiles, body.intro #calls, body.intro #info, body.intro .maplink { visibility: hidden; }
+body.opened .pane { animation: paneIn .7s cubic-bezier(.2,.8,.2,1) both; }
+body.opened .dock { animation: dockIn .6s .1s cubic-bezier(.2,.8,.2,1) both; }
+body.opened .bar, body.opened .tabs, body.opened .tiles { animation: fadeIn .6s .3s both; }
+@keyframes paneIn { from { transform: translateX(-100%); opacity: 0; } }
+@keyframes dockIn { from { transform: translateY(100%); } }
+@keyframes fadeIn { from { opacity: 0; } }
+
 /* 암호 */
 #modal { position: fixed; inset: 0; z-index: 20; background: rgba(23,26,32,.35); display: grid; place-items: center; }
 #modal[hidden] { display: none; }
@@ -289,6 +300,7 @@ body.replay .ident .replay { display: inline-block; }
   <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4.5 4.5-6.5 8-6.5s7 2 8 6.5"/></symbol>
 </svg>
 
+<script>if (!location.hash) document.body.classList.add('intro');</script>
 <div class="scr">
   <aside class="pane">
     <div class="ident"><b>SHADE01</b><span>C2NV2850087</span><em class="replay">재생 <i id="replayWhen"></i></em></div>
