@@ -483,9 +483,9 @@ def reg_place(tx, ty, half):
     return Vector((x, y, wing_top(x, y) + 0.0009))
 REG_K = lettering('registration', REG, RX1 - RX0, reg_place)
 
-# 기체명 — 좌익(+X) 윗면, 신고번호와 같은 글자 크기·방향 (뒤에서 읽힘), 뿌리 쪽에서 시작
+# 기체명 — 좌익(+X) 윗면, 신고번호와 같은 글자 크기·방향 (뒤에서 읽힘), 신고번호와 같은 스팬 중앙
 def name_place(tx, ty, half):
-    x = RX0 + half - tx               # 읽는 방향 = -X (끝→뿌리)
+    x = (RX0 + RX1) / 2 - tx          # 읽는 방향 = -X (끝→뿌리)
     le, c, _, _ = wing_sec(x)
     y = le + 0.38 * c - ty
     return Vector((x, y, wing_top(x, y) + 0.0009))

@@ -100,6 +100,7 @@ const fill = new THREE.DirectionalLight(0xf2f4ff, 0.9); fill.position.set(-2.5, 
 const front = new THREE.DirectionalLight(0xffffff, 0.5); front.position.set(0, 0.6, 3); scene.add(front);
 
 const FLOOR = -0.125;
+let grid;
 { // 격자 무대 — 25 cm 칸, 1 m 마다 진하게, 가장자리로 흐려진다
   const N = 1024, c = document.createElement('canvas'); c.width = c.height = N;
   const x = c.getContext('2d'), R = 2.4, px = N / (2 * R);
@@ -119,8 +120,8 @@ const FLOOR = -0.125;
   g1.addColorStop(0, 'rgba(0,0,0,1)'); g1.addColorStop(1, 'rgba(0,0,0,0)');
   x.fillStyle = g1; x.fillRect(0, 0, N, N);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(2 * R, 2 * R), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
-  floor.rotation.x = -Math.PI / 2; floor.position.y = -0.126; floor.renderOrder = -1; scene.add(floor);
+  grid = new THREE.Mesh(new THREE.PlaneGeometry(2 * R, 2 * R), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+  grid.rotation.x = -Math.PI / 2; grid.position.y = -0.126; grid.renderOrder = -1; scene.add(grid);
 }
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShadowMaterial({ opacity: 0.24 }));
 ground.rotation.x = -Math.PI / 2; ground.position.y = FLOOR; ground.receiveShadow = true; scene.add(ground);
@@ -473,8 +474,9 @@ function drawPred(k) {
 // ── 첫 화면 → 대시보드 — 기체가 기수 방향으로 날아가 사라지면 대시보드가 열리고,
 // 같은 방향으로 뒤에서 다시 들어와, 선회하며 대시보드 시점에 선다.
 // 돌려 둔 시점에서 출발하므로 돌린 만큼 선회가 커진다. 좌표는 기체 기준(+z 기수).
-const fly = { t: -1, p: 0, from: null, to: null };
+const fly = { t: -1, p: 0, from: null, to: null, floor: 1 };
 const FLY_OUT = 0.8, FLY_IN = 1.2, FLY_Z = 7;
+const FLY_HOLD = 0.9, FLY_SETTLE = 1.1;   // 들어온 자세를 쥐고 있는 시간, 선 뒤 자세가 가라앉는 시간
 function launch() {
   if (fly.t >= 0) return;
   fly.t = 0;
@@ -500,18 +502,27 @@ function flyStep(dt) {
     setView(); goal.on = false;
     fly.to = { yaw: goal.yaw, tilt: goal.tilt, dist: goal.dist };
   }
-  const s = Math.min(1, (fly.t - FLY_OUT) / FLY_IN), e = 1 - (1 - s) ** 3;   // 감속하며 들어온다
+  const u = fly.t - FLY_OUT, s = Math.min(1, u / FLY_IN), e = 1 - (1 - s) ** 3;   // 감속하며 들어온다
   const f = fly.from, g = fly.to, turn = g.yaw - f.yaw;
-  cam.yaw = f.yaw + turn * e; cam.tilt = f.tilt + (g.tilt - f.tilt) * e; cam.dist = f.dist + (g.dist - f.dist) * e;
-  const r = FLY_Z * (1 - e);                  // 나간 각도 그대로 뒤에서 들어와 수평으로 편다
+  if (s < 1) { cam.yaw = f.yaw + turn * e; cam.tilt = f.tilt + (g.tilt - f.tilt) * e; cam.dist = f.dist + (g.dist - f.dist) * e; }
+  const r = FLY_Z * (1 - e);                  // 나간 각도 그대로 뒤에서 들어온다
   flyG.position.set(0, 0.3 * (1 - e) - r * Math.sin(p), -r * Math.cos(p));
-  flyG.rotation.x = -(p + 0.12) * (1 - e);
-  flyG.rotation.z = -Math.max(-0.6, Math.min(0.6, turn * 0.4)) * Math.sin(Math.PI * s);   // 선회 쪽으로 기운다 (+x 좌익)
-  if (s >= 1) { fly.t = -1; flyG.rotation.z = 0; }
+  // 자세 — 날아온 자세 그대로 들어와, 선 뒤 살짝 넘쳤다가 가라앉는다. flyG 는
+  // 덧붙는 몫이라 0 이 되면 attitude 만 남는다 — 링크가 없으면 수평, 있으면 FC 자세.
+  const h = u < FLY_HOLD ? 1 : Math.exp(-4.5 * (u - FLY_HOLD)) * Math.cos(7 * (u - FLY_HOLD));
+  flyG.rotation.x = -(p + 0.12) * h;
+  flyG.rotation.z = -Math.max(-0.7, Math.min(0.7, turn * 0.5)) * (1 - s) ** 2;   // 선회율만큼 기울었다 선회가 끝나며 편다 (+x 좌익)
+  if (u >= FLY_IN + FLY_SETTLE) { fly.t = -1; flyG.rotation.set(0, 0, 0); }
 }
-function flyShadow() {   // 그림자는 바닥에 남아 따라가고, 뜬 만큼 옅어진다
-  blob.position.z = flyG.position.z;
-  blob.material.opacity = Math.max(0, 1 - Math.abs(flyG.position.y) * 3);
+// 바닥 — 날아가는 동안은 치운다 (위에서 보다 누르면 바닥을 뚫고 내려간다).
+// 들어와 자세가 가라앉기 시작하면 다시 깔린다.
+function flyFloor(k) {
+  const off = fly.t >= 0 && fly.t - FLY_OUT < FLY_HOLD + 0.3;
+  fly.floor += ((off ? 0 : 1) - fly.floor) * k;
+  grid.material.opacity = fly.floor;
+  ground.material.opacity = 0.24 * fly.floor;
+  blob.position.z = flyG.position.z;   // 그림자는 바닥에 남아 따라가고, 뜬 만큼 옅어진다
+  blob.material.opacity = Math.max(0, 1 - Math.abs(flyG.position.y) * 3) * fly.floor;
 }
 
 const timer = new THREE.Timer();
@@ -521,7 +532,7 @@ function frame() {
   timer.update();
   const dt = Math.min(timer.getDelta(), 0.05);
   const ease = (r) => 1 - Math.exp(-dt * r);
-  flyStep(dt); flyShadow();
+  flyStep(dt); flyFloor(ease(4));
   if (goal.on) {
     const k = ease(3.2);
     cam.yaw += (goal.yaw - cam.yaw) * k; cam.tilt += (goal.tilt - cam.tilt) * k; cam.dist += (goal.dist - cam.dist) * k;
