@@ -239,7 +239,7 @@ const goal = { ...cam, on: false };
 const look = new THREE.Vector3(0, 0.02, 0);
 const ptrs = new Map();
 let pinch0 = 0, dist0 = 0, down = null;
-const clampTilt = (t) => Math.max(-0.15, Math.min(1.4, t));
+const clampTilt = (t) => Math.max(-1.4, Math.min(1.4, t));   // 음수면 바닥 밑 — 하부가 보인다
 const clampDist = (d) => Math.max(1.4, Math.min(8, d));
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function pickBay(e) {
@@ -470,13 +470,15 @@ function drawPred(k) {
   predPath.geometry.attributes.position.needsUpdate = true;
 }
 
-// ── 첫 화면 → 대시보드 — 기체가 앞으로 날아가 사라지면 대시보드가 열리고,
-// 뒤에서 다시 날아 들어와 제자리에 선다. 좌표는 기체 기준(+z 기수).
-const fly = { t: -1 };
+// ── 첫 화면 → 대시보드 — 기체가 기수 방향으로 날아가 사라지면 대시보드가 열리고,
+// 같은 방향으로 뒤에서 다시 들어와, 선회하며 대시보드 시점에 선다.
+// 돌려 둔 시점에서 출발하므로 돌린 만큼 선회가 커진다. 좌표는 기체 기준(+z 기수).
+const fly = { t: -1, from: null, to: null };
 const FLY_OUT = 0.8, FLY_IN = 1.2, FLY_Z = 7;
 function launch() {
   if (fly.t >= 0) return;
   fly.t = 0;
+  goal.on = false; cam.vYaw = cam.vTilt = 0;
   canvas.style.cursor = '';
 }
 function flyStep(dt) {
@@ -492,12 +494,17 @@ function flyStep(dt) {
     intro = false;
     document.body.classList.remove('intro');
     document.body.classList.add('opened');
-    setView();
+    fly.from = { yaw: cam.yaw, tilt: cam.tilt, dist: cam.dist };
+    setView(); goal.on = false;
+    fly.to = { yaw: goal.yaw, tilt: goal.tilt, dist: goal.dist };
   }
   const s = Math.min(1, (fly.t - FLY_OUT) / FLY_IN), e = 1 - (1 - s) ** 3;   // 감속하며 들어온다
+  const f = fly.from, g = fly.to, turn = g.yaw - f.yaw;
+  cam.yaw = f.yaw + turn * e; cam.tilt = f.tilt + (g.tilt - f.tilt) * e; cam.dist = f.dist + (g.dist - f.dist) * e;
   flyG.position.set(0, 0.3 * (1 - e), -FLY_Z * (1 - e));
   flyG.rotation.x = -0.12 * (1 - e);
-  if (s >= 1) fly.t = -1;
+  flyG.rotation.z = -Math.max(-0.6, Math.min(0.6, turn * 0.4)) * Math.sin(Math.PI * s);   // 선회 쪽으로 기운다 (+x 좌익)
+  if (s >= 1) { fly.t = -1; flyG.rotation.z = 0; }
 }
 function flyShadow() {   // 그림자는 바닥에 남아 따라가고, 뜬 만큼 옅어진다
   blob.position.z = flyG.position.z;
