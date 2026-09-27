@@ -335,7 +335,7 @@ function bayLook(k) {
 
 // ── 부위 표시 ────────────────────────────────────────────────────────
 const CALLS = {
-  sum: (d) => [['bat', 'BATTERY', d.batt_pct != null ? `${d.batt_pct}%` : '—', lvl(d.batt_pct, 35, 20)]],
+  sum: () => [],
   pwr: (d) => { const m = d.motors || {}; const f = (k) => m[k] != null ? `${Math.round(m[k])}%` : '—';
     return [['LF', 'LF', f('LF'), thr(m.LF)], ['RF', 'RF', f('RF'), thr(m.RF)], ['LB', 'LB', f('LB'), thr(m.LB)], ['RB', 'RB', f('RB'), thr(m.RB)],
             ['nose', 'CRUISE', d.cruise != null ? `${Math.round(d.cruise)}%` : '—', thr(d.cruise)]]; },

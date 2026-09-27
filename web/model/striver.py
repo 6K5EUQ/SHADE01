@@ -475,7 +475,7 @@ def lettering(name, body, length, place, m=INK, k=None):
 
 # 신고번호 — 우익(-X) 윗면, 뿌리→끝으로 읽히고 글자 윗변이 앞전 쪽 (실기와 같다)
 REG = 'C2NV2850087'
-RX0, RX1 = 0.16, 0.88
+RX0, RX1 = 0.21, 0.93            # 끝쪽으로 — 날개끝 곡면(0.93~)이 시작하기 전까지
 def reg_place(tx, ty, half):
     x = -((RX0 + RX1) / 2 + tx)       # 읽는 방향 = -X
     le, c, _, _ = wing_sec(x)
@@ -483,9 +483,10 @@ def reg_place(tx, ty, half):
     return Vector((x, y, wing_top(x, y) + 0.0009))
 REG_K = lettering('registration', REG, RX1 - RX0, reg_place)
 
-# 기체명 — 좌익(+X) 윗면, 신고번호와 같은 글자 크기·방향 (뒤에서 읽힘), 신고번호와 같은 스팬 중앙
+# 기체명 — 좌익(+X) 윗면, 신고번호와 같은 글자 크기·방향 (뒤에서 읽힘), 가운데가 NX
+NX = 0.58
 def name_place(tx, ty, half):
-    x = (RX0 + RX1) / 2 - tx          # 읽는 방향 = -X (끝→뿌리)
+    x = NX - tx          # 읽는 방향 = -X (끝→뿌리)
     le, c, _, _ = wing_sec(x)
     y = le + 0.38 * c - ty
     return Vector((x, y, wing_top(x, y) + 0.0009))
