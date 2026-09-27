@@ -29,10 +29,10 @@ const D = () => (S.live ? (S.d || {}) : {});
 const BAYS = {
   head: { name: '기수', hatch: 'hatch_F', rows: [
     ['크루즈 모터', 'MFE X4120 KV430'],
-    ['크루즈 ESC', 'MFE ESC 6100 · 6S 100A · 85 g'],
+    ['크루즈 ESC', 'MFE ESC 6100 · 6S 100 A · 85 g'],
     ['프롭', '2엽 견인식'] ] },
   battery: { name: '배터리', hatch: 'hatch_F', rows: [
-    ['배터리', 'Fullymax 6S 16000 mAh'],
+    ['배터리', 'Fullymax 6S 16,000 mAh'],
     ['정격', '22.2 V · 25C (400 A)'],
     ['무게', '2,150 g · XT90-S'] ] },
   power: { name: '배전', hatch: 'hatch_F', rows: [
@@ -53,17 +53,17 @@ const BAYS = {
     ['정확도', '2.0 m CEP'] ] },
 };
 const TAB_INFO = {
-  sum: { name: 'Striver Mini VTOL 4+1', rows: [
+  sum: { name: '제원', rows: [
     ['익폭', '2,100 mm'], ['동체', '1,200 mm'], ['최대 이륙', '6.98 kg'], ['순항', '18–21 m/s'] ] },
   pwr: { name: '동력', bays: ['head'], rows: [
-    ['VTOL 모터', 'MFE M4112 KV460 × 4'], ['VTOL ESC', 'MFE ESC 650 · 6S 50A × 4'],
-    ['크루즈 모터', 'MFE X4120 KV430'], ['크루즈 ESC', 'MFE ESC 6100 · 6S 100A'],
+    ['VTOL 모터', 'MFE M4112 KV460 × 4'], ['VTOL ESC', 'MFE ESC 650 · 6S 50 A × 4'],
+    ['크루즈 모터', 'MFE X4120 KV430'], ['크루즈 ESC', 'MFE ESC 6100 · 6S 100 A'],
     ['조종면 서보', 'MFE S3054 × 5'] ] },
   nav: { name: '항법', bays: ['fc', 'gps'], rows: [
     ['비행제어기', 'Pixhawk 6C Mini · STM32H743'], ['IMU', 'ICM-42688-P · BMI088'],
     ['기압계', 'MS5611'], ['GPS', 'Holybro M10N · u-blox M10'], ['대기속도', 'Holybro DroneCAN'] ] },
   bat: { name: '전원', bays: ['battery', 'power'], rows: [
-    ['배터리', 'Fullymax 6S 16000 mAh · 2,150 g'], ['전원 모듈', 'Holybro PM08-CAN · 200 A'],
+    ['배터리', 'Fullymax 6S 16,000 mAh · 2,150 g'], ['전원 모듈', 'Holybro PM08-CAN · 200 A'],
     ['배전판', 'Holybro PDB 300A'], ['서보 전원', 'MFE UBEC · 10 A'] ] },
   rec: null,
   pf: null,
@@ -224,13 +224,13 @@ new GLTFLoader().load('/model/striver.glb', (g) => {
 
 // ── 조작 — 끌면 기체가 돈다, 휠·두 손가락은 거리, 두 번 누르면 제자리, 눌러서 칸 선택 ──
 const VIEWS = {
-  intro: { yaw: 2.55, tilt: 0.38, dist: 3.1 },
-  sum: { yaw: 2.55, tilt: 0.55, dist: 3.9 },
-  pwr: { yaw: -2.75, tilt: 0.78, dist: 4.1 },
-  nav: { yaw: 0.65, tilt: 0.45, dist: 3.3 },
-  bat: { yaw: -1.9, tilt: 0.5, dist: 3.3 },
-  rec: { yaw: 2.55, tilt: 0.55, dist: 3.9 },
-  pf: { yaw: -2.1, tilt: 0.75, dist: 3.4 },
+  intro: { yaw: 4.0, tilt: 0.6, dist: 6.2 },
+  sum: { yaw: 4.0, tilt: 0.55, dist: 4.7 },
+  pwr: { yaw: -2.75, tilt: 0.78, dist: 4.9 },
+  nav: { yaw: 0.65, tilt: 0.45, dist: 4.0 },
+  bat: { yaw: -1.9, tilt: 0.5, dist: 4.0 },
+  rec: { yaw: 4.0, tilt: 0.55, dist: 4.7 },
+  pf: { yaw: -2.1, tilt: 0.75, dist: 4.1 },
   bay: { yaw: -1.25, tilt: 0.62, dist: 2.3 },
 };
 let intro = document.body.classList.contains('intro');
@@ -308,7 +308,6 @@ function resize() {
   if (!renderer || !r.width) return;
   renderer.setSize(r.width, r.height, false);
   camera.aspect = r.width / r.height;
-  camera.userData.k = Math.max(1, 1.35 / camera.aspect);   // 좁으면 물러선다
   camera.updateProjectionMatrix();
 }
 new ResizeObserver(resize).observe(canvas);
@@ -338,10 +337,10 @@ const CALLS = {
   sum: () => [],
   pwr: (d) => { const m = d.motors || {}; const f = (k) => m[k] != null ? `${Math.round(m[k])}%` : '—';
     return [['LF', 'LF', f('LF'), thr(m.LF)], ['RF', 'RF', f('RF'), thr(m.RF)], ['LB', 'LB', f('LB'), thr(m.LB)], ['RB', 'RB', f('RB'), thr(m.RB)],
-            ['nose', 'CRUISE', d.cruise != null ? `${Math.round(d.cruise)}%` : '—', thr(d.cruise)]]; },
+            ['nose', '크루즈', d.cruise != null ? `${Math.round(d.cruise)}%` : '—', thr(d.cruise)]]; },
   nav: (d) => [['gps', 'GPS', d.sats != null ? `${d.sats}기 · ${num(d.eph, 1)}m` : '—', lvl(d.sats, 8, 5)],
-               ['nose', 'HEADING', d.hdg != null ? `${Math.round(d.hdg)}°` : '—']],
-  bat: (d) => [['bat', 'BATTERY', d.volt != null ? `${d.volt.toFixed(1)}V · ${num(d.cur, 1)}A` : '—', lvl(d.batt_pct, 35, 20)]],
+               ['nose', '헤딩', d.hdg != null ? `${Math.round(d.hdg)}°` : '—']],
+  bat: (d) => [['bat', '배터리', d.volt != null ? `${d.volt.toFixed(1)}V · ${num(d.cur, 1)}A` : '—', lvl(d.batt_pct, 35, 20)]],
   rec: () => [],
   pf: () => [],
 };
@@ -526,6 +525,7 @@ function flyFloor(k) {
 }
 
 const timer = new THREE.Timer();
+let shiftX = 0, distK = 1;   // 정보 카드를 피해 화면 중심을 옮긴 폭(px), 물러선 배율
 function frame() {
   requestAnimationFrame(frame);
   if (!renderer || mode !== '3d') return;
@@ -546,7 +546,20 @@ function frame() {
   // 고른 칸을 가운데로
   if (sel && bays[sel]) bays[sel].mesh.getWorldPosition(lookGoal); else lookGoal.set(0, 0.02, 0);
   look.lerp(lookGoal, ease(4));
-  const dist = cam.dist * (camera.userData.k || 1);
+  // 정보 카드가 기체를 덮을 때만 — 카드 오른쪽 빈 곳으로 화면 중심을 옮기고,
+  // 거기에 안 들어가면 물러선다. 기체 반폭 ≈ 1.8·높이/거리 (개요 시점에서 잰 값).
+  const cw = canvas.clientWidth, chh = canvas.clientHeight, ib = $('info');
+  const base = cam.dist * Math.max(1, 1.35 * chh / Math.max(1, cw));   // 좁으면 물러선다
+  let far = base, want = 0;
+  if (!intro && innerWidth > 900 && ib.offsetParent) {
+    const L = ib.getBoundingClientRect().right - canvas.getBoundingClientRect().left + 16;
+    far = Math.max(base, 3.6 * chh / Math.max(1, cw - L - 16));
+    want = Math.max(0, L - (cw / 2 - 1.8 * chh / far));
+  }
+  shiftX += (want - shiftX) * ease(5);
+  distK += (far / cam.dist - distK) * ease(5);
+  if (shiftX > 0.5) camera.setViewOffset(cw, chh, -shiftX, 0, cw, chh); else camera.clearViewOffset();
+  const dist = cam.dist * distK;
   camera.position.set(look.x, look.y + Math.sin(cam.tilt) * dist, look.z + Math.cos(cam.tilt) * dist);
   camera.up.set(0, Math.cos(cam.tilt), -Math.sin(cam.tilt));   // 궤도 접선 — 90° 에서도 안 뒤집힌다
   camera.lookAt(look);
@@ -612,7 +625,7 @@ frame();
 
 // ── 정보 카드 ────────────────────────────────────────────────────────
 function rowsHtml(rows) {
-  return rows.map(([k, v]) => `<div class="row"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');
+  return rows.map(([k, v]) => `<div class="row"><span>${esc(k)}</span><b>${esc(v).replace(/(\d) (?=[A-Za-z°%])/g, '$1\u00a0')}</b></div>`).join('');
 }
 function renderInfo() {
   const box = $('info');
@@ -649,8 +662,6 @@ const TILES = {
   nav: (d) => [
     ['sat', '위성', num(d.sats), '기', lvl(d.sats, 8, 5)],
     ['pin', '수평 오차', num(d.eph, 1), 'm', lvl(d.eph, 3, 6, false)],
-    ['pin', '위도', num(d.lat, 5), ''],
-    ['pin', '경도', num(d.lon, 5), ''],
     ['hdg', '헤딩', num(d.hdg), '°'],
   ],
   bat: (d) => [
@@ -740,7 +751,7 @@ $('modes').addEventListener('click', (e) => { const b = e.target.closest('button
 
 // ── 비행 전 점검 ─────────────────────────────────────────────────────
 // preflight.js 와 같은 스트림·암호(sessionStorage pf_pw)를 쓴다.
-const pf = { state: 'idle', groups: [], res: {}, prog: {}, verdict: null, error: null, notes: [], at: null, open: null, bayLevel: {} };
+const pf = { state: 'idle', groups: [], res: {}, prog: {}, verdict: null, error: null, at: null, open: null, bayLevel: {} };
 let pfPw = '';
 try { pfPw = sessionStorage.getItem('pf_pw') || ''; } catch { /* 사설 모드 */ }
 const PF_SECS = 10;
@@ -763,7 +774,7 @@ function renderPf() {
     h += `<div class="verdict ${go ? 'ok' : 'blk'}">${go ? 'GOOD TO GO' : 'NO GO'}</div>`;
   }
   if (pf.error) {
-    h += `<div class="pferr"><b>${esc(pf.error)}</b>${(pf.notes || []).map((n) => `<div>· ${esc(n)}</div>`).join('')}</div>`;
+    h += `<div class="pferr"><b>${esc(pf.error)}</b></div>`;
   }
   if (pf.groups.length) {
     h += '<ol class="pfl">' + pf.groups.map((g) => {
@@ -774,8 +785,8 @@ function renderPf() {
       let body = '';
       if (r && pf.open === g.name) {
         body = '<div class="pfb">' + (r.items.length ? r.items.map((it) =>
-          `<div class="it ${it.level}"><i>${PF_MARK[it.level] || '·'}</i><span>${esc(it.name)}</span><em>${esc(it.detail)}</em>${it.why ? `<p>${esc(String(it.why).replace(/\*\*/g, ''))}</p>` : ''}</div>`).join('')
-          : '<div class="it info"><span>읽은 것이 없다</span></div>') + '</div>';
+          `<div class="it ${it.level}"><i>${PF_MARK[it.level] || '·'}</i><span>${esc(it.name)}</span><em>${esc(it.detail)}</em></div>`).join('')
+          : '<div class="it info"><span>항목 없음</span></div>') + '</div>';
       }
       return `<li class="${cls}" style="--pct:${r ? 100 : Math.round((p || 0) * 100)}%"><button data-g="${esc(g.name)}"><span>${esc(g.label)}</span><b>${right}</b></button>${body}</li>`;
     }).join('') + '</ol>';
@@ -811,7 +822,7 @@ function pfLine(d) {
   else if (d.t === 'group') pf.res[d.group.name] = d.group;
   else if (d.t === 'done') {
     for (const g of d.groups || []) pf.res[g.name] = g;
-    if (d.error) { pf.error = d.error; pf.notes = d.notes || []; } else pf.verdict = d.verdict;
+    if (d.error) pf.error = '점검 실패'; else pf.verdict = d.verdict;
     pf.state = 'done';
   }
   pfBayLevels();
@@ -821,18 +832,17 @@ function pfLine(d) {
 async function pfRun() {
   if (pf.state === 'run') return;
   if (!pfPw) { pfAsk(); return; }
-  Object.assign(pf, { state: 'run', groups: [], res: {}, prog: {}, verdict: null, error: null, notes: [], open: null, bayLevel: {} });
+  Object.assign(pf, { state: 'run', groups: [], res: {}, prog: {}, verdict: null, error: null, open: null, bayLevel: {} });
   renderPf();
   try {
     const res = await fetch('/api/preflight/stream?t=' + PF_SECS, { method: 'POST', headers: { 'X-Preflight-Password': pfPw } });
     if (res.status === 401) {
       pfPw = ''; try { sessionStorage.removeItem('pf_pw'); } catch { /* 사설 모드 */ }
-      pf.state = 'idle'; renderPf(); pfAsk('암호가 틀렸다'); return;
+      pf.state = 'idle'; renderPf(); pfAsk('암호 오류'); return;
     }
     try { sessionStorage.setItem('pf_pw', pfPw); } catch { /* 사설 모드 */ }
     if (!(res.headers.get('content-type') || '').includes('ndjson')) {
-      const d = await res.json().catch(() => ({ error: '응답을 읽지 못했다' }));
-      pf.error = d.error || '점검하지 못했다'; pf.notes = [...(d.notes || []), ...(d.hints || [])];
+      pf.error = res.status === 409 ? '다른 점검 중' : res.status === 429 ? '잠시 후 재시도' : '점검 실패';
       pf.state = 'done'; renderPf(); return;
     }
     const reader = res.body.getReader(), dec = new TextDecoder();
@@ -849,7 +859,7 @@ async function pfRun() {
       }
     }
   } catch (e) {
-    pf.error = '서버에 닿지 못했다: ' + e.message;
+    pf.error = '연결 실패';
   }
   if (pf.state === 'run') pf.state = 'done';
   if (tab === 'pf' && !sel) renderPf();
@@ -869,19 +879,20 @@ async function pbSheet(open) {
   const sh = $('pbSheet');
   sh.hidden = !open;
   if (!open) return;
-  sh.innerHTML = '<div class="ih"><b>비행 재생</b><button class="x" id="pbSheetX" aria-label="닫기">×</button></div><div class="pbmsg">목록을 읽는 중</div>';
+  sh.innerHTML = '<div class="ih"><b>비행 재생</b><button class="x" id="pbSheetX" aria-label="닫기">×</button></div><div class="pbmsg">불러오는 중</div>';
   $('pbSheetX').onclick = () => pbSheet(false);
   try {
     const rows = (await (await fetch('/api/logs', { cache: 'no-store' })).json())
       .filter((x) => !x.error && !x.corrupt && (x.badge === 'flight' || x.badge === 'hover'))
       .sort((a, b) => (b.utc || '').localeCompare(a.utc || '')).slice(0, 60);
+    if (!rows.length) { sh.querySelector('.pbmsg').textContent = '기록 없음'; return; }
     sh.querySelector('.pbmsg').remove();
     const list = document.createElement('div'); list.className = 'pbl';
     list.innerHTML = rows.map((x) => `<button data-log="${esc(x.name)}" data-utc="${esc(x.utc || '')}">
       <span class="w">${esc(fmtWhen(x.utc))}</span><span class="b ${x.badge}">${x.badge === 'flight' ? '비행' : '호버'}</span>
       <span class="n">${esc(mins(x.duration))}</span><span class="n">${x.alt_max != null ? x.alt_max.toFixed(0) + ' m' : '—'}</span></button>`).join('');
     sh.append(list);
-  } catch { sh.querySelector('.pbmsg').textContent = '목록을 읽지 못했다'; }
+  } catch { sh.querySelector('.pbmsg').textContent = '목록 오류'; }
 }
 $('pbSheet').addEventListener('click', (e) => {
   const b = e.target.closest('[data-log]');
@@ -899,16 +910,16 @@ async function pbStart(name, utc) {
   $('pbSeek').disabled = true;
   try {
     const r = await fetch('/api/playback/open?name=' + encodeURIComponent(name), { cache: 'no-store' });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || '열지 못했다');
+    if (!r.ok) throw new Error();
     for (;;) {   // 큰 로그는 굽는 데 수십 초 걸린다
       await new Promise((z) => setTimeout(z, 400));
       const info = await (await fetch('/api/playback/info', { cache: 'no-store' })).json();
       if (info.state === 'ready') { pb.dur = info.dur; break; }
-      if (info.state === 'error') throw new Error(info.error || '읽을 수 없다');
+      if (info.state === 'error') throw new Error();
       if ($('pbBar').hidden) return;   // 기다리는 사이에 닫았다
     }
-  } catch (e) {
-    $('pbName').textContent = pb.when + ' · ' + e.message;
+  } catch {
+    $('pbName').textContent = pb.when + ' · 열기 실패';
     return;
   }
   clearTimeout(pollTimer);
@@ -999,31 +1010,24 @@ function render() {
   const on = !!S.live, d = D();
   updatePred();
   renderHud(d);
-  txt('spd', d.groundspeed != null ? d.groundspeed.toFixed(0) : '—');
+  txt('spd', d.groundspeed != null ? d.groundspeed.toFixed(0) : '0');
   $('spd').classList.toggle('off', d.groundspeed == null);
   txt('mode', d.mode || '—');
   const arm = $('arm');
-  txt('arm', !on ? 'OFFLINE' : d.armed ? (d.landed === 2 ? 'AIRBORNE' : 'ARMED') : 'DISARMED');
+  txt('arm', !on ? '연결 없음' : d.armed ? (d.landed === 2 ? '비행 중' : '시동') : '대기');
   arm.className = on && d.armed ? (d.landed === 2 ? 'air' : 'on') : '';
   const vt = d.vtol || '';
   $('gMC').className = vt === 'MC' ? 'on' : '';
   $('gTR').className = /TRANSITION/.test(vt) ? 'on' : '';
   $('gFW').className = vt === 'FW' ? 'on' : '';
-  txt('bat', d.batt_pct != null ? d.batt_pct + ' %' : '—');
+  html('bat', d.batt_pct != null ? d.batt_pct + '<small>%</small>' : '—');
   $('batBox').className = 'bat ' + lvl(d.batt_pct, 35, 20);
   $('batFill').setAttribute('width', d.batt_pct != null ? (21 * Math.max(0, Math.min(100, d.batt_pct)) / 100).toFixed(1) : 0);
 
   txt('sat', d.sats != null ? String(d.sats) : '—');
   $('stSat').className = 'st ' + (d.fix != null && d.fix < 3 ? 'bad' : lvl(d.sats, 8, 5));
   $('linkDot').className = 'dot' + (on ? ' on' : '');
-  txt('barLink', on ? (S.link || S.src || 'LINK') : '—');
 
-  $('linkIc').className = 'ic' + (on ? ' on' : '');
-  txt('linkNm', on ? (S.link || S.src || '연결') : '링크 없음');
-  txt('linkSub', (S.relay && S.relay.pusher) || '—');
-  txt('lkPkt', on && S.packets ? S.packets.toLocaleString() : '—');
-  txt('lkAge', on && S.relay && S.relay.age != null ? S.relay.age.toFixed(1) + 's' : '—');
-  txt('lkUp', on && S.uptime ? mins(S.uptime) : '—');
 
   const mt = d.motors || {};
   const vs = Object.values(mt).filter((v) => v != null);
@@ -1034,18 +1038,12 @@ function render() {
     e.setAttribute('class', spread > 20 ? 'bad' : spread > 10 ? 'warn' : '');
   }
 
-  const withU = (v, u) => v === '—' ? v : `${v}<small>${u}</small>`;
-  html('dAlt', withU(num(d.alt, 1), 'm'));
-  html('dClimb', withU(num(d.climb, 1), 'm/s'));
-  html('dHdg', withU(num(d.hdg), '°'));
-  html('dVolt', withU(num(d.volt, 1), 'V'));
   renderTiles();
   if (mode === 'map') renderMap();
 }
 
 function renderRec() {
   if (!R) return;
-  txt('totMin', num(R.min)); txt('totN', String(R.n));
   const L = R.last;
   if (!L) return;
   $('lastCard').href = '/log/' + L.id;
@@ -1053,8 +1051,8 @@ function renderRec() {
   txt('lastWhen', `${t.getFullYear()}.${two(t.getMonth() + 1)}.${two(t.getDate())} ${two(t.getHours())}:${two(t.getMinutes())}`);
   txt('lastBadge', { flight: '비행', hover: '호버' }[L.badge] || '');
   txt('lastDur', mins(L.duration));
-  txt('lastAlt', L.alt_max != null ? L.alt_max.toFixed(1) + 'm' : '—');
-  txt('lastCur', L.cur_max != null ? L.cur_max.toFixed(0) + 'A' : '—');
+  html('lastAlt', L.alt_max != null ? L.alt_max.toFixed(1) + '<small>m</small>' : '—');
+  html('lastCur', L.cur_max != null ? L.cur_max.toFixed(0) + '<small>A</small>' : '—');
 }
 
 let pollTimer = 0;
