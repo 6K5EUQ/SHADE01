@@ -50,35 +50,29 @@ svg.i { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-widt
 .spd .arm span { font-size: 14px; color: var(--ink2); font-weight: 500; }
 
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
-.card .h { display: flex; align-items: center; gap: 8px; color: var(--dim); font-size: 12px; font-weight: 500; letter-spacing: .02em; }
-.card .h svg.i { width: 16px; height: 16px; }
-.card .h .grow { flex: 1; }
-.card .big { font-size: 17px; font-weight: 600; margin-top: 4px; }
-.trio { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 12px; text-align: center; }
-.trio b { display: block; font-size: 17px; font-weight: 500; }
-.trio span { font-size: 11px; color: var(--dim); }
-.trio b small, .gear .bat small { font-size: .72em; color: var(--dim); margin-left: 1px; font-weight: 500; }
-a.card:hover { border-color: var(--track); }
+.gear .bat small { font-size: .72em; color: var(--dim); margin-left: 1px; font-weight: 500; }
 
-.frame { display: flex; justify-content: center; }
-.frame svg.top { width: 124px; height: 124px; display: block; }
-.frame svg.top text { font: 600 11px var(--font); fill: var(--dim); }
-.frame svg.top text.warn { fill: var(--warn); } .frame svg.top text.bad { fill: var(--bad); }
 
-/* 작은 HUD — 자세계와 헤딩 */
-.hud { display: grid; grid-template-columns: 116px 1fr; gap: 14px; align-items: center; padding: 12px 14px; }
+/* 자세계 */
+.hud { display: flex; justify-content: center; padding: 12px 14px; }
 .hud .att { width: 116px; height: 116px; display: block; }
-#hudHz, #hudRoll, #hudTape { transform-origin: 0 0; transition: transform .25s linear; }
-.hud .hh { display: flex; align-items: baseline; gap: 8px; }
-.hud .hh b { font-size: 28px; font-weight: 300; letter-spacing: -.02em; }
-.hud .hh span { font-size: 13px; font-weight: 700; color: var(--dim); letter-spacing: .08em; }
-.hud .tape { width: 100%; height: 22px; display: block; margin: 4px 0 8px; }
-.hud .tape line { stroke: #a8a8ab; stroke-width: 1; }
-.hud .tape text { font: 600 8px var(--font); fill: var(--dim); text-anchor: middle; }
-.hud .tape text.c { fill: var(--ink); font-weight: 800; }
-.hud .rp { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 4px 8px; font-size: 12px; align-items: baseline; }
-.hud .rp span { color: var(--dim); }
-.hud .rp b { font-size: 16px; font-weight: 500; }
+#hudHz, #hudRoll { transform-origin: 0 0; transition: transform .25s linear; }
+
+/* 계기판 — 3칸. 모터 그림이 두 칸, 편차·평균이 셋째 칸 */
+.strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 8px; text-align: center; }
+.strip .sc b { display: block; font-size: 20px; font-weight: 500; }
+.strip .sc b small { font-size: .62em; color: var(--dim); margin-left: 1px; font-weight: 500; }
+.strip .sc span { font-size: 11px; color: var(--dim); }
+.strip .sc.warn b { color: var(--warn); } .strip .sc.bad b { color: var(--bad); }
+.strip .mframe { grid-column: 1 / 3; grid-row: 3 / 5; width: 100%; height: 100%; min-height: 84px; align-self: center; }
+.strip #sc-mspread { grid-column: 3; grid-row: 3; } .strip #sc-mavg { grid-column: 3; grid-row: 4; }
+.mframe .fuse { stroke: var(--track); stroke-width: 8; stroke-linecap: round; fill: none; }
+.mframe .nose { fill: var(--track); }
+.mframe .arm { stroke: var(--track); stroke-width: 5; stroke-linecap: round; }
+.mframe .arm.warn { stroke: var(--warn); } .mframe .arm.bad { stroke: var(--bad); }
+.mframe .rot { fill: #dcdcdf; }
+.mframe .mv { font: 600 15px var(--font); fill: var(--ink2); text-anchor: middle; dominant-baseline: central; }
+.mframe .mv.hi { fill: #fff; }
 
 /* ── 우: 무대 ── */
 .main { position: relative; min-width: 0; min-height: 0; background: radial-gradient(ellipse 70% 60% at 50% 58%, #fbfbfc 0%, var(--stage) 70%, #e6e6ea 100%); overflow: hidden; }
@@ -104,6 +98,13 @@ a.card:hover { border-color: var(--track); }
 .call i { width: 1px; height: 44px; background: var(--dim); opacity: .7; }
 .call i::after { content: ""; display: block; width: 5px; height: 5px; border-radius: 50%; background: var(--dim); margin: 42px 0 0 -2px; }
 
+/* 홈 — 멀면 패드 위에, 화면 밖이면 그쪽 가장자리에 */
+#htag { position: absolute; left: 0; top: 0; z-index: 2; pointer-events: none; display: flex; align-items: center; gap: 6px; transform: translate(-50%, -50%);
+  background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 3px 10px 3px 3px; font-size: 13px; font-weight: 600; color: var(--ink2); white-space: nowrap; }
+#htag[hidden] { display: none; }
+#htag i { width: 20px; height: 20px; border-radius: 50%; background: var(--acc); color: #fff; font-style: normal; font-weight: 800; font-size: 12px; display: grid; place-items: center; }
+#htag small { font-size: .78em; color: var(--dim); margin-left: 1px; font-weight: 500; }
+body.intro #htag, .main.mapmode #htag { display: none; }
 .tiles { position: absolute; left: 0; right: 0; bottom: 18px; display: flex; justify-content: center; gap: 8px; z-index: 3; pointer-events: none; padding: 0 16px; }
 .tile { pointer-events: auto; width: 128px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 12px 10px 10px; text-align: center; }
 .tile svg.i { display: block; margin: 0 auto 6px; color: var(--ink2); }
@@ -235,12 +236,11 @@ body.opened .bar, body.opened .tabs, body.opened .tiles { animation: fadeIn .6s 
 @media (min-width: 901px) and (max-height: 820px) {
   .pane { gap: 10px; padding: 14px 18px 12px; }
   .spd .v { font-size: 72px; }
-  .hud { grid-template-columns: 96px 1fr; }
   .hud .att { width: 96px; height: 96px; }
-  .frame svg.top { width: 100px; height: 100px; }
+  .strip { gap: 8px; }
 }
 @media (min-width: 901px) and (max-height: 660px) {
-  .frame { display: none; }
+  .hud { display: none; }
 }
 
 @media (max-width: 900px) {
@@ -340,42 +340,28 @@ body.opened .bar, body.opened .tabs, body.opened .tiles { animation: fadeIn .6s 
         <path d="M-32 0 H-11 L-6 6 L0 0 L6 6 L11 0 H32" fill="none" stroke="#171a20" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
         <circle r="2" fill="#171a20"/>
       </svg>
-      <div class="hv">
-        <div class="hh"><b class="num" id="hudHdg">—</b><span id="hudCard"></span></div>
-        <svg class="tape" viewBox="-70 0 140 22" aria-label="헤딩">
-          <defs><clipPath id="tapeClip"><rect x="-70" y="0" width="140" height="22"/></clipPath></defs>
-          <g clip-path="url(#tapeClip)"><g id="hudTape"></g></g>
-          <path d="M0 0 l-4 -0.1 l4 6 l4 -6 z" fill="#3e6ae1"/>
-        </svg>
-        <div class="rp"><span>롤</span><b class="num" id="hudR">—</b><span>피치</span><b class="num" id="hudP">—</b></div>
-      </div>
     </div>
 
-    <a class="card last" id="lastCard" href="/">
-      <div class="h"><svg class="i"><use href="#i-clock"/></svg>최근 비행<span class="grow"></span><span id="lastBadge"></span></div>
-      <div class="big num" id="lastWhen">—</div>
-      <div class="trio">
-        <div><b class="num" id="lastDur">—</b><span>시간</span></div>
-        <div><b class="num" id="lastAlt">—</b><span>최고 고도</span></div>
-        <div><b class="num" id="lastCur">—</b><span>최대 전류</span></div>
-      </div>
-    </a>
-
-    <div class="card frame">
-      <!-- 위에서 본 기체 — 모서리 숫자는 VTOL 모터 출력 -->
-      <svg class="top" viewBox="0 0 132 132">
-        <g stroke="#c6c6c8" stroke-linecap="round" fill="none">
-          <path d="M34 24 V104 M98 24 V104" stroke-width="3"/>
-          <path d="M6 58 H126" stroke-width="11"/>
-          <path d="M66 12 V120" stroke-width="12"/>
-          <path d="M48 116 H84" stroke-width="5"/>
-        </g>
-        <g fill="#a8a8ab"><circle cx="34" cy="24" r="5"/><circle cx="98" cy="24" r="5"/><circle cx="34" cy="104" r="5"/><circle cx="98" cy="104" r="5"/></g>
-        <text id="mLF" x="22" y="12" text-anchor="middle">—</text>
-        <text id="mRF" x="110" y="12" text-anchor="middle">—</text>
-        <text id="mLB" x="22" y="126" text-anchor="middle">—</text>
-        <text id="mRB" x="110" y="126" text-anchor="middle">—</text>
+    <!-- 계기판 — /live 와 같은 값·같은 판정 (live.js). 모터는 기수가 위인 X 그림 위에 -->
+    <div class="card strip">
+      <div class="sc" id="sc-alt"><b class="num" id="st-alt">—</b><span>고도</span></div>
+      <div class="sc" id="sc-batt"><b class="num" id="st-batt">—</b><span>배터리</span></div>
+      <div class="sc" id="sc-sats"><b class="num" id="st-sats">—</b><span>위성</span></div>
+      <div class="sc" id="sc-spd"><b class="num" id="st-spd">—</b><span>속도</span></div>
+      <div class="sc" id="sc-cur"><b class="num" id="st-cur">—</b><span>전류</span></div>
+      <div class="sc" id="sc-eph"><b class="num" id="st-eph">—</b><span>위치 오차</span></div>
+      <svg class="mframe" viewBox="0 0 280 100" aria-label="모터">
+        <path class="fuse" d="M140 30 L140 72"/>
+        <path class="nose" d="M140 10 L131 28 L149 28 Z"/>
+        <path class="arm" id="arm-LF" d="M140 51 L52 20"/><path class="arm" id="arm-RF" d="M140 51 L228 20"/>
+        <path class="arm" id="arm-LB" d="M140 51 L52 82"/><path class="arm" id="arm-RB" d="M140 51 L228 82"/>
+        <circle class="rot" id="rot-LF" cx="52" cy="20" r="18"/><circle class="rot" id="rot-RF" cx="228" cy="20" r="18"/>
+        <circle class="rot" id="rot-LB" cx="52" cy="82" r="18"/><circle class="rot" id="rot-RB" cx="228" cy="82" r="18"/>
+        <text class="mv" id="mv-LF" x="52" y="20">—</text><text class="mv" id="mv-RF" x="228" y="20">—</text>
+        <text class="mv" id="mv-LB" x="52" y="82">—</text><text class="mv" id="mv-RB" x="228" y="82">—</text>
       </svg>
+      <div class="sc" id="sc-mspread"><b class="num" id="st-mspread">—</b><span>모터 편차</span></div>
+      <div class="sc" id="sc-mavg"><b class="num" id="st-mavg">—</b><span>모터 평균</span></div>
     </div>
   </aside>
 
@@ -401,6 +387,7 @@ body.opened .bar, body.opened .tabs, body.opened .tiles { animation: fadeIn .6s 
     <div id="map"></div>
     <a class="maplink" href="/live">상세 화면</a>
     <div id="calls"></div>
+    <div id="htag" hidden><i>H</i><b class="num"></b></div>
     <div class="tiles" id="tiles"></div>
     <div id="pbSheet" hidden></div>
     <div id="pbBar" hidden>

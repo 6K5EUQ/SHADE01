@@ -84,7 +84,7 @@ let renderer = null;
 try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true }); } catch { canvas.style.display = 'none'; }
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(26, 1, 0.05, 50);
+const camera = new THREE.PerspectiveCamera(26, 1, 0.05, 600);   // 높이 뜨면 먼 땅까지 보인다
 const craft = new THREE.Group();      // 사용자가 끌어 돌리는 것
 const flyG = new THREE.Group();       // 첫 화면에서 날아가는 것
 const attitude = new THREE.Group();   // 실시간 자세
@@ -102,13 +102,12 @@ const front = new THREE.DirectionalLight(0xffffff, 0.5); front.position.set(0, 0
 const FLOOR = -0.125;
 // ── 땅 — 홈(이륙한 자리)에 고정된 바닥 ─────────────────────────────────
 // 기체는 화면 가운데 그대로 있고, 땅이 고도만큼 내려가고 이동한 만큼 뒤로 흐른다.
-// 무대 1 = 실제 10 m (예측 경로와 같다). 높이·먼 거리는 로그로 줄여 화면에 남긴다.
+// 땅·홈·고도는 **한 축척**이다 — 무대 1 = 실제 4 m. 따로 줄이면 홈이 땅 위에서
+// 미끄러지고(가까워질수록 제자리를 찾아가는 것처럼 보인다) 높이·속도감이 죽는다.
 // world 는 craft 안에 있어 사용자가 돌린 시점을 따르고, 기수 방향만큼 돈다 —
 // world 좌표는 +z 북, -x 동.
 const world = new THREE.Group(); craft.add(world);
-const M2U = 0.1, GRID = 4.8;
-const depthOf = (alt) => 1.15 * Math.log1p(Math.max(0, alt) / 7);   // 고도 → 바닥이 내려간 깊이
-const farOf = (r) => 3 * Math.log1p(r * M2U / 3);                   // 수평 거리 → 가까우면 1:10, 멀면 줄인다
+const G = 0.25, GRID = 4.8;   // 무대/m, 격자 판 한 변 (격자 한 칸 = 1 m, 굵은 선 = 4 m)
 let grid, floorY = FLOOR;
 { // 격자 — 25 cm 칸, 1 m 마다 진하게. 무늬는 땅을 따라 흐르고(map), 흐려지는 테두리는 기체 밑에 남는다(alphaMap)
   const T = 256, c = document.createElement('canvas'); c.width = c.height = T;
@@ -141,7 +140,7 @@ const homeG = new THREE.Group(); homeG.visible = false; world.add(homeG);
   x.fillText('H', N / 2, N / 2 + 8);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   const pad = new THREE.Mesh(new THREE.CircleGeometry(0.18, 48), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false }));
-  pad.rotation.x = -Math.PI / 2; pad.position.y = FLOOR + 0.002; pad.renderOrder = 0; homeG.add(pad);
+  pad.name = 'pad'; pad.rotation.x = -Math.PI / 2; pad.position.y = FLOOR + 0.002; pad.renderOrder = 0; homeG.add(pad);
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 1, 8), new THREE.MeshBasicMaterial({ color: 0x3e6ae1, transparent: true, opacity: 0.45, depthWrite: false }));
   pole.name = 'pole'; homeG.add(pole);
 }
@@ -263,7 +262,7 @@ const look = new THREE.Vector3(0, 0.02, 0);
 const ptrs = new Map();
 let pinch0 = 0, dist0 = 0, down = null;
 const clampTilt = (t) => Math.max(-Math.PI / 2, Math.min(Math.PI / 2, t));   // ±90° — 음수면 바닥 밑에서 올려다본다
-const clampDist = (d) => Math.max(1.4, Math.min(8, d));
+const clampDist = (d) => Math.max(1.4, Math.min(40, d));   // 높이 뜨면 멀리 물러나 땅까지 본다
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 function pickBay(e) {
   const r = canvas.getBoundingClientRect();
@@ -474,9 +473,9 @@ function drawPred(k) {
   predPath.visible = pred.on > 0.01;
   if (!predPath.visible) return;
   predPath.material.opacity = pred.on;
-  // 길이는 속도에 비례 — 무대 1 m ≈ 실제 10 m, 무대 밖으로 나가지 않게 자른다
-  const L = Math.max(0.7, Math.min(2.0, 0.5 + pred.v * 0.11));
-  const turn = THREE.MathUtils.degToRad(Math.max(-160, Math.min(160, pred.omega * L * 10 / Math.max(pred.v, 0.5))));
+  // 5초 앞까지 — 땅과 같은 축척(G)이라 땅 위에 제 길이로 놓인다
+  const L = Math.max(0.7, Math.min(40, pred.v * 5 * G));
+  const turn = THREE.MathUtils.degToRad(Math.max(-160, Math.min(160, pred.omega * L / G / Math.max(pred.v, 0.5))));
   const rel = THREE.MathUtils.degToRad(pred.rel);
   // 기수 앞에서 출발해 앞으로. 오른쪽 선회 = -x (좌익이 +x).
   // 기수 방향과 진행 방향이 다르면(옆바람·옆걸음) 처음부터 그만큼 틀어져 나간다.
@@ -485,7 +484,7 @@ function drawPred(k) {
   for (let i = 0; i <= PRED_N; i++) {
     const s = i / PRED_N;
     const th = rel * Math.min(1, s * 4) + turn * s * s;   // 곧게 나가다 점점 휜다
-    const dx = -Math.sin(th), dz = Math.cos(th), w = PRED_W / 2;
+    const dx = -Math.sin(th), dz = Math.cos(th), w = PRED_W / 2 * (1 + (FLOOR - floorY) * 0.15);
     pa.set([x + dz * w, y, z - dx * w, x - dz * w, y, z + dx * w], i * 6);
     x += dx * L / PRED_N; z += dz * L / PRED_N;
   }
@@ -541,14 +540,22 @@ function flyFloor(k) {
   const off = fly.t >= 0 && fly.t - FLY_OUT < FLY_HOLD + 0.3;
   fly.floor += ((off ? 0 : 1) - fly.floor) * k;
   grid.material.opacity = fly.floor;
-  ground.material.opacity = 0.24 * fly.floor;
+  ground.material.opacity = 0.24 * fly.floor * Math.max(0, 1 - (FLOOR - floorY) / 3);
   blob.position.z = flyG.position.z;   // 그림자는 바닥에 남아 따라가고, 뜬 만큼 옅어진다
   blob.material.opacity = Math.max(0, 1 - Math.abs(flyG.position.y) * 3 - (FLOOR - floorY) * 2) * fly.floor;
 }
 
+// 기체 밑에서 땅까지 내리는 선과 땅에 닿는 고리 — 얼마나 떠 있는지
+const drop = new THREE.Group(); drop.visible = false; craft.add(drop);
+{
+  const m = new THREE.MeshBasicMaterial({ color: 0x3e6ae1, transparent: true, opacity: 0.35, depthWrite: false });
+  const line = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 1, 6), m); line.name = 'line'; drop.add(line);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.2, 48), m.clone()); ring.name = 'ring';
+  ring.rotation.x = -Math.PI / 2; drop.add(ring);
+}
 // 위치는 1초마다 온다 — 사이는 속도로 이어 가다 받은 값으로 당긴다.
 // 홈은 FC 의 HOME_POSITION(ARM 때 잡힌다), 없으면 ARM 한 순간의 위치.
-const geo = { n: 0, e: 0, alt: 0, psi: 0, armHome: null, armed: false };
+const geo = { n: 0, e: 0, alt: 0, psi: 0, armHome: null, armed: false, home: null };
 function groundStep(dt, ease) {
   const d = D();
   if (d.armed && !geo.armed && d.lat != null) geo.armHome = [d.lat, d.lon];
@@ -567,26 +574,58 @@ function groundStep(dt, ease) {
   const yaw = d.yaw != null ? d.yaw : d.hdg;
   geo.psi += unwrap((on && yaw != null ? yaw : 0) - geo.psi) * ease(4);
   // 바닥 — 내려가고, 기수만큼 돌고, 무늬가 흐른다. 멀어질수록 넓게 깔아 화면에 남긴다.
-  const depth = depthOf(geo.alt);
+  const depth = Math.max(0, geo.alt) * G;
   floorY = FLOOR - depth;
   world.position.y = -depth;
   world.rotation.y = THREE.MathUtils.degToRad(geo.psi);
-  const sc = 1 + depth * 2, rp = GRID * sc;
+  const sc = 1 + depth * 1.5, rp = GRID * sc;
   grid.scale.set(sc, sc, 1);
   const m = grid.material.map, fr = (v) => ((v % 1) + 1) % 1;
   m.repeat.set(rp, rp);
-  m.offset.set(fr(-geo.e * M2U - rp / 2), fr(-geo.n * M2U - rp / 2));
+  m.offset.set(fr(-geo.e * G - rp / 2), fr(-geo.n * G - rp / 2));
   ground.position.y = floorY;
   blob.position.y = floorY + 0.001;
-  // 홈 — 가까우면 실제 거리, 멀면 줄여서
+  // 홈 — 땅과 같은 축척으로 제자리에. 높이 뜨면 패드를 키워 멀리서도 보이게.
   homeG.visible = !!on;
+  geo.home = on ? Math.hypot(geo.n, geo.e) : null;
   if (on) {
-    const r = Math.hypot(geo.n, geo.e), f = r > 0.01 ? farOf(r) / r : 0;
-    homeG.position.set(geo.e * f, 0, -geo.n * f);
+    homeG.position.set(geo.e * G, 0, -geo.n * G);
+    homeG.getObjectByName('pad').scale.setScalar(1 + depth * 0.25);
     const pole = homeG.getObjectByName('pole');
-    pole.scale.y = depth; pole.position.y = FLOOR + depth / 2;
+    pole.scale.y = Math.max(0.001, depth); pole.position.y = FLOOR + depth / 2;
     pole.visible = depth > 0.05;
   }
+  drop.visible = depth > 0.1;
+  if (drop.visible) {
+    const line = drop.getObjectByName('line');
+    line.scale.y = depth; line.position.y = FLOOR - depth / 2;
+    const ring = drop.getObjectByName('ring');
+    ring.position.y = floorY + 0.003; ring.scale.setScalar(1 + depth * 0.25);
+  }
+}
+
+// 홈 표지 — 20 m 넘게 떨어지면 패드 자리에 거리와 함께. 화면 밖이면 그쪽 가장자리로.
+const hPos = new THREE.Vector3();
+function placeHome() {
+  const el = $('htag'), r = geo.home;
+  const show = r != null && r > 20 && !sel;
+  if (el.hidden === show) el.hidden = !show;
+  if (!show) return;
+  homeG.getObjectByName('pad').getWorldPosition(hPos).project(camera);
+  // 붙는 영역 — 탭 아래부터 타일·재생 막대 위까지
+  const w = canvas.clientWidth, h = canvas.clientHeight, L = 44, R = w - 44, T = 110, B = h - 130;
+  let x = (hPos.x + 1) / 2 * w, y = (1 - hPos.y) / 2 * h;
+  const behind = hPos.z > 1;
+  if (behind || x < L || x > R || y < T || y > B) {
+    const cx = (L + R) / 2, cy = (T + B) / 2;
+    let dx = x - cx, dy = y - cy;
+    if (behind) { dx = -dx; dy = -dy; }
+    const k = Math.min((R - cx) / Math.max(1e-6, Math.abs(dx)), (B - cy) / Math.max(1e-6, Math.abs(dy)));
+    x = cx + dx * k; y = cy + dy * k;
+  }
+  el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%)`;
+  const t = r >= 1000 ? `${(r / 1000).toFixed(1)}<small>km</small>` : `${Math.round(r)}<small>m</small>`;
+  const b = el.querySelector('b'); if (b.innerHTML !== t) b.innerHTML = t;
 }
 
 const timer = new THREE.Timer();
@@ -609,7 +648,7 @@ function frame() {
   craft.rotation.y = cam.yaw;
   craft.updateMatrixWorld();
   // 고른 칸을 가운데로
-  if (sel && bays[sel]) bays[sel].mesh.getWorldPosition(lookGoal); else lookGoal.set(0, 0.02 - (FLOOR - floorY) * 0.3, 0);   // 높으면 시선을 내려 땅을 화면에 남긴다
+  if (sel && bays[sel]) bays[sel].mesh.getWorldPosition(lookGoal); else lookGoal.set(0, 0.02 - Math.min(FLOOR - floorY, 1) * 0.25, 0);   // 조금만 내린다 — 더 내리면 기체가 화면 위로 잘린다
   look.lerp(lookGoal, ease(4));
   // 정보 카드가 기체를 덮을 때만 — 카드 오른쪽 빈 곳으로 화면 중심을 옮기고,
   // 거기에 안 들어가면 물러선다. 기체 반폭 ≈ 1.8·높이/거리 (개요 시점에서 잰 값).
@@ -685,6 +724,7 @@ function frame() {
   drawPred(ease(4));
   renderer.render(scene, camera);
   placeCalls();
+  placeHome();
 }
 frame();
 
@@ -1046,28 +1086,48 @@ $('pbSeek').addEventListener('input', (e) => { pb.seeking = true; pb.t = pb.dur 
 $('pbSeek').addEventListener('change', () => { pb.seeking = false; pb.last = performance.now(); });
 
 // ── HUD ──────────────────────────────────────────────────────────────
-const CARD = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
 function renderHud(d) {
   const r = d.roll || 0, p = Math.max(-40, Math.min(40, d.pitch || 0));
   // 지평선 — 1° 가 1.6px. 기체가 오른쪽으로 기울면 지평선은 반대로 돈다
   $('hudHz').style.transform = `rotate(${(-r).toFixed(1)}deg) translateY(${(p * 1.6).toFixed(1)}px)`;
   $('hudRoll').style.transform = `rotate(${(-r).toFixed(1)}deg)`;
-  const h = d.yaw != null ? d.yaw : d.hdg;
-  txt('hudHdg', h != null ? `${String(Math.round(h) % 360).padStart(3, '0')}°` : '—');
-  txt('hudCard', h != null ? CARD[Math.round(h / 45) % 8] : '');
-  txt('hudR', d.roll != null ? `${d.roll.toFixed(0)}°` : '—');
-  txt('hudP', d.pitch != null ? `${d.pitch.toFixed(0)}°` : '—');
-  $('hudTape').style.transform = `translateX(${(-(h || 0) * 1.2).toFixed(1)}px)`;
 }
-{ // 헤딩 테이프 눈금 — 10° 마다, 30° 마다 숫자 (방위는 글자)
-  const NAME = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' };
-  let t = '';
-  for (let a = -360; a <= 720; a += 10) {
-    const x = (a * 1.2).toFixed(1), n = ((a % 360) + 360) % 360;
-    t += `<line x1="${x}" y1="0" x2="${x}" y2="${a % 30 ? 4 : 7}"/>`;
-    if (a % 30 === 0) t += `<text x="${x}" y="18"${NAME[n] != null ? ' class="c"' : ''}>${NAME[n] ?? n}</text>`;
+
+// ── 계기판 — /live 와 같은 값·같은 판정 (live.js 의 sc·SPREAD·MOT 기준) ──
+const SPREAD_WARN = 10, SPREAD_BAD = 20, MOT_WARN = 70, MOT_BAD = 80;
+function renderStrip(d) {
+  const sc = (id, c) => { $(id).className = 'sc' + (c ? ' ' + c : ''); };
+  const u = (v, n, unit) => v == null || !Number.isFinite(v) ? '—' : `${v.toFixed(n)}<small>${unit}</small>`;
+  html('st-alt', u(d.alt, 1, 'm'));
+  html('st-batt', u(d.batt_pct, 0, '%'));
+  sc('sc-batt', d.batt_pct == null ? '' : d.batt_pct < 20 ? 'bad' : d.batt_pct < 35 ? 'warn' : '');
+  html('st-sats', u(d.sats, 0, '기'));
+  sc('sc-sats', d.fix != null && d.fix < 3 ? 'bad' : d.sats != null && d.sats < 8 ? 'warn' : '');
+  html('st-spd', u(d.groundspeed, 1, 'm/s'));
+  html('st-cur', u(d.cur, 1, 'A'));
+  sc('sc-cur', d.cur > 60 ? 'bad' : d.cur > 45 ? 'warn' : '');
+  html('st-eph', u(d.eph, 2, 'm'));
+  sc('sc-eph', d.eph > 3 ? 'bad' : d.eph > 1 ? 'warn' : '');
+  const mt = d.motors || {}, vs = ['LF', 'RF', 'LB', 'RB'].map((k) => mt[k]).filter((v) => v != null);
+  const spread = vs.length ? Math.max(...vs) - Math.min(...vs) : null;
+  const avg = vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
+  for (const k of ['LF', 'RF', 'LB', 'RB']) {
+    const v = mt[k], rot = $('rot-' + k), arm = $('arm-' + k), t = $('mv-' + k);
+    // 크기·짙기는 비행에 쓰는 40~90% 구간을 편다 (live.js 와 같다)
+    const f = v == null ? 0 : Math.max(0, Math.min(1, (v - 40) / 50));
+    const ml = v == null ? '' : v >= MOT_BAD ? 'bad' : v >= MOT_WARN ? 'warn' : '';
+    rot.setAttribute('r', v == null ? 18 : (13 + f * 12).toFixed(1));
+    const L = 86 - f * 44;
+    rot.style.fill = ml === 'bad' ? `hsl(0 70% ${L.toFixed(0)}%)` : ml === 'warn' ? `hsl(40 85% ${L.toFixed(0)}%)` : `hsl(240 3% ${L.toFixed(0)}%)`;
+    arm.style.strokeWidth = (5 + f * 8).toFixed(1);
+    arm.setAttribute('class', 'arm' + (ml ? ' ' + ml : ''));
+    t.setAttribute('class', 'mv' + (L < 60 ? ' hi' : ''));
+    t.textContent = v == null ? '—' : v.toFixed(0);
   }
-  $('hudTape').innerHTML = t;
+  html('st-mspread', u(spread, 1, '%p'));
+  sc('sc-mspread', spread == null ? '' : spread > SPREAD_BAD ? 'bad' : spread > SPREAD_WARN ? 'warn' : '');
+  html('st-mavg', u(avg, 0, '%'));
+  sc('sc-mavg', avg == null ? '' : avg > 90 ? 'bad' : avg > 85 ? 'warn' : '');
 }
 
 // ── 상태 반영 ────────────────────────────────────────────────────────
@@ -1075,6 +1135,7 @@ function render() {
   const on = !!S.live, d = D();
   updatePred();
   renderHud(d);
+  renderStrip(d);
   txt('spd', d.groundspeed != null ? d.groundspeed.toFixed(0) : '0');
   $('spd').classList.toggle('off', d.groundspeed == null);
   txt('mode', d.mode || '—');
@@ -1094,31 +1155,10 @@ function render() {
   $('linkDot').className = 'dot' + (on ? ' on' : '');
 
 
-  const mt = d.motors || {};
-  const vs = Object.values(mt).filter((v) => v != null);
-  const spread = vs.length ? Math.max(...vs) - Math.min(...vs) : 0;   // live.js 와 같은 기준 10/20%p
-  for (const k of ['LF', 'RF', 'LB', 'RB']) {
-    const e = $('m' + k);
-    e.textContent = mt[k] == null ? '—' : Math.round(mt[k]) + '%';
-    e.setAttribute('class', spread > 20 ? 'bad' : spread > 10 ? 'warn' : '');
-  }
-
   renderTiles();
   if (mode === 'map') renderMap();
 }
 
-function renderRec() {
-  if (!R) return;
-  const L = R.last;
-  if (!L) return;
-  $('lastCard').href = '/log/' + L.id;
-  const t = new Date(L.utc + 'Z'), two = (n) => String(n).padStart(2, '0');
-  txt('lastWhen', `${t.getFullYear()}.${two(t.getMonth() + 1)}.${two(t.getDate())} ${two(t.getHours())}:${two(t.getMinutes())}`);
-  txt('lastBadge', { flight: '비행', hover: '호버' }[L.badge] || '');
-  txt('lastDur', mins(L.duration));
-  html('lastAlt', L.alt_max != null ? L.alt_max.toFixed(1) + '<small>m</small>' : '—');
-  html('lastCur', L.cur_max != null ? L.cur_max.toFixed(0) + '<small>A</small>' : '—');
-}
 
 let pollTimer = 0;
 async function pollLive(now) {
@@ -1147,7 +1187,7 @@ async function loadRec() {
     const max = (k) => rows.reduce((m, x) => x[k] != null && x[k] > m ? x[k] : m, 0);
     R = { n: rows.length, min: rows.reduce((s, x) => s + (x.duration || 0), 0) / 60,
       alt: max('alt_max'), spd: max('speed_max'), cur: max('cur_max'), last: rows[0] };
-    renderRec(); if (tab === 'rec') renderTiles();
+    if (tab === 'rec') renderTiles();
   } catch {}
 }
 function tick() { const n = new Date(); txt('clk', `${String(n.getHours()).padStart(2, '0')}:${String(n.getMinutes()).padStart(2, '0')}`); }
