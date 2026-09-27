@@ -110,22 +110,17 @@ const world = new THREE.Group(); craft.add(world);
 const G = 0.25, GRID = 4.8;   // 무대/m, 격자 판 한 변 (격자 한 칸 = 1 m, 굵은 선 = 4 m)
 let grid, floorY = FLOOR;
 { // 격자 — 25 cm 칸, 1 m 마다 진하게. 무늬는 땅을 따라 흐르고(map), 흐려지는 테두리는 기체 밑에 남는다(alphaMap)
-  // 두 장 — 평소는 회색 바닥+선, 지도(위성 바닥)일 때는 선만 (바닥이 사진을 가리지 않게)
-  const tile = (fill) => {
-    const T = 256, c = document.createElement('canvas'); c.width = c.height = T;
-    const x = c.getContext('2d');
-    if (fill) { x.fillStyle = 'rgb(204,205,213)'; x.fillRect(0, 0, T, T); }
-    for (let k = 0; k < 4; k++) {
-      x.strokeStyle = k ? 'rgba(110,112,126,.24)' : 'rgba(96,98,112,.50)';
-      x.lineWidth = k ? 1.5 : 2.4;
-      const v = k * T / 4 + (k ? 0 : 1.2);
-      x.beginPath(); x.moveTo(v, 0); x.lineTo(v, T); x.moveTo(0, v); x.lineTo(T, v); x.stroke();
-    }
-    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
-    t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    return t;
-  };
-  const tex = tile(true);
+  const T = 256, c = document.createElement('canvas'); c.width = c.height = T;
+  const x = c.getContext('2d');
+  x.fillStyle = 'rgb(204,205,213)'; x.fillRect(0, 0, T, T);
+  for (let k = 0; k < 4; k++) {
+    x.strokeStyle = k ? 'rgba(110,112,126,.24)' : 'rgba(96,98,112,.50)';
+    x.lineWidth = k ? 1.5 : 2.4;
+    const v = k * T / 4 + (k ? 0 : 1.2);
+    x.beginPath(); x.moveTo(v, 0); x.lineTo(v, T); x.moveTo(0, v); x.lineTo(T, v); x.stroke();
+  }
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   const N = 512, a = document.createElement('canvas'); a.width = a.height = N;
   const y = a.getContext('2d'), g = y.createRadialGradient(N / 2, N / 2, N * 0.22, N / 2, N / 2, N * 0.49);
   g.addColorStop(0, '#fff'); g.addColorStop(1, '#000');
@@ -133,7 +128,6 @@ let grid, floorY = FLOOR;
   grid = new THREE.Mesh(new THREE.PlaneGeometry(GRID, GRID),
     new THREE.MeshBasicMaterial({ map: tex, alphaMap: new THREE.CanvasTexture(a), transparent: true, depthWrite: false }));
   grid.rotation.x = -Math.PI / 2; grid.position.y = FLOOR - 0.001; grid.renderOrder = -1; world.add(grid);
-  grid.userData = { fill: tex, lines: tile(false) };
 }
 // 홈 — 바닥의 H 패드와, 기체 높이까지 서는 가는 선 (멀리서도 보이게)
 const homeG = new THREE.Group(); homeG.visible = false; world.add(homeG);
@@ -646,7 +640,7 @@ function placeHome() {
 // 🔧 조정값 — 보면서 맞춘다.
 const SAT = {
   opacity: 0.45,          // 0 안 보임 ~ 1 원본
-  zoom: 18,               // 타일 줌 (18 ≈ 0.5 m/px, 19 는 지역에 따라 없다)
+  zoom: 18,               // 타일 줌 (18 ≈ 0.5 m/px). 비행장은 Esri 에 18 까지만 있다 — 19 는 회색 「없음」 타일
   tiles: 5,               // 한 변 타일 수 (5 × 256 px ≈ 625 m)
 };
 const SAT_FIELD = [35.1811, 128.5538];   // 링크가 없을 때 가운데 — 비행장 (server.js ADSB_LAT/LON)
@@ -676,12 +670,7 @@ function satBuild(lat, lon) {
   return mesh;
 }
 function satStep() {
-  // 격자 — 지도일 때는 선만 남긴다
-  const want = sat.on ? grid.userData.lines : grid.userData.fill;
-  if (grid.material.map !== want) {
-    want.repeat.copy(grid.material.map.repeat); want.offset.copy(grid.material.map.offset);
-    grid.material.map = want; grid.material.needsUpdate = true;
-  }
+  grid.visible = !sat.on;   // 지도일 때는 격자를 걷어 사진만
   if (!sat.on) { if (sat.mesh) sat.mesh.visible = false; return; }
   const ref = geo.hs || SAT_FIELD, key = ref.join(',');
   if (!sat.mesh || sat.key !== key) {
