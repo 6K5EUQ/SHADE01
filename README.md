@@ -1,12 +1,93 @@
 # SHADE01
 
-**체계 소개 → [shade01.bewe.co.kr/intro](https://shade01.bewe.co.kr/intro)**
+수직이륙 고정익(VTOL) 무인기를 조립해 직접 띄우고, 비행 데이터를 수집 · 분석 · 시각화하는
+운용 체계까지 만든 저장소입니다.
 
-![체계 소개](docs/images/05-intro.png)
+**[shade01.bewe.co.kr](https://shade01.bewe.co.kr)** · **[3D 콕핏](https://shade01.bewe.co.kr/cockpit)** · **[체계 소개](https://shade01.bewe.co.kr/intro)**
 
 ![비행 중](docs/images/00-flight.jpg)
 
-수직이륙 고정익(VTOL) 기체를 조립해 운용하며, 매 비행의 로그를 수집·분석하고 기록합니다.
+**10일간 83회 비행 · 누적 136.8분**
+
+---
+
+## 만든 것
+
+| 영역 | 내용 | 기술 |
+|---|---|---|
+| 3D 콕핏 | 기체 자세 · 모터 부하 · 예측 경로를 위성 지도 위 3D 로 표시 | three.js, Blender Python 절차 모델링 |
+| 비행 기록 분석 | 로그 업로드 → 자동 파싱 → 지도 · 그래프 재생 | Node.js, Python(PX4 ULog), Leaflet |
+| 실시간 텔레메트리 | 비행 중 FC 상태를 웹으로 중계 | MAVLink, ELRS 백팩 |
+| 비행 전 점검 | FC 를 읽어 항목별 GO / NO-GO 판정 (읽기 전용) | MAVLink, 스트리밍 응답 |
+| 운영 인프라 | 자체 서버 배포, 여러 PC 에서 같은 FC 접근 | systemd, Cloudflare Tunnel, Tailscale |
+| 기체 운용 | 자체 빌드 펌웨어, FC 변경 이력 관리, 현장 체크리스트 | PX4 v1.17.0 |
+
+```mermaid
+flowchart LR
+  FC["FC · PX4"] -- "USB / ELRS" --> PC["지상 PC<br/>MAVLink 수신"]
+  PC -- 중계 --> SV["자체 서버"]
+  LOG["비행 로그 .ulg"] -- 업로드 --> SV
+  SV -- "Cloudflare Tunnel" --> WEB["shade01.bewe.co.kr"]
+```
+
+---
+
+## 1. 3D 콕핏
+
+**→ [shade01.bewe.co.kr/cockpit](https://shade01.bewe.co.kr/cockpit)**
+
+![콕핏 시작 화면](docs/images/06-cockpit-start.jpg)
+
+실시간이나 지난 비행 재생에서 기체 자세 · 모터 부하 · 예측 경로 · 홈 위치를 그립니다.
+3D 모델은 실기 치수로 Blender 스크립트에서 생성합니다.
+
+| 위성 지도 위 재생 | 모터 부하 · 예측 경로 · 홈 |
+|---|---|
+| ![콕핏 위성 지도](docs/images/07-cockpit-replay.jpg) | ![콕핏 3D 재생](docs/images/10-cockpit-replay-3d.jpg) |
+| **동력 계통 · 로터 회전 방향** | **동체 내부 부품** |
+| ![콕핏 동력](docs/images/09-cockpit-power.jpg) | ![콕핏 탑재칸](docs/images/08-cockpit-bay.jpg) |
+
+---
+
+## 2. 비행 기록 분석
+
+로그를 올리면 자동으로 파싱해 비행별 최고 고도 · 최대 속도 · 비행 시간 · 최대 전류를 표시합니다.
+위험 수준의 전류는 붉게 표시됩니다.
+
+![비행 로그 목록](docs/images/02-loglist.png)
+
+비행 경로를 지도에 그리고 그래프와 함께 재생합니다. 고도 · 속도 · 자세 · 조종 입력 · 모터 출력 ·
+전력 · 진동 · 통신 · GPS 품질 · 센서 불일치를 겹쳐 특정 시점의 원인을 추적합니다.
+
+![비행 분석 화면](docs/images/03-analysis.png)
+
+---
+
+## 3. 실시간 텔레메트리
+
+비행 중인 기체 상태를 계기판 · 지도 · 그래프로 봅니다.
+
+![실시간 화면](docs/images/01-live.png)
+
+---
+
+## 4. 비행 전 점검
+
+FC 를 읽어 failsafe · 지오펜스 · GPS · 배터리 · 센서 상태를 확인하고 비행 가능 여부를 판정합니다.
+
+![비행 전 점검](docs/images/04-preflight.png)
+
+---
+
+## 5. 체계 구상 — 신호정보 무인 정찰기
+
+**→ [shade01.bewe.co.kr/intro](https://shade01.bewe.co.kr/intro)**
+
+![체계 소개](docs/images/05-intro.png)
+
+---
+
+## 기체 제원
 
 | 항목 | 내용 |
 |---|---|
@@ -26,59 +107,6 @@
 | 수신기 | [RadioMaster RP4TD-M](components/receivers/radiomaster-rp4td-m/README.md) — ELRS 2.4GHz |
 | 신고번호 | C2NV2850087 |
 | 보험 | 대인 무제한(2억원) · 대물 5억원 |
-| 기록 | 10일간 83회 비행, 누적 136.8분 |
-
----
-
-## 1. 비행 기록을 업로드 하여 자동으로 분석이 이루어집니다
-
-![비행 로그 목록](docs/images/02-loglist.png)
-
-비행별 최고 고도·최대 속도·비행 시간·최대 전류를 표시합니다. 위험 수준의 전류는 붉게 표시됩니다.
-
----
-
-## 2. 비행 기록을 재생하여 시간대별 분석이 가능합니다
-
-비행 경로를 지도에 표시하고 그래프와 함께 재생합니다.
-
-![비행 분석 화면](docs/images/03-analysis.png)
-
-고도 · 속도 · 자세 · 각속도 · 조종 입력 · 모터 출력 · 전력 · 진동 · 통신 · 링크 여유 · GPS 품질 · 센서 불일치 · CPU · RAM 을 겹쳐 특정 시점의 원인을 추적합니다.
-
----
-
-## 3. 비행 중인 기체의 상태를 실시간으로 분석합니다
-
-화면에서 실시간으로 확인합니다.
-
-![실시간 화면](docs/images/01-live.png)
-
----
-
-## 4. 비행 전 기체를 점검합니다
-
-명령 한 줄로 기체 상태를 조회해 비행 가능 여부를 판단합니다.
-
-![비행 전 점검](docs/images/04-preflight.png)
-
-GPS·배터리·failsafe 설정·센서 상태를 확인합니다.
-
----
-
-## 5. 기체를 3D 로 보며 상태를 확인합니다
-
-**→ [shade01.bewe.co.kr/cockpit](https://shade01.bewe.co.kr/cockpit)**
-
-![콕핏 시작 화면](docs/images/06-cockpit-start.jpg)
-
-실시간이나 지난 비행 재생에서 기체 자세·모터 부하·예측 경로·홈 위치를 위성 지도 위에 그립니다.
-
-![콕핏 비행 재생](docs/images/07-cockpit-replay.jpg)
-
-부위를 누르면 동체가 비치며 안쪽 부품과 제원이 보입니다.
-
-![콕핏 탑재칸](docs/images/08-cockpit-bay.jpg)
 
 ---
 
