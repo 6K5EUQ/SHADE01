@@ -14,7 +14,7 @@
 :root { --ink: #e6edf3; --lob: #f0883e; --fix: #3fb950; --sig: #58a6ff; }
 html { scroll-behavior: smooth; }
 body { overflow-x: hidden; }
-main { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+main { max-width: 1120px; margin: 0 auto; padding: 0 24px; word-break: keep-all; overflow-wrap: break-word; }
 section { min-height: 72vh; padding: 72px 0 56px; display: grid; align-content: center; gap: 28px; border-bottom: 1px solid var(--border); }
 section:last-of-type { border-bottom: 0; }
 h2 { font-size: 30px; margin: 0; letter-spacing: -.3px; line-height: 1.2; }
@@ -45,8 +45,6 @@ svg text { font-family: var(--mono); }
 #hero .chain i { font-style: normal; opacity: .6; }
 #hero p.lead { font-size: 14px; margin-top: 10px; }
 .reveal { opacity: 0; }
-#cue { text-align: center; color: var(--muted); font-size: 12px; letter-spacing: .2em; }
-#cue::after { content: ""; display: block; width: 1px; height: 22px; margin: 6px auto 0; background: linear-gradient(var(--muted), transparent); }
 
 /* 3D 무대 — SVG 실루엣을 Z 로 쌓아 두께를 만든다 (anime.js 사이트의 층 쌓기와 같은 수법) */
 #stage { position: absolute; inset: 0; overflow: hidden; perspective: 1300px; perspective-origin: 50% 42%;
@@ -63,9 +61,11 @@ svg text { font-family: var(--mono); }
 #stage .part { position: absolute; inset: 0; transform-style: preserve-3d; }
 #stage .layer { position: absolute; inset: 0; width: 100%; height: 100%; display: block; backface-visibility: visible; }
 #stage .fin { position: absolute; left: 50%; top: 50%; width: 90px; height: 80px; transform-origin: 0 0; }
+/* 좁은 무대에서는 기체·그림자를 통째로 줄인다 (--k 는 JS 가 무대 크기로 정한다). Z 도 같이 줄여야 비율이 맞다 */
+#stage .model, #stage .shadow { scale: var(--k, 1) var(--k, 1) var(--k, 1); }
 /* 한 판: 좌 무대(기체 → 지도), 우 운용사 콘솔 */
 #flow { display: grid; grid-template-columns: 1fr 320px; padding: 0; overflow: hidden; }
-#flow .scene { position: relative; background: #0b0f16; min-width: 0; aspect-ratio: 9 / 5.3; }
+#flow .scene { position: relative; background: #0b0f16; min-width: 0; aspect-ratio: 9 / 5.3; place-self: stretch; max-height: calc(100svh - 72px); }
 #flow .scene svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #flow .ops { border-left: 1px solid var(--border); background: #0f141b; padding: 8px; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); gap: 6px; min-width: 0; min-height: 0; overflow: hidden; }
 #flow .ops.idle > :not(.oh) { opacity: .45; }
@@ -85,9 +85,9 @@ svg text { font-family: var(--mono); }
 #flow .kv b { font-weight: 500; color: var(--border-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #flow .kv b.on { color: var(--ink); }
 #flow .kv b.warn { color: var(--warn); font-weight: 700; }
-#flow .olog { font-family: var(--mono); font-size: 10.5px; line-height: 1.45; color: var(--dim); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; flex: 1 1 0; min-height: 0; }
+#flow .olog { font-family: var(--mono); font-size: 10.5px; line-height: 1.45; color: var(--dim); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; flex: 1 1 0; min-height: 76px; }
 #flow .olog div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
-#flow .olog i { font-style: normal; display: inline-block; width: 30px; color: var(--muted); }
+#flow .olog i { font-style: normal; display: inline-block; width: 38px; color: var(--muted); }
 #flow .olog .sig i { color: var(--sig); }
 #flow .olog .lob i { color: var(--lob); }
 #flow .olog .fix i { color: var(--fix); }
@@ -123,6 +123,8 @@ h2 + .steps { margin-top: 18px; }
 /* ── 그림 공통 ── */
 .fig { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; position: relative; }
 .fig svg, .fig canvas { display: block; width: 100%; height: auto; }
+/* 가로 모바일에서 도판이 한 화면을 넘지 않게. 자식만 — #flow 안의 지도·캔버스·층은 제외 */
+.fig > svg, .fig > canvas { max-height: calc(100svh - 100px); object-fit: contain; }
 .fig .cap { position: absolute; left: 14px; top: 12px; font-family: var(--mono); font-size: 11px; color: var(--muted); letter-spacing: .08em; }
 .fig .ro { position: absolute; right: 14px; top: 12px; font-family: var(--mono); font-size: 12px; color: var(--dim); }
 .fig .ro b { color: var(--ink); font-weight: 600; }
@@ -141,8 +143,13 @@ h2 + .steps { margin-top: 18px; }
   .link i { left: -3px; top: 0; } .link em { left: 14px; top: 50%; transform: translateY(-50%); } }
 .cta { display: flex; gap: 10px; flex-wrap: wrap; }
 .cta a.btn { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; padding: 10px 16px; font-size: 14px; }
-.cta a.btn.primary { background: #1f6feb; border-color: #1f6feb; color: #fff; }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+/* 좁은 폰: 헤더 버튼이 세로로 꺾이지 않게 부제를 접고 한 줄로 */
+@media (max-width: 600px) { header { gap: 6px; padding: 8px 12px; } header .sub { display: none; }
+  header .btn { white-space: nowrap; min-height: 40px; display: inline-flex; align-items: center; padding: 0 10px; } }
+/* 좁은 폰: 도판 안 글자. 커진 단계 라벨은 경로 선에서 비킨다 */
+@media (max-width: 560px) { #prof text, #dfmap text { font-size: 20px; } #cut text { font-size: 14px; }
+  #prof .l[data-s="1"] { transform: translate(6px, 4px); } #prof .l[data-s="3"], #prof .l[data-s="4"] { transform: translateX(-36px); } }
 </style>
 
 <header>
@@ -150,8 +157,9 @@ h2 + .steps { margin-top: 18px; }
   <span class="sub">신호정보 무인 정찰기 플랫폼</span>
   <span class="grow"></span>
   <a class="btn" href="/">비행 기록</a>
-  <a class="btn" href="/live">실시간 계기판</a>
+  <a class="btn" href="/preflight">점검</a>
   <a class="btn" href="/cockpit">콕핏</a>
+  <a class="btn" href="/live">실시간</a>
 </header>
 
 <main>
@@ -197,12 +205,12 @@ h2 + .steps { margin-top: 18px; }
     </div>
 
     <!-- 우: 지상 운용사 콘솔 -->
-    <div class="ops idle" id="ops">
+    <div class="ops idle" id="opsCon">
       <div class="oh">
         <svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="15" r="8" fill="#1c2128" stroke="#8b949e" stroke-width="1.5"/><path d="M6,38 C6,28 12,24 20,24 C28,24 34,28 34,38" fill="#1c2128" stroke="#8b949e" stroke-width="1.5"/><path d="M11,15 C11,8 15,5 20,5 C25,5 29,8 29,15" fill="none" stroke="#58a6ff" stroke-width="2"/><rect x="9" y="14" width="4" height="7" rx="1.5" fill="#58a6ff"/><rect x="27" y="14" width="4" height="7" rx="1.5" fill="#58a6ff"/><path d="M31,21 C31,26 26,28 22,28" fill="none" stroke="#58a6ff" stroke-width="1.5"/></svg>
         <div><b>지상국 · 운용사</b><span id="opsSt">링크 대기</span></div><i id="gcsDot"></i>
       </div>
-      <div class="blk"><div class="cap2"><span>SPECTRUM · 400–440 MHz</span><em id="wf0s">스캔</em></div><canvas id="wf0" width="300" height="96"></canvas></div>
+      <div class="blk"><div class="cap2"><span>스펙트럼 · 400–440 MHz</span><em id="wf0s">스캔</em></div><canvas id="wf0" width="300" height="96"></canvas></div>
       <div class="blk"><div class="cap2"><span>신호 특성</span><em id="sigId">—</em></div>
         <div class="kv" id="kv">
           <span>주파수</span><b data-k="f">—</b>
@@ -217,7 +225,6 @@ h2 + .steps { margin-top: 18px; }
       <div class="blk"><div class="cap2"><span>로그</span><em id="clk">00:00</em></div><div class="olog" id="olog"><div class="cur">▌</div></div></div>
     </div>
   </div>
-  <div id="cue">SCROLL</div>
 </section>
 
 <!-- ═══════════ 2. 기체 ═══════════ -->
@@ -247,7 +254,7 @@ h2 + .steps { margin-top: 18px; }
       </ul>
     </div>
     <div class="fig">
-      <span class="cap">FUSELAGE · SIDE CUTAWAY</span>
+      <span class="cap">동체 단면</span>
       <svg id="cut" viewBox="0 0 560 300" aria-label="동체 단면">
         <!-- 동체 윤곽 -->
         <path d="M30,150 C60,90 140,80 300,80 L470,80 C520,80 540,110 540,150 C540,190 520,220 470,220 L300,220 C140,220 60,210 30,150 Z" fill="#0d1117" stroke="#30363d" stroke-width="2"/>
@@ -285,12 +292,12 @@ h2 + .steps { margin-top: 18px; }
   <p class="lead">수직 이륙 후 고정익 천이, 임무 고도 항로 비행 중 상시 수신. 임무 종료 후 홈 상공 수직 착륙. 링크·배터리 failsafe 자동 복귀.</p>
   <div class="grid2">
     <div class="fig">
-      <span class="cap">FLIGHT PROFILE</span>
-      <span class="ro">ALT <b id="opsAlt">0</b> m</span>
+      <span class="cap">비행 단면</span>
+      <span class="ro">고도 <b id="opsAlt">0</b> m</span>
       <svg id="prof" viewBox="0 0 640 300" aria-label="비행 프로파일">
         <line x1="20" y1="250" x2="620" y2="250" stroke="#30363d" stroke-width="2"/>
         <g font-size="11" fill="#6e7681">
-          <text x="24" y="270">HOME</text><text x="560" y="270">RETURN</text>
+          <text x="24" y="270">출발</text><text x="560" y="270">도착</text>
           <text x="24" y="118">임무 고도</text>
         </g>
         <line x1="20" y1="122" x2="620" y2="122" stroke="#21262d" stroke-dasharray="4 6"/>
@@ -326,12 +333,12 @@ h2 + .steps { margin-top: 18px; }
   <p class="lead">단일 지점 수신 → 방위선(LOB). 이동 중 다지점 방위선 교차 → 위치 확정(FIX). 비행 항로 자체가 측정 기선.</p>
   <div class="grid2">
     <div class="fig">
-      <span class="cap">SPECTRUM · WATERFALL</span>
+      <span class="cap">스펙트럼</span>
       <span class="ro" id="sigRo">—</span>
       <canvas id="wf" width="560" height="300"></canvas>
     </div>
     <div class="fig">
-      <span class="cap">LOB → FIX</span>
+      <span class="cap">방위선 교차</span>
       <span class="ro" id="fixRo">LOB <b id="lobN">0</b></span>
       <svg id="dfmap" viewBox="0 0 560 300" aria-label="방위선 교차">
         <defs><pattern id="g" width="28" height="28" patternUnits="userSpaceOnUse"><path d="M28,0 L0,0 0,28" fill="none" stroke="#21262d" stroke-width="1"/></pattern></defs>
@@ -343,8 +350,8 @@ h2 + .steps { margin-top: 18px; }
         <!-- 송신원 · FIX -->
         <g id="fixG" opacity="0">
           <ellipse id="fixEll" cx="400" cy="205" rx="90" ry="60" fill="#3fb950" fill-opacity=".12" stroke="#3fb950" stroke-width="1.5"/>
-          <circle cx="400" cy="205" r="5" fill="#3fb950"/>
-          <text x="412" y="200" font-size="12" fill="#3fb950" font-weight="600">FIX</text>
+          <circle id="fixP" cx="400" cy="205" r="5" fill="#3fb950" opacity="0"/>
+          <text id="fixT" x="412" y="200" font-size="12" fill="#3fb950" font-weight="600" opacity="0">FIX</text>
         </g>
         <g id="dfAc"><path d="M0,-8 L12,0 L0,8 L3,0 Z" fill="#e6edf3"/></g>
       </svg>
@@ -370,7 +377,7 @@ h2 + .steps { margin-top: 18px; }
     <div class="node"><span class="st">비행 후</span><b>웹 기록</b><span>비행별 로그 · 재생<br>지도 항적 · 변경 이력<br>영구 보관</span></div>
   </div>
   <div class="cta">
-    <a class="btn primary" href="/live">실시간 계기판</a>
+    <a class="btn" href="/live">실시간</a>
     <a class="btn" href="/">비행 기록</a>
   </div>
 </section>
@@ -450,6 +457,9 @@ h2 + .steps { margin-top: 18px; }
     utils.set(fin, { translateX: 0, translateY: 180, translateZ: 30, rotateY: -90 });
     utils.set('#model', { rotateX: 62, rotateZ: -28, scale: .72 });
     utils.set('#stage .xr', { opacity: 0 });
+    // 무대가 620×365 보다 작으면 기체를 그만큼 줄인다 — 데스크톱은 그대로
+    const fit = () => { const sc = $('#flow .scene'); $('#stage').style.setProperty('--k', Math.min(1, sc.clientWidth / 620, sc.clientHeight / 365)); };
+    fit(); addEventListener('resize', fit);
     animate('#model .rot:not(.nose) path', { rotate: 360, duration: 900, ease: 'linear', loop: true });
 
     // ── 지도. 백령도 서쪽 ~ 속초 동쪽이 한 화면에 들어오는 확대 투영.
@@ -502,7 +512,8 @@ h2 + .steps { margin-top: 18px; }
     utils.set('#ftrail', { strokeDasharray: L, strokeDashoffset: L });
 
     // ── 콘솔 스펙트럼: 위 40px FFT 트레이스, 아래 워터폴, 주파수 축. 400–440 MHz 로 그린다.
-    const cv = $('#wf0'), ctx = cv.getContext('2d'), W = cv.width, H = cv.height, FH = 34, AX = 12, WH = H - FH - AX;
+    const cv = $('#wf0'); cv.width = Math.round(cv.clientWidth) || 300;
+    const ctx = cv.getContext('2d'), W = cv.width, H = cv.height, FH = 34, AX = 12, WH = H - FH - AX;
     const F0 = 400, F1 = 440, SIGF = 421.3, SX = (SIGF - F0) / (F1 - F0);
     const wf = document.createElement('canvas'); wf.width = W; wf.height = WH; const wctx = wf.getContext('2d');
     wctx.fillStyle = '#0d1117'; wctx.fillRect(0, 0, W, WH);
@@ -552,7 +563,7 @@ h2 + .steps { margin-top: 18px; }
     } });
 
     // ── 콘솔 표시
-    const ops = $('#ops'), opsSt = $('#opsSt'), dot = $('#gcsDot'), olog = $('#olog');
+    const ops = $('#opsCon'), opsSt = $('#opsSt'), dot = $('#gcsDot'), olog = $('#olog');
     const clkEl = $('#clk'), sigId = $('#sigId');
     const say = () => {}, cap = () => {};   // 무대 위 설명 문구는 두지 않는다 — 그림이 말한다
     let clock = 0;
@@ -574,12 +585,12 @@ h2 + .steps { margin-top: 18px; }
     const ANALYSIS = [
       [.05, (q) => { hot = .95; $('#wf0s').textContent = '검출 421.3'; $('#emit').setAttribute('opacity', 1); sigId.textContent = 'SIG-01';
                     cap(6, '미상 신호'); say('미상 신호 검출');
-                    send(q, '#58a6ff', () => { kv('f', '421.30 MHz'); kv('bw', '25 kHz · SNR 18 dB'); log('sig', 'DET', '421.30 MHz · BW 25 kHz · SNR 18 dB'); opsSt.textContent = '추적 중 · SIG-01'; }); }],
-      [.08, (q) => { cap(7, '방향탐지 — 이동하며 측정'); send(q, '#58a6ff', () => { kv('mod', 'GMSK'); kv('br', '9.6 kbps'); log('sig', 'DEM', '복조 GMSK · 9.6 kbps · 프레임 2.0 s'); }); }],
-      [.12, (q) => send(q, '#58a6ff', () => { kv('dop', '+1.2 kHz · 이동체'); log('sig', 'DOP', '도플러 +1.2 kHz → 이동체 (≈32 km/h)'); })],
-      [.16, (q) => send(q, '#58a6ff', () => { kv('enc', '프리앰블 7A · 호핑'); log('sig', 'ENC', '암호 패턴 프리앰블 7A · 주파수 호핑 4ch'); })],
-      [.25, (q) => send(q, '#d29922', () => { kv('db', '일치 91%'); kv('cls', '미사일 관련 통신', 'warn'); log('warn', 'DB', 'DB 대조 91% — 이동식 발사대 지휘통신망'); opsSt.textContent = '경보 · 미사일 관련'; })],
-      [.66, (q) => send(q, '#58a6ff', () => { kv('dop', '0 kHz · 정지'); log('sig', 'DOP', '도플러 0 → 정지 · 전개 위치 추정'); })],
+                    send(q, '#58a6ff', () => { kv('f', '421.30 MHz'); kv('bw', '25 kHz · SNR 18 dB'); log('sig', '검출', '421.30 MHz · BW 25 kHz · SNR 18 dB'); opsSt.textContent = '추적 중 · SIG-01'; }); }],
+      [.08, (q) => { cap(7, '방향탐지 — 이동하며 측정'); send(q, '#58a6ff', () => { kv('mod', 'GMSK'); kv('br', '9.6 kbps'); log('sig', '복조', 'GMSK · 9.6 kbps · 프레임 2.0 s'); }); }],
+      [.12, (q) => send(q, '#58a6ff', () => { kv('dop', '+1.2 kHz · 이동체'); log('sig', '도플러', '+1.2 kHz → 이동체 (≈32 km/h)'); })],
+      [.16, (q) => send(q, '#58a6ff', () => { kv('enc', '프리앰블 7A · 호핑'); log('sig', '암호', '프리앰블 7A · 주파수 호핑 4ch'); })],
+      [.25, (q) => send(q, '#d29922', () => { kv('db', '일치 91%'); kv('cls', '미사일 관련 통신', 'warn'); log('warn', '대조', '91% — 이동식 발사대 지휘통신망'); opsSt.textContent = '경보 · 미사일 관련'; })],
+      [.66, (q) => send(q, '#58a6ff', () => { kv('dop', '0 kHz · 정지'); log('sig', '도플러', '0 → 정지 · 전개 위치 추정'); })],
     ];
     let nextA = 0;
     const bearing = (p) => Math.round((Math.atan2(EM[0] - p.x, -(EM[1] - p.y)) * 180 / Math.PI + 360) % 360);
@@ -646,7 +657,7 @@ h2 + .steps { margin-top: 18px; }
     // 3 수직 이륙 — 로터가 빨라지고 기체가 바닥면에서 수직(Z)으로 뜬다. 그림자는 작아진다.
     tl.add('#stage .fus .layer:not(.xr)', { opacity: [.16, 1], duration: 500 }, T.side);
     tl.add('#stage .xr', { opacity: [1, 0], duration: 400 }, T.side);
-    tl.add('#model', { translateZ: [0, 210], duration: 2400, ease: 'inOutSine', onBegin: () => { ops.classList.remove('idle'); dot.classList.add('on'); opsSt.textContent = '링크 · 이륙'; log('', 'LNK', '텔레메트리 연결 · 이륙'); } }, T.side + 300);
+    tl.add('#model', { translateZ: [0, 210], duration: 2400, ease: 'inOutSine', onBegin: () => { ops.classList.remove('idle'); dot.classList.add('on'); opsSt.textContent = '링크 · 이륙'; log('', '링크', '텔레메트리 연결 · 이륙'); } }, T.side + 300);
     tl.add('#shadow', { scale: [1, .55], opacity: [1, .25], duration: 2400, ease: 'inOutSine' }, T.side + 300);
     // 4 천이 — 기수가 들리고 앞으로 가속해 화면 밖으로. 리프트 로터는 멈추고 기수 프로펠러가 돈다.
     tl.add('#model', { rotateX: [62, 74], rotateZ: [-60, -95], translateX: [0, 1100], translateY: [0, -260], scale: [.72, .46],
@@ -666,7 +677,7 @@ h2 + .steps { margin-top: 18px; }
       while (next < LOB_AT.length && prog.p >= LOB_AT[next]) { drawLob(LOB_AT[next], next); next++; }
     } }, T.cruise);
     // 복귀
-    tl.add('#kac', { opacity: [1, 0], duration: 800, onBegin: () => { cap(9, '지상 분석 완료 · 복귀'); say('복귀'); log('', 'LNK', '임무 종료 · 복귀'); $('#dlink').setAttribute('opacity', 0); } }, T.out);
+    tl.add('#kac', { opacity: [1, 0], duration: 800, onBegin: () => { cap(9, '지상 분석 완료 · 복귀'); say('복귀'); log('', '링크', '임무 종료 · 복귀'); $('#dlink').setAttribute('opacity', 0); } }, T.out);
     tl.add({}, { duration: 1 }, T.end);
   });
 
@@ -753,7 +764,7 @@ h2 + .steps { margin-top: 18px; }
     } });
     // 신호가 켜졌다 꺼졌다 한다 — 아래 LOB 타임라인과 박자를 맞춘다
     const sig = { h: 0 };
-    animate(sig, { h: [0, .95], duration: 1200, ease: 'outQuad', delay: 600, onUpdate: () => { hot = sig.h; $('#sigRo').innerHTML = hot > .5 ? '<b style="color:#f0883e">신호 검출</b> · f 0.62' : '스캔 중'; } });
+    animate(sig, { h: [0, .95], duration: 1200, ease: 'outQuad', delay: 600, onUpdate: () => { hot = sig.h; $('#sigRo').innerHTML = hot > .5 ? '<b style="color:#f0883e">신호 검출</b>' : '스캔 중'; } });
 
     // (b) LOB → FIX
     const map = $('#dfmap'), lobs = $('#lobs');
@@ -763,7 +774,7 @@ h2 + .steps { margin-top: 18px; }
     const at = (u) => { const L = P.getTotalLength(); return P.getPointAtLength(u * L); };
     const LOB_AT = [.12, .38, .62, .86];                // 방위선을 남기는 지점
     const ELL = [[150, 110], [110, 70], [70, 40], [42, 22]];   // 교차가 좁혀지는 모양
-    const lobN = $('#lobN'), fixG = $('#fixG'), ell = $('#fixEll');
+    const fixG = $('#fixG'), ell = $('#fixEll');
     const steps = $$('#sigSteps li');
     const setStep = (i) => steps.forEach((s, k) => s.classList.toggle('on', k <= i));
 
@@ -781,16 +792,16 @@ h2 + .steps { margin-top: 18px; }
       const line = svg.createDrawable(g.querySelector('.lobl'));
       animate(line, { draw: ['0 0', '0 1'], duration: 700, ease: 'outQuad' });
       animate(g.querySelector('path'), { opacity: [0, 1], duration: 700 });
-      lobN.textContent = String(k + 1);
+      $('#lobN').textContent = String(k + 1);
       if (k === 0) setStep(1); else setStep(2);
       // 교차 타원
       fixG.setAttribute('opacity', 1);
       animate(ell, { rx: ELL[k][0], ry: ELL[k][1], duration: 800, ease: 'outExpo' });
       animate(ell, { stroke: k >= 3 ? '#3fb950' : '#f0883e', fillOpacity: k >= 3 ? .18 : .06, duration: 600 });
-      if (k >= 3) { setStep(3); $('#fixRo').innerHTML = '<b style="color:#3fb950">FIX</b> · LOB 4'; }
+      if (k >= 3) { setStep(3); $('#fixRo').innerHTML = '<b style="color:#3fb950">FIX</b> · LOB 4'; $('#fixP').setAttribute('opacity', 1); $('#fixT').setAttribute('opacity', 1); }
     };
     const reset = () => {
-      lobs.innerHTML = ''; fixG.setAttribute('opacity', 0); lobN.textContent = '0'; setStep(0);
+      lobs.innerHTML = ''; fixG.setAttribute('opacity', 0); $('#fixP').setAttribute('opacity', 0); $('#fixT').setAttribute('opacity', 0); setStep(0);
       $('#fixRo').innerHTML = 'LOB <b id="lobN">0</b>';
       ell.setAttribute('rx', 150); ell.setAttribute('ry', 110); ell.setAttribute('stroke', '#f0883e');
     };
