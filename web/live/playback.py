@@ -284,6 +284,8 @@ def load_flight(path):
         # pyulog 는 syslog 레벨을 문자 코드로 준다 ('6' 등) — 숫자로 맞춘다.
         if isinstance(lvl, str):
             lvl = ord(lvl) - ord('0') if lvl.isdigit() else 6
+        elif isinstance(lvl, int) and lvl >= ord('0'):
+            lvl -= ord('0')       # 정수로 올 때도 문자 코드다 (54 = '6' = INFO) — 안 빼면 전부 '?' 가 된다
         messages.append({'t': round(ts, 1),
                          'sev': SEVERITY[lvl] if 0 <= lvl < len(SEVERITY) else '?',
                          'text': m.message.strip()})
