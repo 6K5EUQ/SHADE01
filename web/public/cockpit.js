@@ -401,6 +401,8 @@ function renderCalls() {
   if (!sel && mode === '3d' && tab !== 'pwr' && tab !== 'fly') {
     const m = D().motors || {};
     for (const k of ['LF', 'RF', 'LB', 'RB']) if (thr(m[k])) want.push([k, '', `${Math.round(m[k])}%`, thr(m[k])]);
+    const cr = D().cruise;
+    if (thr(cr)) want.push(['nose', '크루즈', `${Math.round(cr)}%`, thr(cr)]);   // 고정익 모터도 같은 기준
   }
   const keep = new Set();
   for (const [a, k, v, c] of want) {
