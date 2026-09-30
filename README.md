@@ -27,7 +27,7 @@ flowchart LR
 실시간이나 지난 비행 재생에서 기체 자세 · 모터 부하 · 예측 경로 · 홈 위치를 그립니다.
 
 | 위성 지도 위 재생 | 모터 부하 · 예측 경로 · 홈 |
-|---|---|
+|:---:|:---:|
 | ![콕핏 위성 지도](docs/images/07-cockpit-replay.jpg) | ![콕핏 3D 재생](docs/images/10-cockpit-replay-3d.jpg) |
 | **동력 계통 · 로터 회전 방향** | **동체 내부 부품** |
 | ![콕핏 동력](docs/images/09-cockpit-power.jpg) | ![콕핏 탑재칸](docs/images/08-cockpit-bay.jpg) |
