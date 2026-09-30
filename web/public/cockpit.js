@@ -61,6 +61,7 @@ const BAYS = {
 const TAB_INFO = {
   sum: { name: '제원', bays: ['vtol', 'head', 'battery', 'power', 'payload', 'fc', 'gps'], rows: [
     ['익폭', '2,100 mm'], ['동체', '1,200 mm'], ['최대 이륙', '6.98 kg'], ['순항', '18–21 m/s'] ] },
+  fly: null,
   pwr: { name: '동력', bays: ['head'], rows: [
     ['VTOL 모터', 'MFE M4112 KV460 × 4'], ['VTOL ESC', 'MFE ESC 650 · 6S 50 A × 4'],
     ['크루즈 모터', 'MFE X4120 KV430'], ['크루즈 ESC', 'MFE ESC 6100 · 6S 100 A'],
@@ -262,6 +263,7 @@ new GLTFLoader().load('/model/striver.glb', (g) => {
 const VIEWS = {
   intro: { yaw: 4.0, tilt: 0.6, dist: 6.2 },
   sum: { yaw: 4.0, tilt: 0.55, dist: 4.7 },
+  fly: { yaw: 4.0, tilt: 0.55, dist: 4.7 },
   pwr: { yaw: -2.75, tilt: 0.78, dist: 4.9 },
   nav: { yaw: 0.65, tilt: 0.45, dist: 4.0 },
   bat: { yaw: -1.9, tilt: 0.5, dist: 4.0 },
@@ -373,6 +375,10 @@ function bayLook(k) {
 const ROT_DIR = { LF: 'CW', RF: 'CCW', LB: 'CCW', RB: 'CW' };
 const CALLS = {
   sum: () => [],
+  // 비행 — 모터마다 부하만. 한쪽으로 쏠리면 바로 보이게 색은 thr 그대로.
+  fly: (d) => { const m = d.motors || {}; const f = (k) => m[k] != null ? `${Math.round(m[k])}%` : '—';
+    return [['LF', '', f('LF'), thr(m.LF)], ['RF', '', f('RF'), thr(m.RF)], ['LB', '', f('LB'), thr(m.LB)], ['RB', '', f('RB'), thr(m.RB)],
+            ...(d.cruise ? [['nose', '크루즈', `${Math.round(d.cruise)}%`, thr(d.cruise)]] : [])]; },
   // 회전 방향은 OPERATIONS.md 「모터 지오메트리」 기준
   pwr: (d) => { const m = d.motors || {}; const f = (k) => m[k] != null ? `${Math.round(m[k])}% · ${ROT_DIR[k]}` : ROT_DIR[k];
     return [['LF', '', f('LF'), thr(m.LF)], ['RF', '', f('RF'), thr(m.RF)], ['LB', '', f('LB'), thr(m.LB)], ['RB', '', f('RB'), thr(m.RB)],
@@ -391,7 +397,7 @@ const THR_COLOR = { '': 0x5a5d63, warn: 0xd99a06, bad: 0xdc2626 };
 const callEls = new Map();
 function renderCalls() {
   let want = sel || mode !== '3d' || !tab ? [] : CALLS[tab](D());
-  if (!sel && mode === '3d' && tab !== 'pwr') {
+  if (!sel && mode === '3d' && tab !== 'pwr' && tab !== 'fly') {
     const m = D().motors || {};
     for (const k of ['LF', 'RF', 'LB', 'RB']) if (thr(m[k])) want.push([k, '', `${Math.round(m[k])}%`, thr(m[k])]);
   }
@@ -894,6 +900,14 @@ const TILES = {
     ['climb', '상승률', num(d.climb, 1), 'm/s'],
     ['hdg', '헤딩', num(d.hdg), '°'],
   ],
+  // 비행 중에 볼 것만 — 높이·속도·오르내림·홈까지·남은 배터리
+  fly: (d) => [
+    ['alt', '고도', num(d.alt, 1), 'm'],
+    ['air', '대기속도', num(d.airspeed, 1), 'm/s'],
+    ['climb', '상승률', num(d.climb, 1), 'm/s'],
+    ['pin', '홈 거리', num(geo.home), 'm'],
+    ['bat', '배터리', num(d.batt_pct), '%', lvl(d.batt_pct, 35, 20)],
+  ],
   pwr: () => [],
   nav: (d) => [
     ['sat', '위성', num(d.sats), '기', lvl(d.sats, 8, 5)],
@@ -1255,7 +1269,6 @@ const SPREAD_WARN = 10, SPREAD_BAD = 20;
 function renderStrip(d) {
   const sc = (id, c) => { $(id).className = 'sc' + (c ? ' ' + c : ''); };
   const u = (v, n, unit) => v == null || !Number.isFinite(v) ? '—' : `${v.toFixed(n)}<small>${unit}</small>`;
-  html('st-alt', u(d.alt, 1, 'm'));
   html('st-batt', u(d.batt_pct, 0, '%'));
   sc('sc-batt', d.batt_pct == null ? '' : d.batt_pct < 20 ? 'bad' : d.batt_pct < 35 ? 'warn' : '');
   html('st-cur', u(d.cur, 1, 'A'));
