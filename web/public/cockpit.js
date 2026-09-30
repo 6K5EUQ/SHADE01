@@ -1351,6 +1351,12 @@ function fcWarn() {
   return null;
 }
 
+// PX4 모드 이름 → QGC 에서 부르는 이름(대문자). 없는 것은 AUTO. 만 뗀다.
+const MODE_NAME = {
+  STABILIZED: 'STABILIZED', ALTCTL: 'ALTITUDE', POSCTL: 'POSITION', 'AUTO.MISSION': 'MISSION',
+  'AUTO.LOITER': 'HOLD', 'AUTO.RTL': 'RTL', TERMINATION: 'KILL',
+  'AUTO.TAKEOFF': 'TAKEOFF', 'AUTO.VTOL_TAKEOFF': 'TAKEOFF', 'AUTO.LAND': 'LAND',
+};
 // 모드 글자 — 칸에 들어갈 때까지 줄인다 (STABILIZED 같은 긴 이름)
 function fitMode() {
   const e = $('mode');
@@ -1366,7 +1372,7 @@ function render() {
   renderStrip(d);
   txt('spd', d.groundspeed != null ? d.groundspeed.toFixed(0) : '0');
   $('spd').classList.toggle('off', d.groundspeed == null);
-  const md = (d.mode || '—').replace(/^AUTO\./, '');   // AUTO.RTL → RTL
+  const md = d.mode ? MODE_NAME[d.mode] || d.mode.replace(/^AUTO\./, '') : '—';
   if ($('mode').textContent !== md) { txt('mode', md); fitMode(); }
   const arm = $('arm');
   txt('arm', !on ? '연결 없음' : d.armed ? (d.landed === 2 ? '비행 중' : '시동') : '대기');
