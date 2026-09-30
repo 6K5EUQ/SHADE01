@@ -3,11 +3,10 @@
 수직이륙 고정익(VTOL) 무인기를 조립해 직접 띄우고, 비행 데이터를 수집 · 분석 · 시각화하는
 운용 체계까지 만든 저장소입니다.
 
-**[shade01.bewe.co.kr](https://shade01.bewe.co.kr)** · **[3D 콕핏](https://shade01.bewe.co.kr/cockpit)** · **[체계 소개](https://shade01.bewe.co.kr/intro)**
+**[SHADE01](https://shade01.bewe.co.kr/cockpit)** · **[체계 소개](https://shade01.bewe.co.kr/intro)**
 
 ![비행 중](docs/images/00-flight.jpg)
 
-**10일간 83회 비행 · 누적 136.8분**
 
 ---
 
