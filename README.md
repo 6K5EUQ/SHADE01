@@ -8,15 +8,6 @@
 
 
 
-| 영역 | 내용 | 기술 |
-|---|---|---|
-| 3D 모니터링 | 기체 자세 · 모터 부하 · 예측 경로를 위성 지도 위 3D 로 표시 | three.js, Blender Python 절차 모델링 |
-| 비행 기록 분석 | 로그 업로드 → 자동 파싱 → 지도 · 그래프 재생 | Node.js, Python(PX4 ULog), Leaflet |
-| 실시간 텔레메트리 | 비행 중 FC 상태를 웹으로 중계 | MAVLink, ELRS 백팩 |
-| 비행 전 점검 | FC 를 읽어 항목별 GO / NO-GO 판정 (읽기 전용) | MAVLink, 스트리밍 응답 |
-| 운영 인프라 | 자체 서버 배포, 여러 PC 에서 같은 FC 접근 | systemd, Cloudflare Tunnel, Tailscale |
-| 기체 운용 | 자체 빌드 펌웨어, FC 변경 이력 관리, 현장 체크리스트 | PX4 v1.17.0 |
-
 ```mermaid
 flowchart LR
   FC["FC · PX4"] -- "USB / ELRS" --> PC["지상 PC<br/>MAVLink 수신"]
@@ -34,7 +25,6 @@ flowchart LR
 ![콕핏 시작 화면](docs/images/06-cockpit-start.jpg)
 
 실시간이나 지난 비행 재생에서 기체 자세 · 모터 부하 · 예측 경로 · 홈 위치를 그립니다.
-3D 모델은 실기 치수로 Blender 스크립트에서 생성합니다.
 
 | 위성 지도 위 재생 | 모터 부하 · 예측 경로 · 홈 |
 |---|---|
