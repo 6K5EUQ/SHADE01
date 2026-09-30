@@ -263,19 +263,29 @@ def load_flight(path):
                   'c2': 'accel_clipping[2]'}, t0)
 
     # ── 홈 위치 ────────────────────────────────────────────────────
+    # 🔴 home_position 은 비행 중에도 다시 찍힌다 (log_363: 5번, 마지막은 착지 뒤).
+    #    마지막 값을 쓰면 H 가 **착지한 자리**에 선다 — 이륙 자리와 5 m 어긋났다.
+    #    이륙 순간(처음 landed=0)에 유효하던 값을 쓴다. 상대고도 기준(href)도 같은 값.
     home = None
+    href = None
     hp = Q.get(ulog, 'home_position')
     if hp is not None and len(hp.data['timestamp']):
+        th = hp.data['timestamp'] / 1e6
+        ok = [k for k in range(len(th)) if 0 < th[k] < 1e9]     # 음수가 넘친 쓰레기 시각은 뺀다
+        ld = Q.get(ulog, 'vehicle_land_detected')
+        t_to = None
+        if ld is not None:
+            air = [k for k in range(len(ld.data['landed'])) if not ld.data['landed'][k]]
+            if air:
+                t_to = float(ld.data['timestamp'][air[0]]) / 1e6
+        pick = [k for k in ok if t_to is None or th[k] <= t_to + 1.0]
+        k = pick[-1] if pick else (ok[0] if ok else len(th) - 1)
         try:
-            home = [round(float(hp.data['lat'][-1]), 7),
-                    round(float(hp.data['lon'][-1]), 7)]
+            home = [round(float(hp.data['lat'][k]), 7), round(float(hp.data['lon'][k]), 7)]
         except (KeyError, IndexError):
             home = None
-
-    # 홈 고도. 화면의 고도는 **홈 기준 상대**다 (라이브의 relative_alt 와 같게).
-    href = None
-    if hp is not None and 'alt' in hp.data and len(hp.data['alt']):
-        href = float(hp.data['alt'][-1])
+        if 'alt' in hp.data:
+            href = float(hp.data['alt'][k])
 
     # ── STATUSTEXT ─────────────────────────────────────────────────
     messages = []
