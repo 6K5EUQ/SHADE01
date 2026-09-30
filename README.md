@@ -1,20 +1,16 @@
 # SHADE01
 
-수직이륙 고정익(VTOL) 무인기를 조립해 직접 띄우고, 비행 데이터를 수집 · 분석 · 시각화하는
-운용 체계까지 만든 저장소입니다.
+수직이착륙무인기를 제작해 비행 데이터 수집·분석·시각화 운용 체계 저장소입니다.
 
 **[SHADE01](https://shade01.bewe.co.kr/cockpit)** · **[체계 소개](https://shade01.bewe.co.kr/intro)**
 
 ![비행 중](docs/images/00-flight.jpg)
 
 
----
-
-## 만든 것
 
 | 영역 | 내용 | 기술 |
 |---|---|---|
-| 3D 콕핏 | 기체 자세 · 모터 부하 · 예측 경로를 위성 지도 위 3D 로 표시 | three.js, Blender Python 절차 모델링 |
+| 3D 모니터링 | 기체 자세 · 모터 부하 · 예측 경로를 위성 지도 위 3D 로 표시 | three.js, Blender Python 절차 모델링 |
 | 비행 기록 분석 | 로그 업로드 → 자동 파싱 → 지도 · 그래프 재생 | Node.js, Python(PX4 ULog), Leaflet |
 | 실시간 텔레메트리 | 비행 중 FC 상태를 웹으로 중계 | MAVLink, ELRS 백팩 |
 | 비행 전 점검 | FC 를 읽어 항목별 GO / NO-GO 판정 (읽기 전용) | MAVLink, 스트리밍 응답 |
@@ -31,7 +27,7 @@ flowchart LR
 
 ---
 
-## 1. 3D 콕핏
+## 1. 3D 모니터링
 
 **→ [shade01.bewe.co.kr/cockpit](https://shade01.bewe.co.kr/cockpit)**
 
@@ -78,7 +74,7 @@ FC 를 읽어 failsafe · 지오펜스 · GPS · 배터리 · 센서 상태를 �
 
 ---
 
-## 5. 체계 구상 — 신호정보 무인 정찰기
+## 5. 응용 체계 — 신호정보 무인 정찰기
 
 **→ [shade01.bewe.co.kr/intro](https://shade01.bewe.co.kr/intro)**
 
@@ -106,19 +102,3 @@ FC 를 읽어 failsafe · 지오펜스 · GPS · 배터리 · 센서 상태를 �
 | 수신기 | [RadioMaster RP4TD-M](components/receivers/radiomaster-rp4td-m/README.md) — ELRS 2.4GHz |
 | 신고번호 | C2NV2850087 |
 | 보험 | 대인 무제한(2억원) · 대물 5억원 |
-
----
-
-## 저장소 구성
-
-| 폴더 | 내용 |
-|---|---|
-| `flights/` | 비행별 분석 기록 |
-| `components/` | 부품별 제원과 배선 |
-| `airframes/` | 기체 조립 구성 |
-| `tools/` | 로그 수집·분석 프로그램 |
-| `tools/fc/` | **FC 에 `extras.txt` 올리기·재부팅·ELRS Hz 재기** — [올리는 절차](tools/fc/README.md) · [재는 절차](tools/fc/MEASURING.md) |
-| `web/` | 비행 기록 웹 서비스 |
-| `docs/emergency/` | **현장 체크리스트** — 이륙 전 · 이륙 직후 · 비상 |
-| `FC_CHANGELOG.md` | FC 변경 이력 |
-| `OPERATIONS.md` | **운용 상세** — 기체 식별 · 링크 구성 · 현재 상태 · 다음 비행 전 |
