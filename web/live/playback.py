@@ -127,6 +127,43 @@ def _val(tr, i, key, default=None):
     return v
 
 
+# 9/15 기준 MAIN 배치 — 로그에 출력 설정이 없을 때만 쓴다.
+MAIN_DEFAULT = {'RB': 'output[2]', 'RF': 'output[3]', 'LB': 'output[5]', 'LF': 'output[6]',
+                'CR': 'output[7]', 'AR': 'output[0]', 'AL': 'output[1]'}
+
+
+def _main_map(P):
+    """로그 자신의 출력 설정(PWM_MAIN_FUNCn · CA_ROTORn · CA_SV_CSn_TYPE)으로 핀을 찾는다.
+
+    🔴 핀 배치는 날짜마다 다르다. 9/01 재배치 전 로그는 MAIN2 가 크루즈, MAIN5·8 이
+    에일러론이었다 — 고정 인덱스로 읽으면 MAIN8 의 에일러론 중립 1500us 가 「크루즈 50%」
+    로 뜨고, 크루즈 모터는 에일러론으로 읽힌다 (log_98, 2026-08-25 실측).
+    기능 번호: 101~108 = 모터1~8(CA_ROTOR0~7), 201~208 = 서보1~8(CA_SV_CS0~7).
+    로터는 AX>0.5 면 크루즈(앞으로 미는 축), 아니면 PX(앞+)·PY(오른쪽+) 부호로 LF/RF/LB/RB.
+    서보는 TYPE 1 = 왼쪽 에일러론, 2 = 오른쪽 에일러론.
+    """
+    m = {}
+    for n in range(1, 9):
+        f = P.get('PWM_MAIN_FUNC%d' % n)
+        if f is None:
+            continue
+        f, ch = int(f), 'output[%d]' % (n - 1)
+        if 101 <= f <= 108:
+            r = f - 101
+            if P.get('CA_ROTOR%d_AX' % r, 0) > 0.5:
+                m['CR'] = ch
+            else:
+                px, py = P.get('CA_ROTOR%d_PX' % r, 0), P.get('CA_ROTOR%d_PY' % r, 0)
+                m[('L' if py < 0 else 'R') + ('F' if px > 0 else 'B')] = ch
+        elif 201 <= f <= 208:
+            t = P.get('CA_SV_CS%d_TYPE' % (f - 201))
+            if t == 1:
+                m['AL'] = ch
+            elif t == 2:
+                m['AR'] = ch
+    return m if len(m) == len(MAIN_DEFAULT) else dict(MAIN_DEFAULT)
+
+
 def load_flight(path):
     """로그 하나를 프레임 열로 굽는다.
 
@@ -203,10 +240,7 @@ def load_flight(path):
     #    servo1_raw 부터라 **1 부터** 세어 3,4,6,7 이다. 같은 핀이고 둘 다 맞다.
     #    MAIN1/2 는 에일러론 서보(로그에서 1500 고정), MAIN8 은 크루즈(1000 고정).
     #    서보를 추력으로 그리면 거짓말이 된다.
-    mot = _track(ulog, 'actuator_outputs',
-                 {'RB': 'output[2]', 'RF': 'output[3]',
-                  'LB': 'output[5]', 'LF': 'output[6]',
-                  'CR': 'output[7]', 'AR': 'output[0]', 'AL': 'output[1]'}, t0)
+    mot = _track(ulog, 'actuator_outputs', _main_map(ulog.initial_parameters), t0)
     # AUX — actuator_outputs 두 번째 인스턴스. AUX1/AUX3 엘리베이터, AUX2 러더
     # (OPERATIONS.md 「출력 배치」). 9/5 로그 실측: multi_id 1 의 output[0..2] 가
     # 1500 중립이고 나머지는 0 — 이 셋만 서보다.
