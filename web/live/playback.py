@@ -205,6 +205,9 @@ def load_flight(path):
                    'heading': 'heading', 'ref_alt': 'ref_alt'}, t0)
     att = _track(ulog, 'vehicle_attitude',
                  {'q0': 'q[0]', 'q1': 'q[1]', 'q2': 'q[2]', 'q3': 'q[3]'}, t0)
+    # KILL — 라이브는 HEARTBEAT.system_status 8(FLIGHT_TERMINATION)로 받는다. PX4 가 그 값을
+    # 내는 조건(actuator_armed 의 kill·termination·lockdown)을 로그에서 그대로 본다.
+    kill = _track(ulog, 'actuator_armed', {'k': 'kill', 't': 'termination', 'l': 'lockdown'}, t0)
     status = _track(ulog, 'vehicle_status',
                     {'nav': 'nav_state', 'arming': 'arming_state',
                      'failsafe': 'failsafe'}, t0)
@@ -365,6 +368,9 @@ def load_flight(path):
             fs = _val(status, i, 'failsafe')
             if fs is not None:
                 d['failsafe'] = bool(fs)
+        i = kill.at(ts) if kill else None
+        if i is not None and any(_val(kill, i, k) for k in ('k', 't', 'l')):
+            d['system_status'] = 8
 
         i = batt.at(ts) if batt else None
         if i is not None:
