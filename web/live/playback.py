@@ -210,7 +210,7 @@ def load_flight(path):
     kill = _track(ulog, 'actuator_armed', {'k': 'kill', 't': 'termination', 'l': 'lockdown'}, t0)
     status = _track(ulog, 'vehicle_status',
                     {'nav': 'nav_state', 'arming': 'arming_state',
-                     'failsafe': 'failsafe'}, t0)
+                     'failsafe': 'failsafe', 'ui': 'nav_state_user_intention'}, t0)
     batt = _track(ulog, 'battery_status',
                   {'v': 'voltage_v', 'i': 'current_a', 'rem': 'remaining',
                    'mah': 'discharged_mah', 'cells': 'cell_count'}, t0)
@@ -368,6 +368,11 @@ def load_flight(path):
             fs = _val(status, i, 'failsafe')
             if fs is not None:
                 d['failsafe'] = bool(fs)
+            # RTL 이 FC 판단(페일세이프·다른 모드에서 넘어감)인지 조종사 선택인지.
+            # 조종사가 고른 모드(user_intention)가 RTL 이 아니면 FC 가 건 것이다.
+            if nav is not None and int(nav) == 5:
+                ui = _val(status, i, 'ui')
+                d['rtl_auto'] = bool(fs) or (ui is not None and int(ui) != 5)
         i = kill.at(ts) if kill else None
         if i is not None and any(_val(kill, i, k) for k in ('k', 't', 'l')):
             d['system_status'] = 8
