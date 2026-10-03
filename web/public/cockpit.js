@@ -253,7 +253,7 @@ function buildAero(m) {
   });
   // ② 유선 — 상류에서 출발해 날개 위로 빨라지고, 뒷전 뒤로 내리흐르고(내리흐름), 날개끝에서 감긴다
   const lines = [], te = (ax) => { const [le, c] = aeroWing(Math.min(ax, 1.05)); return le + c; };
-  const Y0 = -1.1, Y1 = 2.6, N = 150;
+  const Y0 = -1.9, Y1 = 3.4, N = 170;   // 기체 앞 1.6 m 부터 뒤 3 m 까지
   const seed = (x0, dz) => {
     const ax = Math.abs(x0), span = ax < 1.0, [le, c, zc] = aeroWing(Math.min(ax, 1.05)), L = span ? liftAt(ax) : 0, pts = [], spd = [];
     for (let k = 0; k <= N; k++) {
@@ -263,15 +263,17 @@ function buildAero(m) {
       if (span) {
         z += 0.025 * L * Math.exp(-(((y - le + 0.12) / 0.18) ** 2));                     // 앞전 앞 올림흐름
         if (dz >= -0.01) { z += 0.03 * over * Math.exp(-Math.max(0, dz) / 0.12); v += 0.5 * L * over * Math.exp(-Math.max(0, dz) / 0.1); }
-        else { z -= 0.012 * over; v -= 0.22 * L * over; }
-        if (y > le + c) z -= 0.075 * L * (1 - Math.exp(-(y - le - c) / 0.5));         // 내리흐름
+        else { const f = Math.exp(dz / 0.15); z -= 0.012 * over * f; v -= 0.22 * L * over * f; }
+        const far = Math.exp(-Math.abs(dz) / 0.6);                                     // 멀수록 덜 휜다
+        if (y > le + c) z -= 0.075 * L * far * (1 - Math.exp(-(y - le - c) / 0.5));   // 내리흐름
       }
       if (ax < 0.16) { x += Math.sign(x0 || 1) * 0.07 * Math.exp(-(((y + 0.15) / 0.55) ** 2)); if (y < -0.45) v -= 0.4 * Math.exp(-(((y + 0.56) / 0.08) ** 2)); }
       pts.push(bz(x, y, z)); spd.push(v);
     }
     lines.push({ pts, spd });
   };
-  for (let i = 0; i <= 22; i++) for (const dz of [-0.09, 0.0, 0.07, 0.16]) seed(-1.43 + 2.86 * i / 22, dz);
+  // 기체 둘레를 넓게 — 날개폭의 2.5배, 위아래 1.3 m 범위에 씨앗을 깐다
+  for (let i = 0; i <= 34; i++) for (const dz of [-0.62, -0.38, -0.2, -0.09, 0.0, 0.07, 0.16, 0.3, 0.5, 0.75]) seed(-2.6 + 5.2 * i / 34, dz);
   // 날개끝 와류 — 끝 뒷전 둘레에서 출발해 축을 감으며 말려 든다
   for (const sgn of [-1, 1]) {
     const [le, c, zt] = aeroWing(1.03), yt = le + 0.3 * c;
@@ -328,7 +330,7 @@ function aeroStep(dt, d) {
   if (!on) return;
   aero.phase = (aero.phase + dt * (0.22 + Math.min(30, v) * 0.012)) % 1;
   // 몸체 각 → 양력 배율 k·박리 정도. 느리면(호버) 날개가 일을 안 한다 — k 가 0 으로 내려간다.
-  const kGoal = an.cl != null ? Math.max(-0.6, Math.min(2.6, an.cl / AERO.CL_TRIM)) : 0;
+  const kGoal = an.cl != null ? Math.max(-0.6, Math.min(2.6, an.cl / AERO.CL_TRIM)) : S.live ? 0 : 1;   // 연결이 없으면 순항 트림 그림을 보여 준다
   const sepGoal = an.aoa != null ? Math.max(0, Math.min(1, (an.aoa - AERO.A_STALL) / 4)) : 0;
   const e = 1 - Math.exp(-dt * 6);
   aero.k += (kGoal - aero.k) * e; aero.sep += (sepGoal - aero.sep) * e;
