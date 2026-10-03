@@ -192,7 +192,7 @@ const AERO = {
   // 반날개 단위폭 양력 분포 (19 m/s 트림, 정규화) — 스팬 0~1.05 m 를 21등분
   lift: [1.0, 0.983, 0.959, 0.942, 0.937, 0.931, 0.923, 0.917, 0.915, 0.912, 0.903, 0.888, 0.857, 0.806, 0.752, 0.719, 0.705, 0.683, 0.618, 0.488, 0.301, 0.0],
 };
-const aero = { g: null, vort: [] };
+const aero = { g: null, flows: [], cfd: [], on: false, phase: 0 };
 // 블렌더 좌표(x 스팬, y 앞−, z 위) → glTF(x, z, −y)
 const bz = (x, y, z) => new THREE.Vector3(x, z, -y);
 function aeroWing(ax) {   // striver.py wing_sec 과 같은 식 — 앞전 y, 시위, 높이
@@ -200,50 +200,118 @@ function aeroWing(ax) {   // striver.py wing_sec 과 같은 식 — 앞전 y, �
   const t = (ax - 0.93) / 0.12;
   return [-0.235 + 0.05 * t ** 2.4, 0.255 - 0.10 * t ** 2.2, 0.080 + ax * 0.022 + 0.032 * t ** 2];
 }
+const liftAt = (ax) => { const L = AERO.lift, f = Math.min(1, ax / 1.05) * (L.length - 1), i = Math.min(L.length - 2, Math.floor(f)); return L[i] + (L[i + 1] - L[i]) * (f - i); };
+// CFD 색 — 파랑(흡입·느림) → 청록 → 초록 → 노랑 → 빨강(정체·빠름)
+const CMAP = [[0.13, 0.29, 0.80], [0.10, 0.66, 0.86], [0.24, 0.78, 0.45], [0.96, 0.84, 0.22], [0.88, 0.27, 0.17]];
+function cmap(t) { t = Math.max(0, Math.min(1, t)) * (CMAP.length - 1); const i = Math.min(CMAP.length - 2, Math.floor(t)), f = t - i, a = CMAP[i], b = CMAP[i + 1]; return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]; }
+const CP_MIN = -0.9, CP_MAX = 0.6;
+// 표면 압력계수 — 순항 트림의 양력 분포(VLM)에 얇은 날개 꼴의 시위 분포를 입힌 근사. 눈으로 읽는 그림이지 CFD 해가 아니다.
+function cpAt(name, x, y, z) {
+  const ax = Math.abs(x);
+  if (/^(wing|aileron|center_panel|root_band|panel_seam|registration|name|servo_|hinge_)/.test(name)) {
+    const [le, c, zc] = aeroWing(Math.min(ax, 1.05)), u = Math.max(0, Math.min(1, (y - le) / c)), L = liftAt(ax);
+    if (z >= zc + 0.004) return -(0.05 + 1.15 * L ** 1.6) * (1.3 * Math.exp(-u / 0.08) + 0.6) * (1 - u) ** 1.3 + 0.15 * u ** 2;   // 뿌리 쪽 흡입이 크고 끝으로 갈수록 준다
+    return Math.exp(-u / 0.012) + (0.16 - 0.08 * L) * (1 - u) ** 2 - 0.02;
+  }
+  if (/^(htail|elevator|ht_root)/.test(name)) {
+    const u = Math.max(0, Math.min(1, (y - 0.545) / 0.14));
+    return 0.9 * Math.exp(-u / 0.015) - 0.32 * (1 - u) ** 1.4 * (1 - Math.exp(-u / 0.03)) + (z < 0.010 ? 0.06 : 0);
+  }
+  if (/^(vtail|rudder)/.test(name)) {
+    const u = Math.max(0, Math.min(1, (y - 0.47) / 0.2));
+    return 0.85 * Math.exp(-u / 0.02) - 0.3 * (1 - u) ** 1.5 * (1 - Math.exp(-u / 0.04));
+  }
+  if (/^(fuselage|belly|hatch|nose_mount|top_stub|gps)/.test(name)) {
+    return Math.exp(-(y + 0.56) / 0.025) - 0.5 * Math.exp(-(((y + 0.36) / 0.12) ** 2)) - 0.12 + 0.18 * Math.exp(-(((y - 0.6) / 0.08) ** 2)) - (z > 0.09 ? 0.15 : 0);
+  }
+  return null;
+}
 function buildAero(m) {
   const g = new THREE.Group(); g.visible = false; m.add(g);
-  const blue = 0x3e6ae1, H = 0.32;
-  // 양력 분포 — 1/4 시위선 위로 세운 막. 높이 = 그 스팬 위치의 양력
+  // ① 표면 압력 — 겉면 메시마다 정점 색을 굽고, 공력 탭에서만 재질을 바꿔 끼운다
+  m.updateMatrixWorld(true);
+  const p = new THREE.Vector3();
+  m.traverse((o) => {
+    if (!o.isMesh || !o.geometry.attributes.position) return;
+    const pos = o.geometry.attributes.position, col = new Float32Array(pos.count * 3);
+    let hit = false;
+    for (let i = 0; i < pos.count; i++) {
+      p.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      const cp = cpAt(o.name, p.x, -p.z, p.y);        // glTF → 블렌더
+      if (cp == null) { col.set([0.62, 0.64, 0.67], i * 3); continue; }
+      hit = true; col.set(cmap((cp - CP_MIN) / (CP_MAX - CP_MIN)), i * 3);
+    }
+    if (!hit && !/^(arm_|pod_|mount_|motor|fold|rotor_|prop_|spinner|nose_motor|boom_|clamp_)/.test(o.name)) return;
+    o.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    aero.cfd.push({ mesh: o, orig: o.material, mat: new THREE.MeshLambertMaterial({ vertexColors: true, toneMapped: false }) });
+  });
+  // ② 유선 — 상류에서 출발해 날개 위로 빨라지고, 뒷전 뒤로 내리흐르고(내리흐름), 날개끝에서 감긴다
+  const lines = [], te = (ax) => { const [le, c] = aeroWing(Math.min(ax, 1.05)); return le + c; };
+  const Y0 = -1.1, Y1 = 2.6, N = 150;
+  const seed = (x0, dz) => {
+    const ax = Math.abs(x0), span = ax < 1.0, [le, c, zc] = aeroWing(Math.min(ax, 1.05)), L = span ? liftAt(ax) : 0, pts = [], spd = [];
+    for (let k = 0; k <= N; k++) {
+      const y = Y0 + (Y1 - Y0) * k / N, s = (y - le) / c;
+      let x = x0, z = zc + dz, v = 1;
+      const over = Math.exp(-(((y - (le + 0.3 * c)) / (0.55 * c)) ** 2));
+      if (span) {
+        z += 0.025 * L * Math.exp(-(((y - le + 0.12) / 0.18) ** 2));                     // 앞전 앞 올림흐름
+        if (dz >= -0.01) { z += 0.03 * over * Math.exp(-Math.max(0, dz) / 0.12); v += 0.5 * L * over * Math.exp(-Math.max(0, dz) / 0.1); }
+        else { z -= 0.012 * over; v -= 0.22 * L * over; }
+        if (y > le + c) z -= 0.075 * L * (1 - Math.exp(-(y - le - c) / 0.5));         // 내리흐름
+      }
+      if (ax < 0.16) { x += Math.sign(x0 || 1) * 0.07 * Math.exp(-(((y + 0.15) / 0.55) ** 2)); if (y < -0.45) v -= 0.4 * Math.exp(-(((y + 0.56) / 0.08) ** 2)); }
+      pts.push(bz(x, y, z)); spd.push(v);
+    }
+    lines.push({ pts, spd });
+  };
+  for (let i = 0; i <= 22; i++) for (const dz of [-0.09, 0.0, 0.07, 0.16]) seed(-1.43 + 2.86 * i / 22, dz);
+  // 날개끝 와류 — 끝 뒷전 둘레에서 출발해 축을 감으며 말려 든다
   for (const sgn of [-1, 1]) {
-    const n = AERO.lift.length, pos = [], idx = [], line = [];
-    for (let i = 0; i < n; i++) {
-      const ax = 1.05 * i / (n - 1), [le, c, z] = aeroWing(ax), y = le + c * 0.25, base = z + 0.022;
-      const a = bz(sgn * ax, y, base), b = bz(sgn * ax, y, base + H * AERO.lift[i]);
-      pos.push(a.x, a.y, a.z, b.x, b.y, b.z); line.push(b);
-      if (i) { const k = i * 2; idx.push(k - 2, k - 1, k, k - 1, k + 1, k); }
+    const [le, c, zt] = aeroWing(1.03), yt = le + 0.3 * c;
+    const NT = 480;   // 나선은 촘촘히 — 성기게 찍으면 지그재그로 보인다
+    for (let j = 0; j < 14; j++) {
+      const r0 = 0.05 + 0.09 * (j % 2), ph0 = j / 14 * Math.PI * 2, pts = [], spd = [];
+      for (let k = 0; k <= NT; k++) {
+        const y = Y0 + (Y1 - Y0) * k / NT, d = Math.max(0, y - yt);
+        const cx = sgn * (1.03 - 0.05 * (1 - Math.exp(-d / 0.4))), cz = zt - 0.06 * (1 - Math.exp(-d / 0.8));
+        const r = y < yt ? r0 + 0.08 * Math.min(1, (yt - y) / 0.6) : r0 * (0.75 + 0.25 * Math.exp(-d / 0.5));
+        const ph = ph0 + sgn * 0.55 * d / (r + 0.03);   // 2.5 m 동안 약 3바퀴
+        pts.push(bz(cx + r * Math.cos(ph), y, cz + r * Math.sin(ph)));
+        spd.push(1 + 0.45 * Math.exp(-d / 1.2) * (y > yt ? 1 : 0));
+      }
+      lines.push({ pts, spd });
     }
-    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx);
-    const sheet = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: blue, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false }));
-    sheet.renderOrder = 7; g.add(sheet);
-    const top = new THREE.Line(new THREE.BufferGeometry().setFromPoints(line), new THREE.LineBasicMaterial({ color: blue, transparent: true, opacity: 0.9 }));
-    top.renderOrder = 8; g.add(top);
-    for (let i = 0; i < n - 1; i += 3) {      // 세로 눈금 — 막대처럼 읽히게
-      const p = pos.slice(i * 6, i * 6 + 6);
-      const tick = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(p[0], p[1], p[2]), new THREE.Vector3(p[3], p[4], p[5])]),
-        new THREE.LineBasicMaterial({ color: blue, transparent: true, opacity: 0.45 }));
-      g.add(tick);
-    }
-    // 날개끝 와류 — 뒷전에서 뒤로 감기며 퍼지는 나선. 양쪽이 반대로 돈다(바깥 아래 → 위 안쪽).
-    const [le, c, z] = aeroWing(1.03), tipY = le + c, L = 1.7, turns = 10, N = 360;
-    const helix = new THREE.Group(); helix.position.copy(bz(sgn * 1.02, tipY, z)); g.add(helix);
-    const hp = [], col = [];
-    for (let i = 0; i <= N; i++) {
-      const s = i / N, th = s * turns * Math.PI * 2, r = 0.02 + 0.07 * Math.sqrt(s);
-      hp.push(r * Math.cos(th), r * Math.sin(th), -s * L);   // glTF −z = 뒤
-      col.push(0.24, 0.42, 0.88, (1 - s) * 0.85);
-    }
-    const hg = new THREE.BufferGeometry(); hg.setAttribute('position', new THREE.Float32BufferAttribute(hp, 3)); hg.setAttribute('color', new THREE.Float32BufferAttribute(col, 4));
-    const hl = new THREE.Line(hg, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
-    hl.renderOrder = 8; helix.add(hl);
-    aero.vort.push({ node: helix, dir: sgn });
+  }
+  for (const l of lines) {
+    const n = l.pts.length, geo = new THREE.BufferGeometry().setFromPoints(l.pts), col = new Float32Array(n * 4);
+    for (let k = 0; k < n; k++) { const c = cmap((l.spd[k] - 0.75) / 0.7); col.set([c[0], c[1], c[2], 0.2], k * 4); }
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 4));
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
+    line.renderOrder = 8; line.frustumCulled = false; g.add(line);
+    aero.flows.push({ col, n, off: Math.random() });
   }
   // 무게중심(검정)·중립점(파랑) — 동체 위 점, 라벨 자리
   const dot = (y, color) => { const s = new THREE.Mesh(new THREE.SphereGeometry(0.018, 20, 14), new THREE.MeshBasicMaterial({ color, depthTest: false })); s.renderOrder = 9; s.position.copy(bz(0, y, 0.17)); g.add(s); return s; };
-  const axis = new THREE.Line(new THREE.BufferGeometry().setFromPoints([bz(0, -0.30, 0.17), bz(0, 0.05, 0.17)]), new THREE.LineBasicMaterial({ color: 0x828284, transparent: true, opacity: 0.6, depthTest: false }));
-  axis.renderOrder = 9; g.add(axis);
-  g.userData.cg = dot(AERO.cg, 0x171a20); g.userData.np = dot(AERO.np, blue);
+  g.userData.cg = dot(AERO.cg, 0x171a20); g.userData.np = dot(AERO.np, 0x3e6ae1);
   aero.g = g;
   return g;
+}
+// 매 화면 — 탭이면 재질을 바꿔 끼우고, 유선 위로 빛 뭉치가 흘러간다(속도만큼 빨리)
+function aeroStep(dt, v) {
+  if (!aero.g) return;
+  const on = tab === 'aero' && !sel && mode === '3d';
+  if (on !== aero.on) { aero.on = on; aero.g.visible = on; for (const c of aero.cfd) c.mesh.material = on ? c.mat : c.orig; document.querySelector('.main').classList.toggle('aeromode', on); }
+  if (!on) return;
+  aero.phase = (aero.phase + dt * (0.22 + Math.min(30, v) * 0.012)) % 1;
+  for (const f of aero.flows) {
+    for (let k = 0; k < f.n; k++) {
+      const s = k / (f.n - 1), d = ((aero.phase + f.off - s) % 1 + 1) % 1, d2 = (d + 0.5) % 1;
+      const head = (q) => q < 0.16 ? (1 - q / 0.16) : 0;
+      f.col[k * 4 + 3] = 0.22 + 0.78 * Math.max(head(d), head(d2));
+    }
+  }
+  for (const l of aero.g.children) if (l.isLine) l.geometry.attributes.color.needsUpdate = true;
 }
 // 공력 탭 — 지금 속도로 필요한 양력계수와 트림 받음각, 실속까지의 여유
 function aeroNow(d) {
@@ -338,7 +406,7 @@ const VIEWS = {
   intro: { yaw: 4.0, tilt: 0.6, dist: 6.2 },
   sum: { yaw: 4.0, tilt: 0.55, dist: 4.7 },
   fly: { yaw: 4.0, tilt: 0.55, dist: 4.7 },
-  aero: { yaw: 3.55, tilt: 0.62, dist: 5.6 },
+  aero: { yaw: 4.35, tilt: 0.42, dist: 6.4 },
   pwr: { yaw: -2.75, tilt: 0.78, dist: 4.9 },
   nav: { yaw: 0.65, tilt: 0.45, dist: 4.0 },
   bat: { yaw: -1.9, tilt: 0.5, dist: 4.0 },
@@ -804,7 +872,7 @@ function satBuild(lat, lon) {
   return mesh;
 }
 function satStep() {
-  grid.visible = !sat.on;   // 지도일 때는 격자를 걷어 사진만
+  grid.visible = !sat.on && !aero.on;   // 지도일 때는 격자를 걷어 사진만, 공력은 어두운 무대에
   if (!sat.on) { if (sat.mesh) sat.mesh.visible = false; return; }
   const ref = geo.hs || SAT_FIELD, key = ref.join(',');
   if (!sat.mesh || sat.key !== key) {
@@ -867,11 +935,7 @@ function frame() {
   attitude.rotation.z += (tr - attitude.rotation.z) * ease(6);
   attitude.rotation.x += (-tp - attitude.rotation.x) * ease(6);
 
-  // 공력 — 탭에서만 보인다. 와류는 속도만큼 빨리 감긴다.
-  if (aero.g) {
-    aero.g.visible = tab === 'aero' && !sel && mode === '3d';
-    if (aero.g.visible) { const v = (aeroNow(d).v || 0); for (const w of aero.vort) w.node.rotateZ(w.dir * (3 + v * 0.5) * dt); }
-  }
+  aeroStep(dt, aeroNow(d).v || 0);
   // 로터 — ARM 이고 출력이 있으면 돈다. 빨라지면 날 대신 원판이 보인다.
   const mt = d.motors || {};
   for (const [k, r] of Object.entries(rotors)) {
@@ -943,7 +1007,8 @@ function renderInfo() {
   if (!t) { box.hidden = true; return; }
   box.hidden = false;
   const chips = (t.bays || []).map((k) => `<button class="chip" data-bay="${k}">${esc(BAYS[k].name)}</button>`).join('');
-  box.innerHTML = `<div class="ih"><b>${esc(t.name)}</b></div>${rowsHtml(t.rows)}${chips ? `<div class="chips">${chips}</div>` : ''}`;
+  const leg = tab === 'aero' ? `<div class="cpleg"><span>압력 계수</span><i></i><div><em>−0.9</em><em>0</em><em>+0.6</em></div></div>` : '';
+  box.innerHTML = `<div class="ih"><b>${esc(t.name)}</b></div>${rowsHtml(t.rows)}${leg}${chips ? `<div class="chips">${chips}</div>` : ''}`;
 }
 $('info').addEventListener('click', (e) => {
   const c = e.target.closest('[data-bay]');
