@@ -193,7 +193,7 @@ const AERO = {
   // 반날개 단위폭 양력 분포 (19 m/s 트림, 정규화) — 스팬 0~1.05 m 를 21등분
   lift: [1.0, 0.983, 0.959, 0.942, 0.937, 0.931, 0.923, 0.917, 0.915, 0.912, 0.903, 0.888, 0.857, 0.806, 0.752, 0.719, 0.705, 0.683, 0.618, 0.488, 0.301, 0.0],
 };
-const aero = { g: null, flowG: null, flows: [], cfd: [], on: false, phase: 0, k: 0, sep: 0, kDrawn: -9, sepDrawn: -9, t: 1 };
+const aero = { g: null, flowG: null, flows: [], cfd: [], on: false, phase: 0, k: 0, sep: 0, kDrawn: -9, sepDrawn: -9, t: 1, flow: 1 };
 // 블렌더 좌표(x 스팬, y 앞−, z 위) → glTF(x, z, −y)
 const bz = (x, y, z) => new THREE.Vector3(x, z, -y);
 function aeroWing(ax) {   // striver.py wing_sec 과 같은 식 — 앞전 y, 시위, 높이
@@ -291,7 +291,9 @@ function buildAero(m) {
       lines.push({ pts, spd });
     }
   }
-  const flowG = new THREE.Group(); flowG.rotation.order = 'YXZ'; g.add(flowG); aero.flowG = flowG;   // 상대풍 방향으로 통째로 기운다
+  // 유선은 기체가 아니라 **바람**에 붙는다 — 롤·피치를 받는 자세 그룹 밖(기수 방향만 맞춘 수평 틀)에 둔다.
+  // 기수가 들려도 흐름은 그대로이고, 비행 경로 방향(상승각·옆미끄럼)으로만 기운다.
+  const flowG = new THREE.Group(); flowG.rotation.order = 'YXZ'; flowG.visible = false; flyG.add(flowG); aero.flowG = flowG;
   for (const l of lines) {
     const n = l.pts.length, geo = new THREE.BufferGeometry().setFromPoints(l.pts), col = new Float32Array(n * 4);
     for (let k = 0; k < n; k++) { const c = cmap((l.spd[k] - 0.75) / 0.7); col.set([c[0], c[1], c[2], 0.2], k * 4); }
@@ -326,7 +328,7 @@ function aeroStep(dt, d) {
   if (!aero.g) return;
   const an = aeroNow(d), v = an.v || 0;
   const on = tab === 'aero' && !sel && mode === '3d';
-  if (on !== aero.on) { aero.on = on; aero.g.visible = on; for (const c of aero.cfd) c.mesh.material = on ? c.mat : c.orig; document.querySelector('.main').classList.toggle('aeromode', on); }
+  if (on !== aero.on) { aero.on = on; aero.g.visible = on; aero.flowG.visible = on; for (const c of aero.cfd) c.mesh.material = on ? c.mat : c.orig; document.querySelector('.main').classList.toggle('aeromode', on); }
   if (!on) return;
   aero.phase = (aero.phase + dt * (0.22 + Math.min(30, v) * 0.012)) % 1;
   // 몸체 각 → 양력 배율 k·박리 정도. 느리면(호버) 날개가 일을 안 한다 — k 가 0 으로 내려간다.
@@ -336,15 +338,19 @@ function aeroStep(dt, d) {
   aero.k += (kGoal - aero.k) * e; aero.sep += (sepGoal - aero.sep) * e;
   aero.t += dt;
   if (aero.t > 0.15 && (Math.abs(aero.k - aero.kDrawn) > 0.02 || Math.abs(aero.sep - aero.sepDrawn) > 0.02)) { aeroPaint(); aero.t = 0; }
-  // 유선은 상대풍 방향으로 — 받음각만큼 아래에서 올라오고, 옆미끄럼만큼 옆에서 온다
-  const fa = an.aoa != null ? Math.max(-20, Math.min(25, an.aoa)) : 0;
-  aero.flowG.rotation.x += (THREE.MathUtils.degToRad(fa) - aero.flowG.rotation.x) * e;
+  // 유선 방향 = 비행 경로의 반대. 오르면 위에서 내려오듯, 옆으로 미끄러지면 옆에서 온다.
+  // 기체 자세(피치·롤)는 유선을 돌리지 않는다 — 그래서 기수를 들면 받음각이 화면에 그대로 보인다.
+  const gam = an.gam != null ? Math.max(-45, Math.min(45, an.gam)) : 0;
+  aero.flowG.rotation.x += (THREE.MathUtils.degToRad(-gam) - aero.flowG.rotation.x) * e;
   aero.flowG.rotation.y += (THREE.MathUtils.degToRad(-(an.beta || 0)) - aero.flowG.rotation.y) * e;
+  // 바람이 없으면 흐름도 없다 — 연결 중 느리면(호버) 유선이 옅어지고 2 m/s 아래면 멈춘다. 연결이 없으면 순항 그림.
+  const fGoal = !S.live ? 1 : Math.max(0, Math.min(1, (v - 2) / 6));
+  aero.flow += (fGoal - aero.flow) * e;
   for (const f of aero.flows) {
     for (let k = 0; k < f.n; k++) {
       const s = k / (f.n - 1), d = ((aero.phase + f.off - s) % 1 + 1) % 1, d2 = (d + 0.5) % 1;
       const head = (q) => q < 0.16 ? (1 - q / 0.16) : 0;
-      f.col[k * 4 + 3] = 0.22 + 0.78 * Math.max(head(d), head(d2));
+      f.col[k * 4 + 3] = (0.22 + 0.78 * Math.max(head(d), head(d2))) * aero.flow;
     }
   }
   for (const l of aero.flowG.children) l.geometry.attributes.color.needsUpdate = true;
@@ -354,13 +360,13 @@ function aeroStep(dt, d) {
 // 바람을 모르므로 대지속도 기준이면 바람만큼 틀린다. 피토가 살아 있으면 대기속도를 쓴다.
 function aeroNow(d) {
   const v = d.airspeed > 1 ? d.airspeed : d.groundspeed;
-  if (v == null || v < 3 || d.pitch == null) return { v };
+  if (v == null || v < 5 || d.pitch == null) return { v };   // 호버 속도에서는 날개가 일을 안 한다 — 받음각이 뜻이 없다
   const gam = Math.atan2(d.climb || 0, v) * 180 / Math.PI, aoa = d.pitch - gam;
   const cl = AERO.CL0 + AERO.CLA * Math.min(aoa, AERO.A_STALL);
   const need = AERO.M * 9.81 / (0.5 * AERO.RHO * v * v * AERO.S);
   const yaw = d.yaw != null ? d.yaw : d.hdg, crs = d.vx != null && Math.hypot(d.vx, d.vy) > 2 ? Math.atan2(d.vy, d.vx) * 180 / Math.PI : null;
   const beta = yaw != null && crs != null ? Math.max(-25, Math.min(25, unwrap(crs - yaw))) : 0;
-  return { v, aoa, cl, need, beta, stall: aoa > AERO.A_STALL };
+  return { v, aoa, cl, need, beta, gam, stall: aoa > AERO.A_STALL };
 }
 let nose = null, anchors = {};
 const surfaces = {};        // AL/AR/EL/ER/R → { node, base }
