@@ -187,12 +187,13 @@ const rotors = {};          // LF/RF/LB/RB → { node, dir, v, disc }
 // 실속 속도는 최대 양력계수 1.0~1.2 가정 — VLM 은 실속을 못 다룬다. 값은 해석 추정이지 실측이 아니다.
 const AERO = {
   S: 0.591, AR: 7.4, MAC: 0.285, SM: 14.4, VS: [12.4, 13.6], LD: 18.5, M: 6.8, RHO: 1.225,
+  CL0: 0.125, CLA: 0.0878, A_STALL: 12, CL_TRIM: 0.51,   // 양력 기울기 /°, 실속 받음각(가정), 19 m/s 트림 양력계수
   cg: -0.155, np: -0.114,                          // 모델 y(앞 −) — 무게중심·중립점
   trim: [[14, 9.3], [16, 6.8], [18, 5.0], [19, 4.4], [21, 3.3], [24, 2.2]],   // 속도 → 트림 받음각
   // 반날개 단위폭 양력 분포 (19 m/s 트림, 정규화) — 스팬 0~1.05 m 를 21등분
   lift: [1.0, 0.983, 0.959, 0.942, 0.937, 0.931, 0.923, 0.917, 0.915, 0.912, 0.903, 0.888, 0.857, 0.806, 0.752, 0.719, 0.705, 0.683, 0.618, 0.488, 0.301, 0.0],
 };
-const aero = { g: null, flows: [], cfd: [], on: false, phase: 0 };
+const aero = { g: null, flowG: null, flows: [], cfd: [], on: false, phase: 0, k: 0, sep: 0, kDrawn: -9, sepDrawn: -9, t: 1 };
 // 블렌더 좌표(x 스팬, y 앞−, z 위) → glTF(x, z, −y)
 const bz = (x, y, z) => new THREE.Vector3(x, z, -y);
 function aeroWing(ax) {   // striver.py wing_sec 과 같은 식 — 앞전 y, 시위, 높이
@@ -206,23 +207,26 @@ const CMAP = [[0.13, 0.29, 0.80], [0.10, 0.66, 0.86], [0.24, 0.78, 0.45], [0.96,
 function cmap(t) { t = Math.max(0, Math.min(1, t)) * (CMAP.length - 1); const i = Math.min(CMAP.length - 2, Math.floor(t)), f = t - i, a = CMAP[i], b = CMAP[i + 1]; return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]; }
 const CP_MIN = -0.9, CP_MAX = 0.6;
 // 표면 압력계수 — 순항 트림의 양력 분포(VLM)에 얇은 날개 꼴의 시위 분포를 입힌 근사. 눈으로 읽는 그림이지 CFD 해가 아니다.
+// 표면 압력계수 cp = a·k + b. k = 지금 양력계수 / 순항 트림 양력계수(0.51) — 몸체 각에 따라 실시간으로 바뀐다.
+// 순항 트림의 양력 분포(VLM)에 얇은 날개 꼴의 시위 분포를 입힌 근사다. 눈으로 읽는 그림이지 CFD 해가 아니다.
+// 반환 [a, b, u] — u 는 날개 윗면의 시위 위치(실속 때 박리 표시용), 윗면이 아니면 −1.
 function cpAt(name, x, y, z) {
   const ax = Math.abs(x);
   if (/^(wing|aileron|center_panel|root_band|panel_seam|registration|name|servo_|hinge_)/.test(name)) {
     const [le, c, zc] = aeroWing(Math.min(ax, 1.05)), u = Math.max(0, Math.min(1, (y - le) / c)), L = liftAt(ax);
-    if (z >= zc + 0.004) return -(0.05 + 1.15 * L ** 1.6) * (1.3 * Math.exp(-u / 0.08) + 0.6) * (1 - u) ** 1.3 + 0.15 * u ** 2;   // 뿌리 쪽 흡입이 크고 끝으로 갈수록 준다
-    return Math.exp(-u / 0.012) + (0.16 - 0.08 * L) * (1 - u) ** 2 - 0.02;
+    if (z >= zc + 0.004) return [-(0.05 + 1.15 * L ** 1.6) * (1.3 * Math.exp(-u / 0.08) + 0.6) * (1 - u) ** 1.3, 0.15 * u ** 2, u];   // 뿌리 쪽 흡입이 크고 끝으로 갈수록 준다
+    return [(0.16 - 0.08 * L) * (1 - u) ** 2, Math.exp(-u / 0.012) - 0.02, -1];
   }
   if (/^(htail|elevator|ht_root)/.test(name)) {
     const u = Math.max(0, Math.min(1, (y - 0.510) / 0.18));
-    return 0.9 * Math.exp(-u / 0.015) - 0.32 * (1 - u) ** 1.4 * (1 - Math.exp(-u / 0.03)) + (z < 0.010 ? 0.06 : 0);
+    return [0, 0.9 * Math.exp(-u / 0.015) - 0.32 * (1 - u) ** 1.4 * (1 - Math.exp(-u / 0.03)) + (z < 0.010 ? 0.06 : 0), -1];
   }
   if (/^(vtail|rudder)/.test(name)) {
     const u = Math.max(0, Math.min(1, (y - 0.47) / 0.2));
-    return 0.85 * Math.exp(-u / 0.02) - 0.3 * (1 - u) ** 1.5 * (1 - Math.exp(-u / 0.04));
+    return [0, 0.85 * Math.exp(-u / 0.02) - 0.3 * (1 - u) ** 1.5 * (1 - Math.exp(-u / 0.04)), -1];
   }
   if (/^(fuselage|belly|hatch|nose_mount|top_stub|gps)/.test(name)) {
-    return Math.exp(-(y + 0.56) / 0.025) - 0.5 * Math.exp(-(((y + 0.36) / 0.12) ** 2)) - 0.12 + 0.18 * Math.exp(-(((y - 0.6) / 0.08) ** 2)) - (z > 0.09 ? 0.15 : 0);
+    return [0, Math.exp(-(y + 0.56) / 0.025) - 0.5 * Math.exp(-(((y + 0.36) / 0.12) ** 2)) - 0.12 + 0.18 * Math.exp(-(((y - 0.6) / 0.08) ** 2)) - (z > 0.09 ? 0.15 : 0), -1];
   }
   return null;
 }
@@ -233,17 +237,19 @@ function buildAero(m) {
   const p = new THREE.Vector3();
   m.traverse((o) => {
     if (!o.isMesh || !o.geometry.attributes.position) return;
-    const pos = o.geometry.attributes.position, col = new Float32Array(pos.count * 3);
+    const pos = o.geometry.attributes.position, n = pos.count, col = new Float32Array(n * 3);
+    const A = new Float32Array(n), B = new Float32Array(n), U = new Float32Array(n).fill(-2);   // −2 = 압력 없음(회색)
     let hit = false;
-    for (let i = 0; i < pos.count; i++) {
+    for (let i = 0; i < n; i++) {
       p.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
-      const cp = cpAt(o.name, p.x, -p.z, p.y);        // glTF → 블렌더
-      if (cp == null) { col.set([0.62, 0.64, 0.67], i * 3); continue; }
-      hit = true; col.set(cmap((cp - CP_MIN) / (CP_MAX - CP_MIN)), i * 3);
+      const r = cpAt(o.name, p.x, -p.z, p.y);        // glTF → 블렌더
+      col.set([0.62, 0.64, 0.67], i * 3);
+      if (r == null) continue;
+      hit = true; A[i] = r[0]; B[i] = r[1]; U[i] = r[2];
     }
     if (!hit && !/^(arm_|pod_|mount_|motor|fold|rotor_|prop_|spinner|nose_motor|boom_|clamp_)/.test(o.name)) return;
     o.geometry.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    aero.cfd.push({ mesh: o, orig: o.material, mat: new THREE.MeshLambertMaterial({ vertexColors: true, toneMapped: false }) });
+    aero.cfd.push({ mesh: o, orig: o.material, col, A, B, U, mat: new THREE.MeshLambertMaterial({ vertexColors: true, toneMapped: false }) });
   });
   // ② 유선 — 상류에서 출발해 날개 위로 빨라지고, 뒷전 뒤로 내리흐르고(내리흐름), 날개끝에서 감긴다
   const lines = [], te = (ax) => { const [le, c] = aeroWing(Math.min(ax, 1.05)); return le + c; };
@@ -283,12 +289,13 @@ function buildAero(m) {
       lines.push({ pts, spd });
     }
   }
+  const flowG = new THREE.Group(); flowG.rotation.order = 'YXZ'; g.add(flowG); aero.flowG = flowG;   // 상대풍 방향으로 통째로 기운다
   for (const l of lines) {
     const n = l.pts.length, geo = new THREE.BufferGeometry().setFromPoints(l.pts), col = new Float32Array(n * 4);
     for (let k = 0; k < n; k++) { const c = cmap((l.spd[k] - 0.75) / 0.7); col.set([c[0], c[1], c[2], 0.2], k * 4); }
     geo.setAttribute('color', new THREE.BufferAttribute(col, 4));
     const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false }));
-    line.renderOrder = 8; line.frustumCulled = false; g.add(line);
+    line.renderOrder = 8; line.frustumCulled = false; flowG.add(line);
     aero.flows.push({ col, n, off: Math.random() });
   }
   // 무게중심(검정)·중립점(파랑) — 동체 위 점, 라벨 자리
@@ -297,13 +304,40 @@ function buildAero(m) {
   aero.g = g;
   return g;
 }
+// 표면 색을 지금 k·박리로 다시 칠한다 (0.15초에 한 번, 바뀌었을 때만)
+function aeroPaint() {
+  const k = aero.k, sep = aero.sep;
+  for (const c of aero.cfd) {
+    const { col, A, B, U } = c;
+    for (let i = 0; i < A.length; i++) {
+      if (U[i] === -2) continue;
+      let cp = A[i] * k + B[i];
+      if (sep > 0 && U[i] >= 0) { const w = sep * Math.min(1, Math.max(0, (U[i] - 0.15) / 0.25)); cp = cp * (1 - w) - 0.25 * w; }   // 실속 — 뒤쪽 흡입이 무너져 평평해진다
+      col.set(cmap((cp - CP_MIN) / (CP_MAX - CP_MIN)), i * 3);
+    }
+    c.mesh.geometry.attributes.color.needsUpdate = true;
+  }
+  aero.kDrawn = k; aero.sepDrawn = sep;
+}
 // 매 화면 — 탭이면 재질을 바꿔 끼우고, 유선 위로 빛 뭉치가 흘러간다(속도만큼 빨리)
-function aeroStep(dt, v) {
+function aeroStep(dt, d) {
   if (!aero.g) return;
+  const an = aeroNow(d), v = an.v || 0;
   const on = tab === 'aero' && !sel && mode === '3d';
   if (on !== aero.on) { aero.on = on; aero.g.visible = on; for (const c of aero.cfd) c.mesh.material = on ? c.mat : c.orig; document.querySelector('.main').classList.toggle('aeromode', on); }
   if (!on) return;
   aero.phase = (aero.phase + dt * (0.22 + Math.min(30, v) * 0.012)) % 1;
+  // 몸체 각 → 양력 배율 k·박리 정도. 느리면(호버) 날개가 일을 안 한다 — k 가 0 으로 내려간다.
+  const kGoal = an.cl != null ? Math.max(-0.6, Math.min(2.6, an.cl / AERO.CL_TRIM)) : 0;
+  const sepGoal = an.aoa != null ? Math.max(0, Math.min(1, (an.aoa - AERO.A_STALL) / 4)) : 0;
+  const e = 1 - Math.exp(-dt * 6);
+  aero.k += (kGoal - aero.k) * e; aero.sep += (sepGoal - aero.sep) * e;
+  aero.t += dt;
+  if (aero.t > 0.15 && (Math.abs(aero.k - aero.kDrawn) > 0.02 || Math.abs(aero.sep - aero.sepDrawn) > 0.02)) { aeroPaint(); aero.t = 0; }
+  // 유선은 상대풍 방향으로 — 받음각만큼 아래에서 올라오고, 옆미끄럼만큼 옆에서 온다
+  const fa = an.aoa != null ? Math.max(-20, Math.min(25, an.aoa)) : 0;
+  aero.flowG.rotation.x += (THREE.MathUtils.degToRad(fa) - aero.flowG.rotation.x) * e;
+  aero.flowG.rotation.y += (THREE.MathUtils.degToRad(-(an.beta || 0)) - aero.flowG.rotation.y) * e;
   for (const f of aero.flows) {
     for (let k = 0; k < f.n; k++) {
       const s = k / (f.n - 1), d = ((aero.phase + f.off - s) % 1 + 1) % 1, d2 = (d + 0.5) % 1;
@@ -311,16 +345,20 @@ function aeroStep(dt, v) {
       f.col[k * 4 + 3] = 0.22 + 0.78 * Math.max(head(d), head(d2));
     }
   }
-  for (const l of aero.g.children) if (l.isLine) l.geometry.attributes.color.needsUpdate = true;
+  for (const l of aero.flowG.children) l.geometry.attributes.color.needsUpdate = true;
 }
 // 공력 탭 — 지금 속도로 필요한 양력계수와 트림 받음각, 실속까지의 여유
+// 지금 몸체 각에서의 공력 — 받음각 = 피치 − 비행경로각(상승률/속도), 옆미끄럼 = 진행 방향 − 기수.
+// 바람을 모르므로 대지속도 기준이면 바람만큼 틀린다. 피토가 살아 있으면 대기속도를 쓴다.
 function aeroNow(d) {
-  const v = d.airspeed > 1 ? d.airspeed : d.groundspeed;   // 피토가 죽어 있으면 대지속도로
-  if (v == null || v < 3) return { v };
-  const cl = AERO.M * 9.81 / (0.5 * AERO.RHO * v * v * AERO.S);
-  const tr = AERO.trim, k = Math.max(0, Math.min(tr.length - 2, tr.findIndex((r) => r[0] > v) - 1));
-  const aoa = cl <= 1.2 ? tr[k][1] + (tr[k + 1][1] - tr[k][1]) * (v - tr[k][0]) / (tr[k + 1][0] - tr[k][0]) : null;
-  return { v, cl, aoa };
+  const v = d.airspeed > 1 ? d.airspeed : d.groundspeed;
+  if (v == null || v < 3 || d.pitch == null) return { v };
+  const gam = Math.atan2(d.climb || 0, v) * 180 / Math.PI, aoa = d.pitch - gam;
+  const cl = AERO.CL0 + AERO.CLA * Math.min(aoa, AERO.A_STALL);
+  const need = AERO.M * 9.81 / (0.5 * AERO.RHO * v * v * AERO.S);
+  const yaw = d.yaw != null ? d.yaw : d.hdg, crs = d.vx != null && Math.hypot(d.vx, d.vy) > 2 ? Math.atan2(d.vy, d.vx) * 180 / Math.PI : null;
+  const beta = yaw != null && crs != null ? Math.max(-25, Math.min(25, unwrap(crs - yaw))) : 0;
+  return { v, aoa, cl, need, beta, stall: aoa > AERO.A_STALL };
 }
 let nose = null, anchors = {};
 const surfaces = {};        // AL/AR/EL/ER/R → { node, base }
@@ -935,7 +973,7 @@ function frame() {
   attitude.rotation.z += (tr - attitude.rotation.z) * ease(6);
   attitude.rotation.x += (-tp - attitude.rotation.x) * ease(6);
 
-  aeroStep(dt, aeroNow(d).v || 0);
+  aeroStep(dt, d);
   // 로터 — ARM 이고 출력이 있으면 돈다. 빨라지면 날 대신 원판이 보인다.
   const mt = d.motors || {};
   for (const [k, r] of Object.entries(rotors)) {
@@ -1074,12 +1112,13 @@ const TILES = {
     ['cur', '전류', num(d.cur, 1), 'A'],
     ['temp', '온도', num(d.batt_temp, 1), '°C'],
   ],
-  aero: (d) => { const a = aeroNow(d), vs = AERO.VS[0];
+  aero: (d) => { const a = aeroNow(d), fw = d.vtol === 'FW';
     return [
       ['spd', d.airspeed > 1 ? '대기속도' : '대지속도', num(a.v, 1), 'm/s'],
-      ['stall', '실속까지', a.v == null ? '—' : (a.v - vs).toFixed(1), 'm/s', d.vtol === 'FW' && a.v != null ? (a.v < vs ? 'bad' : a.v < vs * 1.2 ? 'warn' : '') : ''],
-      ['cl', '필요 양력계수', num(a.cl, 2), ''],
-      ['aoa', '트림 받음각', num(a.aoa, 1), '°'],
+      ['aoa', '받음각', num(a.aoa, 1), '°', fw && a.aoa != null ? (a.stall ? 'bad' : a.aoa > AERO.A_STALL - 3 ? 'warn' : '') : ''],
+      ['cl', '양력계수', num(a.cl, 2), ''],
+      ['need', '필요 양력계수', num(a.need, 2), '', fw && a.need != null && a.need > 1.0 ? 'warn' : ''],
+      ['beta', '옆미끄럼', num(a.beta, 0), '°'],
     ]; },
   rec: () => [
     ['count', '비행 횟수', R ? String(R.n) : '—', '회'],
